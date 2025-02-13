@@ -1,4 +1,4 @@
-import { ArchiveX, Component, File, Inbox, ListTree, Send, Trash2 } from 'lucide-react'
+import { Component, ListTree } from 'lucide-react'
 import * as React from 'react'
 
 import {
