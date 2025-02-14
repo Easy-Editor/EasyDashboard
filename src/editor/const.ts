@@ -4,7 +4,7 @@ export const defaultRootSchema: RootSchema = {
   fileName: 'home',
   componentName: 'RootContainer',
   props: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#18181b',
     className: 'page test',
   },
   $dashboard: {

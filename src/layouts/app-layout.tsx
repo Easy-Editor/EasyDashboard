@@ -4,11 +4,12 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className='relative flex flex-col bg-background'>
+    <div className='h-full relative flex flex-col bg-background'>
       <div className='border-grid flex flex-1 flex-col'>
         <AppHeader />
         <main className='flex flex-1 flex-col'>
           <SidebarProvider
+            className='h-full'
             style={
               {
                 '--sidebar-width': '350px',
