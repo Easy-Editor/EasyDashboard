@@ -1,5 +1,4 @@
 import Button from './button/component'
-import Input from './input/component'
-import RootContainer from './rootContainer/component'
+import Root from './root/component'
 
-export { Button, Input, RootContainer }
+export { Button, Root }

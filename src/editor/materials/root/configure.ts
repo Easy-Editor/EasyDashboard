@@ -1,20 +1,16 @@
 import type { Configure } from '@easy-editor/core'
-import Input from './component'
+import Root from './component'
 
 const configure: Configure = {
   props: [
     {
-      title: '功能',
       type: 'group',
+      title: '功能',
+      setter: 'GroupSetter',
       items: [
         {
-          name: 'value',
-          title: '当前值',
-          setter: 'StringSetter',
-        },
-        {
-          name: 'placeholder',
-          title: '占位提示',
+          name: 'backgroundColor',
+          title: '背景颜色',
           setter: 'StringSetter',
         },
       ],
@@ -23,7 +19,7 @@ const configure: Configure = {
   component: {},
   supports: {},
   advanced: {
-    view: Input,
+    view: Root,
   },
 }
 

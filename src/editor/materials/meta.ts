@@ -1,5 +1,4 @@
 import Button from './button/meta'
-import Input from './input/meta'
-import RootContainer from './rootContainer/meta'
+import Root from './root/meta'
 
-export { Button, Input, RootContainer }
+export { Button, Root }

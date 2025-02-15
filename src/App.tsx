@@ -7,12 +7,7 @@ function App() {
   return (
     <ThemeProvider defaultTheme='system' storageKey='easy-dashboard-theme'>
       <AppLayout>
-        <SimulatorRenderer
-          host={simulator}
-          bemTools={{
-            resizing: true,
-          }}
-        />
+        <SimulatorRenderer host={simulator} />
       </AppLayout>
     </ThemeProvider>
   )

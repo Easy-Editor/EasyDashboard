@@ -2,31 +2,50 @@ import type { Snippet } from '@easy-editor/core'
 
 const snippets: Snippet[] = [
   {
-    title: '主按钮',
+    title: 'Primary Button',
     // screenshot: require('./__screenshots__/button-1.png'),
     schema: {
       componentName: 'Button',
       props: {
-        type: 'primary',
-        text: '主按钮',
+        text: 'Primary Button',
       },
-      // TODO: 这样写法是否奇怪
       $dashboard: {
         rect: {
-          width: 100,
-          height: 100,
+          width: 120,
+          height: 40,
         },
       },
     },
   },
   {
-    title: '次按钮',
-    // screenshot: require('./__screenshots__/button-1.png'),
+    title: 'Destructive Button',
     schema: {
       componentName: 'Button',
       props: {
-        type: 'default',
-        text: '次按钮',
+        variant: 'destructive',
+        text: 'Destructive Button',
+      },
+      $dashboard: {
+        rect: {
+          width: 120,
+          height: 40,
+        },
+      },
+    },
+  },
+  {
+    title: 'Outline Button',
+    schema: {
+      componentName: 'Button',
+      props: {
+        variant: 'outline',
+        text: 'Outline Button',
+      },
+      $dashboard: {
+        rect: {
+          width: 120,
+          height: 40,
+        },
       },
     },
   },

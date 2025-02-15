@@ -2,9 +2,9 @@ import type { RootSchema } from '@easy-editor/core'
 
 export const defaultRootSchema: RootSchema = {
   fileName: 'home',
-  componentName: 'RootContainer',
+  componentName: 'Root',
   props: {
-    backgroundColor: '#18181b',
+    backgroundColor: '#232630',
     className: 'page test',
   },
   $dashboard: {
@@ -26,7 +26,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 100,
           y: 100,
-          width: 50,
+          width: 150,
           height: 30,
         },
       },
@@ -42,7 +42,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 1000,
           y: 100,
-          width: 80,
+          width: 180,
           height: 150,
         },
       },
@@ -58,7 +58,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 1000,
           y: 200,
-          width: 130,
+          width: 230,
           height: 50,
         },
       },
@@ -81,7 +81,7 @@ export const defaultRootSchema: RootSchema = {
                 rect: {
                   x: 400,
                   y: 400,
-                  width: 50,
+                  width: 150,
                   height: 50,
                 },
               },
@@ -96,7 +96,7 @@ export const defaultRootSchema: RootSchema = {
                 rect: {
                   x: 200,
                   y: 200,
-                  width: 70,
+                  width: 170,
                   height: 70,
                 },
               },
@@ -113,7 +113,7 @@ export const defaultRootSchema: RootSchema = {
             rect: {
               x: 300,
               y: 20,
-              width: 60,
+              width: 160,
               height: 50,
             },
           },
@@ -129,7 +129,7 @@ export const defaultRootSchema: RootSchema = {
             rect: {
               x: 300,
               y: 300,
-              width: 50,
+              width: 150,
               height: 50,
             },
           },
@@ -151,7 +151,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 500,
           y: 500,
-          width: 50,
+          width: 150,
           height: 30,
         },
       },
@@ -186,7 +186,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 400,
           y: 500,
-          width: 50,
+          width: 150,
           height: 30,
         },
       },
@@ -201,7 +201,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 800,
           y: 600,
-          width: 50,
+          width: 150,
           height: 30,
         },
       },
@@ -217,7 +217,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 700,
           y: 600,
-          width: 50,
+          width: 150,
           height: 30,
         },
       },

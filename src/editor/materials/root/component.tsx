@@ -1,11 +1,11 @@
 import { type Ref, forwardRef } from 'react'
 
-interface RootContainerProps {
+interface RootProps {
   backgroundColor?: string
   children?: React.ReactNode
 }
 
-const RootContainer = forwardRef((props: RootContainerProps, ref: Ref<HTMLDivElement>) => {
+const Root = forwardRef((props: RootProps, ref: Ref<HTMLDivElement>) => {
   return (
     <div ref={ref} className='w-full h-full' style={{ backgroundColor: props?.backgroundColor }}>
       {props?.children}
@@ -13,4 +13,4 @@ const RootContainer = forwardRef((props: RootContainerProps, ref: Ref<HTMLDivEle
   )
 })
 
-export default RootContainer
+export default Root
