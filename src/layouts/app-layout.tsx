@@ -10,6 +10,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <main className='flex flex-1 flex-col'>
           <SidebarProvider
             className='h-full'
+            defaultOpen={false}
             style={
               {
                 '--sidebar-width': '350px',

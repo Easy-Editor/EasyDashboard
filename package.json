@@ -1,14 +1,17 @@
 {
   "name": "easy-dashboard",
+  "version": "0.0.1",
+  "homepage": "https://easy-editor.github.io/EasyDashboard/",
   "private": true,
   "scripts": {
     "prepare": "husky",
-    "preinstall": "npx only-allow pnpm",
     "format": "biome format --write .",
     "lint": "biome check .",
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@easy-editor/core": "^0.0.5",
@@ -44,10 +47,14 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "gh-pages": "^6.3.0",
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
     "typescript": "~5.7.3",
     "vite": "^6.1.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

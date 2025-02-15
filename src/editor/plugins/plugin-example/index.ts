@@ -1,10 +1,10 @@
-import type { Plugin } from '@easy-editor/core'
+import type { PluginCreator } from '@easy-editor/core'
 
-const ExamplePlugin: Plugin = ctx => {
+const ExamplePlugin: PluginCreator = () => {
   return {
     name: 'ExamplePlugin',
     deps: [],
-    init() {
+    init(ctx) {
       ctx.logger.log('打个日志', ctx)
 
       ctx.project.set('example', {
@@ -13,7 +13,5 @@ const ExamplePlugin: Plugin = ctx => {
     },
   }
 }
-
-ExamplePlugin.pluginName = 'ExamplePlugin'
 
 export default ExamplePlugin
