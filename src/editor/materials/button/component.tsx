@@ -1,5 +1,5 @@
 import type { Ref } from 'react'
-import { Button } from '../../../components/ui/button'
+import { Button as UButton } from '@/components/ui/button'
 
 interface ButtonProps {
   ref: Ref<HTMLButtonElement>
@@ -7,14 +7,14 @@ interface ButtonProps {
   onClick?: () => void
 }
 
-const MaterialButton = (props: ButtonProps) => {
+const Button = (props: ButtonProps) => {
   const { ref, text, onClick, ...rest } = props
 
   return (
-    <Button ref={ref} className='w-full h-full' onClick={onClick} {...rest}>
+    <UButton ref={ref} className='w-full h-full' onClick={onClick} {...rest}>
       {text}
-    </Button>
+    </UButton>
   )
 }
 
-export default MaterialButton
+export default Button

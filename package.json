@@ -19,6 +19,7 @@
     "@easy-editor/plugin-hotkey": "^0.0.3",
     "@easy-editor/react-renderer": "^0.0.5",
     "@easy-editor/react-renderer-dashboard": "^0.0.5",
+    "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-collapsible": "^1.1.3",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-label": "^2.1.2",
