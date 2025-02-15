@@ -1,16 +1,19 @@
-import { type Ref, forwardRef } from 'react'
+import type { Ref } from 'react'
 
 interface RootProps {
+  ref: Ref<HTMLDivElement>
   backgroundColor?: string
   children?: React.ReactNode
 }
 
-const Root = forwardRef((props: RootProps, ref: Ref<HTMLDivElement>) => {
+const Root = (props: RootProps) => {
+  const { ref, backgroundColor, children } = props
+
   return (
-    <div ref={ref} className='w-full h-full' style={{ backgroundColor: props?.backgroundColor }}>
-      {props?.children}
+    <div ref={ref} className='w-full h-full' style={{ backgroundColor }}>
+      {children}
     </div>
   )
-})
+}
 
 export default Root
