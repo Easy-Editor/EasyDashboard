@@ -3,9 +3,9 @@ import configure from './configure'
 import snippets from './snippets'
 
 const meta: ComponentMetadata = {
-  componentName: 'Carousel',
-  title: '轮播图',
-  category: '数据',
+  componentName: 'Select',
+  title: '选择器',
+  category: '表单',
   snippets,
   configure,
 }
