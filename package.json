@@ -11,7 +11,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "add:ui": "pnpm dlx shadcn@canary add"
   },
   "dependencies": {
     "@easy-editor/core": "^0.0.5",

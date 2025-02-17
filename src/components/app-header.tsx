@@ -1,9 +1,15 @@
+import { cn } from '@/lib/utils'
 import { MainNav } from './main-nav'
 import { Button } from './ui/button'
 
-export function AppHeader() {
+export function AppHeader({ className }: { className?: string }) {
   return (
-    <header className='w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+    <header
+      className={cn(
+        'w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
+        className,
+      )}
+    >
       <div className='border-border/70 dark:border-border w-full border-dashed'>
         <div className='flex h-14 items-center px-4'>
           <MainNav />
