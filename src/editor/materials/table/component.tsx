@@ -1,5 +1,8 @@
-import { useState, type Ref } from 'react'
+import { type Ref, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow, Table as UTable } from '@/components/ui/table'
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -12,18 +15,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { ArrowUpDown, MoreHorizontal } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Table as UTable, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ArrowUpDown } from 'lucide-react'
 
 const data: Payment[] = [
   {
