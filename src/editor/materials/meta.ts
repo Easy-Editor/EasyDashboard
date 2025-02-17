@@ -12,6 +12,12 @@ import Select from './select/meta'
 import Sonner from './sonner/meta'
 import Toggle from './toggle/meta'
 import ToggleGroup from './toggle-group/meta'
+import AreaChart from './area-chart/meta'
+import BarChart from './bar-chart/meta'
+import RadialChart from './radial-chart/meta'
+import PieChart from './pie-chart/meta'
+import LineChart from './line-chart/meta'
+import RadarChart from './radar-chart/meta'
 
 export {
   Button,
@@ -28,4 +34,10 @@ export {
   Sonner,
   Toggle,
   ToggleGroup,
+  AreaChart,
+  BarChart,
+  RadialChart,
+  PieChart,
+  LineChart,
+  RadarChart,
 }

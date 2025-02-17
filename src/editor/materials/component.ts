@@ -12,6 +12,12 @@ import Select from './select/component'
 import Sonner from './sonner/component'
 import Toggle from './toggle/component'
 import ToggleGroup from './toggle-group/component'
+import AreaChart from './area-chart/component'
+import BarChart from './bar-chart/component'
+import RadialChart from './radial-chart/component'
+import PieChart from './pie-chart/component'
+import LineChart from './line-chart/component'
+import RadarChart from './radar-chart/component'
 
 export {
   Button,
@@ -28,4 +34,10 @@ export {
   Sonner,
   Toggle,
   ToggleGroup,
+  AreaChart,
+  BarChart,
+  RadialChart,
+  PieChart,
+  LineChart,
+  RadarChart,
 }
