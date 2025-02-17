@@ -6,7 +6,7 @@ export const Icons = {
       <defs id='SvgjsDefs1001'></defs>
       <g
         transform='matrix(0.6048046792627652,0,0,0.6048046792627652,-0.000018403100297668076,-0.0004948108808732459)'
-        fill='#fff'
+        fill='currentColor'
       >
         <path
           xmlns='http://www.w3.org/2000/svg'

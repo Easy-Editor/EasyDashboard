@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/sidebar'
 import { ComponentSidebar } from './sidebar-component'
 import { OutlineSidebar } from './sidebar-outline'
+import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
@@ -74,7 +75,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter></SidebarFooter>
+        <SidebarFooter>
+          <ThemeToggle />
+        </SidebarFooter>
       </Sidebar>
 
       <Sidebar collapsible='none' className='hidden flex-1 md:flex'>
