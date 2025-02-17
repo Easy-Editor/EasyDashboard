@@ -1,6 +1,6 @@
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import type { Ref } from 'react'
-import { CartesianGrid, Line, LineChart, XAxis } from 'recharts'
+import { Bar, BarChart, XAxis, YAxis } from 'recharts'
 
 const chartData = [
   { month: 'January', desktop: 186 },
@@ -18,36 +18,37 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-interface MLineChartProps {
+interface MBarChartProps {
   ref: Ref<HTMLDivElement>
 }
 
-const MLineChart = (props: MLineChartProps) => {
+const MBarChart = (props: MBarChartProps) => {
   const { ref } = props
 
   return (
     <ChartContainer ref={ref} config={chartConfig} className='w-full h-full'>
-      <LineChart
+      <BarChart
         accessibilityLayer
         data={chartData}
+        layout='vertical'
         margin={{
-          left: 12,
-          right: 12,
+          left: -20,
         }}
       >
-        <CartesianGrid vertical={false} />
-        <XAxis
+        <XAxis type='number' dataKey='desktop' hide />
+        <YAxis
           dataKey='month'
+          type='category'
           tickLine={false}
+          tickMargin={10}
           axisLine={false}
-          tickMargin={8}
           tickFormatter={value => value.slice(0, 3)}
         />
         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-        <Line dataKey='desktop' type='natural' stroke='var(--chart-1)' strokeWidth={2} dot={false} />
-      </LineChart>
+        <Bar dataKey='desktop' fill='var(--chart-1)' radius={5} />
+      </BarChart>
     </ChartContainer>
   )
 }
 
-export default MLineChart
+export default MBarChart

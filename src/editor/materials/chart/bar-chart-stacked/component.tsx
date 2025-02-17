@@ -1,4 +1,11 @@
-import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart'
 import type { Ref } from 'react'
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts'
 
@@ -40,9 +47,10 @@ const MBarChart = (props: MBarChartProps) => {
           axisLine={false}
           tickFormatter={value => value.slice(0, 3)}
         />
-        <ChartTooltip cursor={false} content={<ChartTooltipContent indicator='dashed' />} />
-        <Bar dataKey='desktop' fill='var(--chart-1)' radius={4} />
-        <Bar dataKey='mobile' fill='var(--chart-2)' radius={4} />
+        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+        <ChartLegend content={<ChartLegendContent />} />
+        <Bar dataKey='desktop' stackId='a' fill='var(--chart-1)' radius={[0, 0, 4, 4]} />
+        <Bar dataKey='mobile' stackId='a' fill='var(--chart-2)' radius={[4, 4, 0, 0]} />
       </BarChart>
     </ChartContainer>
   )
