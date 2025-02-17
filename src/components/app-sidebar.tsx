@@ -1,4 +1,4 @@
-import { Component, ListTree, X } from 'lucide-react'
+import { Component, ListTree, Pin, PinOff, X } from 'lucide-react'
 import * as React from 'react'
 
 import {
@@ -13,9 +13,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { Label } from '@radix-ui/react-label'
 import { ComponentSidebar } from './sidebar-component'
 import { OutlineSidebar } from './sidebar-outline'
+import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
@@ -38,12 +38,13 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [activeItem, setActiveItem] = React.useState(data.navMain[0])
-  const { open, setOpen } = useSidebar()
+  const { open, setOpen, fixed, toggleFixedSidebar } = useSidebar()
 
   return (
     <Sidebar
       collapsible='icon'
-      className='overflow-hidden [&>[data-sidebar=sidebar]]:flex-row h-[calc(100vh_-_var(--header-height))]'
+      variant='sidebar'
+      className='overflow-hidden [&>[data-sidebar=sidebar]]:flex-row'
       {...props}
     >
       <Sidebar collapsible='none' className='!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r'>
@@ -74,24 +75,35 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter></SidebarFooter>
+        <SidebarFooter>
+          <ThemeToggle />
+        </SidebarFooter>
       </Sidebar>
 
       <Sidebar collapsible='none' className='hidden flex-1 md:flex'>
         <SidebarHeader className='gap-3.5 border-b p-2'>
           <div className='flex w-full items-center justify-between'>
             <div className='text-base font-medium text-foreground'>{activeItem.title}</div>
-            <Label className='flex items-center gap-2 text-sm'>
+            <div className='flex items-center gap-2 text-sm'>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant='ghost' size='icon' onClick={toggleFixedSidebar}>
+                    {fixed ? <Pin /> : <PinOff />}
+                    <span className='sr-only'>{fixed ? '取消固定' : '固定'}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{fixed ? '取消固定' : '固定'}</TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant='ghost' size='icon' onClick={() => setOpen(false)}>
-                    <X className='h-4 w-4' />
+                    <X />
                     <span className='sr-only'>关闭</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>关闭</TooltipContent>
               </Tooltip>
-            </Label>
+            </div>
           </div>
         </SidebarHeader>
         <SidebarContent>{activeItem.component}</SidebarContent>

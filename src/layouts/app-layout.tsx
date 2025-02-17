@@ -6,22 +6,23 @@ import { Toaster } from '@/components/ui/sonner'
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className='h-full relative flex flex-col bg-background'>
-      <div className='border-grid flex flex-1 flex-col'>
-        <AppHeader />
+      <div className='h-full border-grid flex flex-1 flex-col'>
+        <AppHeader className='flex h-[57px]' />
         <main className='flex flex-1 flex-col'>
           <SidebarProvider
-            className='h-full'
             defaultOpen={false}
+            defaultFixed={false}
             style={
               {
                 '--sidebar-width': '350px',
+                '--header-height': '57px',
               } as React.CSSProperties
             }
           >
             <AppSidebar
               style={
                 {
-                  '--header-height': '57px',
+                  height: 'calc(100vh - 57px)',
                   top: '57px',
                 } as React.CSSProperties
               }
