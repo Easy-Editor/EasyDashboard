@@ -1,43 +1,51 @@
-import Button from './button/meta'
 import Root from './root/meta'
-import Text from './text/meta'
-import Calendar from './calendar/meta'
-import CalendarButton from './calendar-button/meta'
-import Carousel from './carousel/meta'
-import Combobox from './combobox/meta'
-import Table from './table/meta'
-import Input from './input/meta'
-import Progress from './progress/meta'
-import Select from './select/meta'
-import Sonner from './sonner/meta'
-import Toggle from './toggle/meta'
-import ToggleGroup from './toggle-group/meta'
-import AreaChart from './area-chart/meta'
-import BarChart from './bar-chart/meta'
-import RadialChart from './radial-chart/meta'
-import PieChart from './pie-chart/meta'
-import LineChart from './line-chart/meta'
-import RadarChart from './radar-chart/meta'
+
+// Basic
+import Text from './basic/text/meta'
+
+// Chart
+import AreaChart from './chart/area-chart/meta'
+import BarChart from './chart/bar-chart/meta'
+import LineChart from './chart/line-chart/meta'
+import PieChart from './chart/pie-chart/meta'
+import RadarChart from './chart/radar-chart/meta'
+import RadialChart from './chart/radial-chart/meta'
+
+// Data
+import Carousel from './data/carousel/meta'
+import Progress from './data/progress/meta'
+import Table from './data/table/meta'
+
+// Interaction
+import Button from './interaction/button/meta'
+import CalendarButton from './interaction/calendar-button/meta'
+import Calendar from './interaction/calendar/meta'
+import Combobox from './interaction/combobox/meta'
+import Input from './interaction/input/meta'
+import Select from './interaction/select/meta'
+import Sonner from './interaction/sonner/meta'
+import ToggleGroup from './interaction/toggle-group/meta'
+import Toggle from './interaction/toggle/meta'
 
 export {
+  AreaChart,
+  BarChart,
   Button,
-  Root,
-  Text,
   Calendar,
   CalendarButton,
   Carousel,
   Combobox,
-  Table,
   Input,
+  LineChart,
+  PieChart,
   Progress,
+  RadarChart,
+  RadialChart,
+  Root,
   Select,
   Sonner,
+  Table,
+  Text,
   Toggle,
   ToggleGroup,
-  AreaChart,
-  BarChart,
-  RadialChart,
-  PieChart,
-  LineChart,
-  RadarChart,
 }
