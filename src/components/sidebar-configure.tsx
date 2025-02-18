@@ -2,14 +2,19 @@ import { editor } from '@/editor'
 import { customFieldItem } from '@/editor/setters'
 import { SettingRender } from '@easy-editor/react-renderer'
 import { observer } from 'mobx-react'
+import { Sidebar, SidebarContent, SidebarHeader } from './ui/sidebar'
 
-export const ConfigureSidebar = observer(() => {
+export const ConfigureSidebar = observer(({ ...props }: React.ComponentProps<typeof Sidebar>) => {
   return (
-    <div className='flex flex-col w-[350px]'>
-      <div className='p-4 border-b border-gray-200'>
-        <h2 className='text-lg font-medium'>Property Setting</h2>
-      </div>
-      <SettingRender editor={editor} customFieldItem={customFieldItem} />
-    </div>
+    <Sidebar collapsible='none' className='sticky hidden lg:flex top-0 h-svh border-l' {...props}>
+      <SidebarHeader className='border-b p-2'>
+        <div className='flex w-full items-center justify-between'>
+          <div className='text-base font-medium text-foreground'>属性配置</div>
+        </div>
+      </SidebarHeader>
+      <SidebarContent className='p-2'>
+        <SettingRender editor={editor} customFieldItem={customFieldItem} />
+      </SidebarContent>
+    </Sidebar>
   )
 })
