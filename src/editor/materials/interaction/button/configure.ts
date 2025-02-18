@@ -22,9 +22,34 @@ const configure: Configure = {
               },
             },
             {
-              name: 'text',
-              title: '内容',
+              name: 'title',
+              title: '标题',
               setter: 'StringSetter',
+              extraProps: {
+                getValue(target) {
+                  return target.getExtraPropValue('title')
+                },
+                setValue(target, value) {
+                  target.setExtraPropValue('title', value)
+                },
+              },
+            },
+            {
+              type: 'group',
+              title: '基础属性',
+              setter: {
+                componentName: 'CollapseSetter',
+                props: {
+                  icon: false,
+                },
+              },
+              items: [
+                {
+                  name: 'text',
+                  title: '内容',
+                  setter: 'StringSetter',
+                },
+              ],
             },
           ],
         },

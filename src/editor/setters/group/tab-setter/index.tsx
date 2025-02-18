@@ -52,7 +52,7 @@ const TabSetter = (props: TabSetterProps) => {
           <TabsContent
             key={child.props.field.config.key}
             value={child.props.field.config.key}
-            className='box-border p-2 mt-0'
+            className='box-border p-2 mt-0 space-y-3'
           >
             {child}
           </TabsContent>
