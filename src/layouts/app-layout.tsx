@@ -1,5 +1,6 @@
 import { AppHeader } from '@/components/app-header'
 import { AppSidebar } from '@/components/app-sidebar'
+import { ConfigureSidebar } from '@/components/sidebar-configure'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -30,6 +31,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarInset>
               <div className='flex flex-1 flex-col gap-4 p-4'>{children}</div>
             </SidebarInset>
+            <ConfigureSidebar />
           </SidebarProvider>
         </main>
         <Toaster />
