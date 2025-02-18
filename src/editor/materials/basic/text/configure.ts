@@ -6,7 +6,6 @@ const configure: Configure = {
     {
       type: 'group',
       title: '功能',
-      setter: 'GroupSetter',
       items: [
         {
           type: 'field',
