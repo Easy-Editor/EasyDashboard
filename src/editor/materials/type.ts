@@ -1,10 +1,10 @@
 export enum MaterialGroup {
   /** 基础 */
-  BASIC = 'basic',
+  BASIC = 'Basic',
   /** 图表 */
-  CHART = 'chart',
+  CHART = 'Chart',
   /** 数据展示 */
-  DATA = 'data',
+  DATA = 'Data',
   /** 交互 */
-  INTERACTION = 'interaction',
+  INTERACTION = 'Interaction',
 }
