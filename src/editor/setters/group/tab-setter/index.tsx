@@ -49,7 +49,11 @@ const TabSetter = (props: TabSetterProps) => {
       ))} */}
       {Array.isArray(children) &&
         children.map(child => (
-          <TabsContent key={child.props.field.config.key} value={child.props.field.config.key}>
+          <TabsContent
+            key={child.props.field.config.key}
+            value={child.props.field.config.key}
+            className='box-border p-2 mt-0'
+          >
             {child}
           </TabsContent>
         ))}

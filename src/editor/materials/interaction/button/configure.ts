@@ -14,6 +14,14 @@ const configure: Configure = {
           title: '基本',
           items: [
             {
+              name: 'id',
+              title: 'ID',
+              setter: 'NodeIdSetter',
+              extraProps: {
+                label: false,
+              },
+            },
+            {
               name: 'text',
               title: '内容',
               setter: 'StringSetter',
