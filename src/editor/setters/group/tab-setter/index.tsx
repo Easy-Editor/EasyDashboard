@@ -1,6 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { SetterProps, SettingField } from '@easy-editor/core'
-import { SettingFieldView } from '@easy-editor/react-renderer'
+import type { SetterProps } from '@easy-editor/core'
 import type { PropsWithChildren } from 'react'
 import React from 'react'
 
@@ -9,13 +8,10 @@ interface TabSetterProps extends SetterProps<string>, PropsWithChildren {
     label: string
     value: string
   }[]
-  defaultValue?: string
-
-  field: SettingField
 }
 
 const TabSetter = (props: TabSetterProps) => {
-  const { tabs, defaultValue, children, field } = props
+  const { tabs, initialValue, children } = props
 
   const tabsList = React.useMemo(() => {
     if (tabs) return tabs
@@ -30,7 +26,7 @@ const TabSetter = (props: TabSetterProps) => {
   const firstTabValue = React.useMemo(() => tabsList[0]?.value, [tabsList])
 
   return (
-    <Tabs defaultValue={defaultValue ?? firstTabValue} className='w-full'>
+    <Tabs defaultValue={initialValue ?? firstTabValue} className='w-full'>
       <TabsList
         className='grid w-full'
         style={{
@@ -44,19 +40,19 @@ const TabSetter = (props: TabSetterProps) => {
         ))}
       </TabsList>
       {/* TODO：两种 group 的渲染方式，一种是 field.items，一种是 children */}
-      {field.items?.map(item => (
+      {/* {field.items?.map(item => (
         <TabsContent key={item.config.key} value={item.config.key as string} className='box-border p-4 mt-0'>
           {item.items?.map(item => (
             <SettingFieldView key={item.name} field={item} />
           ))}
         </TabsContent>
-      ))}
-      {/* {Array.isArray(children) &&
+      ))} */}
+      {Array.isArray(children) &&
         children.map(child => (
-          <TabsContent key={child.props.field.config.name} value={child.props.field.config.name}>
+          <TabsContent key={child.props.field.config.key} value={child.props.field.config.key}>
             {child}
           </TabsContent>
-        ))} */}
+        ))}
     </Tabs>
   )
 }

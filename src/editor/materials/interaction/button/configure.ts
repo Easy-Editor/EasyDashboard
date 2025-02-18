@@ -9,6 +9,7 @@ const configure: Configure = {
       setter: 'TabSetter',
       items: [
         {
+          type: 'group',
           key: 'basic',
           title: '基本',
           items: [
@@ -20,6 +21,7 @@ const configure: Configure = {
           ],
         },
         {
+          type: 'group',
           key: 'advanced',
           title: '高级',
           items: [
