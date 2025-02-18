@@ -251,7 +251,7 @@ export const defaultRootSchema: RootSchema = {
         rect: {
           x: 700,
           y: 600,
-          width: 50,
+          width: 150,
           height: 30,
         },
       },
@@ -288,7 +288,7 @@ export const defaultRootSchema: RootSchema = {
       value: 'false',
     },
   },
-  css: 'body {\n  font-size: 12px;\n}\n\n.button {\n  width: 100px;\n  color: #ff00ff\n}',
+  css: 'body {\n  font-size: 12px;\n}\n\n.button {\n  color: #ff00ff\n}',
   lifeCycles: {
     componentDidMount: {
       type: 'JSFunction',
