@@ -1,4 +1,8 @@
-import GroupSetter from './group-setter'
-import StringSetter from './string-setter'
+import StringSetter from './basic/string-setter'
 
-export { GroupSetter, StringSetter }
+import GroupSetter from './group-setter'
+import TabSetter from './group/tab-setter'
+
+export { GroupSetter, StringSetter, TabSetter }
+
+export * from './custom-field-item'

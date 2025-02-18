@@ -250,7 +250,7 @@ export const defaultRootSchema: RootSchema = {
       $dashboard: {
         rect: {
           x: 700,
-          y: 600,
+          y: 700,
           width: 150,
           height: 30,
         },

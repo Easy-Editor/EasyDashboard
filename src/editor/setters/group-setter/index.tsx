@@ -6,7 +6,7 @@ interface GroupSetterProps extends SetterProps<string>, PropsWithChildren {}
 const GroupSetter = (props: GroupSetterProps) => {
   const { children } = props
 
-  return <div className='space-y-4 flex flex-col gap-2'>{children}</div>
+  return <div>{children}</div>
 }
 
 export default GroupSetter

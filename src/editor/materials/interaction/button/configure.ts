@@ -6,13 +6,29 @@ const configure: Configure = {
     {
       type: 'group',
       title: '功能',
-      setter: 'GroupSetter',
+      setter: 'TabSetter',
       items: [
         {
-          type: 'field',
-          name: 'text',
-          title: '内容',
-          setter: 'StringSetter',
+          key: 'basic',
+          title: '基本',
+          items: [
+            {
+              name: 'text',
+              title: '内容',
+              setter: 'StringSetter',
+            },
+          ],
+        },
+        {
+          key: 'advanced',
+          title: '高级',
+          items: [
+            {
+              name: 'size',
+              title: '尺寸',
+              setter: 'StringSetter',
+            },
+          ],
         },
       ],
     },
