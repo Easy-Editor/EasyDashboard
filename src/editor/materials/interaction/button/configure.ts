@@ -45,6 +45,19 @@ const configure: Configure = {
               },
               items: [
                 {
+                  name: 'rect',
+                  title: '位置尺寸',
+                  setter: 'RectSetter',
+                  extraProps: {
+                    getValue(target) {
+                      return target.getExtraPropValue('$dashboard.rect')
+                    },
+                    setValue(target, value) {
+                      target.setExtraPropValue('$dashboard.rect', value)
+                    },
+                  },
+                },
+                {
                   name: 'text',
                   title: '内容',
                   setter: 'StringSetter',
