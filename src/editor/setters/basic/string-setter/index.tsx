@@ -1,4 +1,5 @@
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import type { SetterProps } from '@easy-editor/core'
 
 interface StringSetterProps extends SetterProps<string> {
@@ -15,7 +16,7 @@ const StringSetter = (props: StringSetterProps) => {
         value={value}
         placeholder={placeholder || ''}
         onChange={e => onChange(e.target.value)}
-        className={suffix ? 'pr-8' : ''}
+        className={cn('h-8 !text-xs px-2 py-[5px]', suffix && 'pr-8')}
       />
       {suffix && (
         <span

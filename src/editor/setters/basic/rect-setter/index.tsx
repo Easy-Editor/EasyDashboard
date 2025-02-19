@@ -14,7 +14,7 @@ const RectSetter = (props: RectSetterProps) => {
     <div className='w-full flex flex-wrap gap-2'>
       <div className='relative w-[calc(50%_-_4px)]'>
         <Input
-          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
           value={value.x}
           onChange={e => handleChange('x', Number(e.target.value))}
@@ -28,7 +28,7 @@ const RectSetter = (props: RectSetterProps) => {
       </div>
       <div className='relative w-[calc(50%_-_4px)]'>
         <Input
-          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
           value={value.y}
           onChange={e => handleChange('y', Number(e.target.value))}
@@ -42,7 +42,7 @@ const RectSetter = (props: RectSetterProps) => {
       </div>
       <div className='relative w-[calc(50%_-_4px)]'>
         <Input
-          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
           value={value.width}
           onChange={e => handleChange('width', Number(e.target.value))}
@@ -56,7 +56,7 @@ const RectSetter = (props: RectSetterProps) => {
       </div>
       <div className='relative w-[calc(50%_-_4px)]'>
         <Input
-          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
           value={value.height}
           onChange={e => handleChange('height', Number(e.target.value))}
