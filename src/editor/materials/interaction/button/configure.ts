@@ -58,14 +58,34 @@ const configure: Configure = {
                   },
                 },
                 {
-                  name: 'text',
-                  title: '内容',
-                  setter: 'StringSetter',
+                  name: 'textDirection',
+                  title: '文字方向',
+                  setter: {
+                    componentName: 'RadioSetter',
+                    props: {
+                      // orientation: '',
+                      options: [
+                        {
+                          label: '横排',
+                          value: 'horizontal',
+                        },
+                        {
+                          label: '竖排',
+                          value: 'vertical',
+                        },
+                      ],
+                    },
+                  },
                 },
                 {
                   name: 'text',
                   title: '内容',
                   setter: 'StringSetter',
+                },
+                {
+                  name: 'testNum',
+                  title: '内容',
+                  setter: 'NumberSetter',
                 },
               ],
             },
