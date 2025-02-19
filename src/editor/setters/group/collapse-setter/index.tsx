@@ -15,7 +15,7 @@ const CollapseSetter = (props: CollapseSetterProps) => {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className='w-[calc(100%_+_32px)] space-y-2 -translate-x-4'>
-      <div className='flex items-center justify-between space-x-4 px-4 bg-[#2d2f38] h-8'>
+      <div className='flex items-center justify-between space-x-4 px-4 h-8'>
         <h4 className='text-sm font-semibold'>{field.title}</h4>
         {icon && (
           <CollapsibleTrigger asChild>

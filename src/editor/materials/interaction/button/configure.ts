@@ -40,7 +40,7 @@ const configure: Configure = {
               setter: {
                 componentName: 'CollapseSetter',
                 props: {
-                  icon: false,
+                  icon: true,
                 },
               },
               items: [
@@ -56,6 +56,33 @@ const configure: Configure = {
                       target.setExtraPropValue('$dashboard.rect', value)
                     },
                   },
+                },
+                {
+                  name: 'text',
+                  title: '内容',
+                  setter: 'StringSetter',
+                },
+                {
+                  name: 'text',
+                  title: '内容',
+                  setter: 'StringSetter',
+                },
+              ],
+            },
+            {
+              type: 'group',
+              title: '基础属性',
+              setter: {
+                componentName: 'AccordionSetter',
+                props: {
+                  orientation: 'horizontal',
+                },
+              },
+              items: [
+                {
+                  name: 'text',
+                  title: '内容',
+                  setter: 'StringSetter',
                 },
                 {
                   name: 'text',
