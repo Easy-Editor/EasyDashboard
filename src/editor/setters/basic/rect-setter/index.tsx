@@ -13,7 +13,12 @@ const RectSetter = (props: RectSetterProps) => {
   return (
     <div className='w-full flex flex-wrap gap-2'>
       <div className='relative w-[calc(50%_-_4px)]'>
-        <Input className={'pr-8'} value={value.x} onChange={e => handleChange('x', Number(e.target.value))} />
+        <Input
+          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          type='number'
+          value={value.x}
+          onChange={e => handleChange('x', Number(e.target.value))}
+        />
         <span
           className='absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none'
           aria-label={'Unit: X'}
@@ -22,7 +27,12 @@ const RectSetter = (props: RectSetterProps) => {
         </span>
       </div>
       <div className='relative w-[calc(50%_-_4px)]'>
-        <Input className={'pr-8'} value={value.y} onChange={e => handleChange('y', Number(e.target.value))} />
+        <Input
+          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          type='number'
+          value={value.y}
+          onChange={e => handleChange('y', Number(e.target.value))}
+        />
         <span
           className='absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none'
           aria-label={'Unit: Y'}
@@ -31,7 +41,12 @@ const RectSetter = (props: RectSetterProps) => {
         </span>
       </div>
       <div className='relative w-[calc(50%_-_4px)]'>
-        <Input className={'pr-8'} value={value.width} onChange={e => handleChange('width', Number(e.target.value))} />
+        <Input
+          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          type='number'
+          value={value.width}
+          onChange={e => handleChange('width', Number(e.target.value))}
+        />
         <span
           className='absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none'
           aria-label={'Unit: W'}
@@ -40,7 +55,12 @@ const RectSetter = (props: RectSetterProps) => {
         </span>
       </div>
       <div className='relative w-[calc(50%_-_4px)]'>
-        <Input className={'pr-8'} value={value.height} onChange={e => handleChange('height', Number(e.target.value))} />
+        <Input
+          className='pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          type='number'
+          value={value.height}
+          onChange={e => handleChange('height', Number(e.target.value))}
+        />
         <span
           className='absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none'
           aria-label={'Unit: H'}
