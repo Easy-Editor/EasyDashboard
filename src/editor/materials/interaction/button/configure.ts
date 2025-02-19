@@ -72,6 +72,37 @@ const configure: Configure = {
             {
               type: 'group',
               title: '基础属性',
+              setter: 'SubTabSetter',
+              items: [
+                {
+                  type: 'group',
+                  key: 'basic',
+                  title: '测试1',
+                  items: [
+                    {
+                      name: 'text',
+                      title: '内容123',
+                      setter: 'StringSetter',
+                    },
+                  ],
+                },
+                {
+                  type: 'group',
+                  key: 'test',
+                  title: '测试2',
+                  items: [
+                    {
+                      name: 'text',
+                      title: '内容312',
+                      setter: 'StringSetter',
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: 'group',
+              title: '基础属性',
               setter: {
                 componentName: 'AccordionSetter',
                 props: {

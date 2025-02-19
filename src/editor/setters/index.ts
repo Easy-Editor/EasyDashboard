@@ -4,8 +4,9 @@ import StringSetter from './basic/string-setter'
 
 import AccordionSetter from './group/accordion-setter'
 import CollapseSetter from './group/collapse-setter'
+import SubTabSetter from './group/sub-tab-setter'
 import TabSetter from './group/tab-setter'
 
-export { AccordionSetter, CollapseSetter, NodeIdSetter, RectSetter, StringSetter, TabSetter }
+export { AccordionSetter, CollapseSetter, NodeIdSetter, RectSetter, StringSetter, SubTabSetter, TabSetter }
 
 export * from './custom-field-item'
