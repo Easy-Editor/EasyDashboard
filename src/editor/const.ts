@@ -25,6 +25,8 @@ export const defaultRootSchema: RootSchema = {
         textDirection: 'horizontal',
         variant: 'default',
         loading: false,
+        horizontalAlign: 'center',
+        verticalAlign: 'center',
       },
       $dashboard: {
         rect: {

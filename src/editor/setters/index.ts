@@ -5,6 +5,7 @@ import RectSetter from './basic/rect-setter'
 import SelectSetter from './basic/select-setter'
 import StringSetter from './basic/string-setter'
 import SwitchSetter from './basic/switch-setter'
+import ToggleGroupSetter from './basic/toggle-group-setter'
 
 import AccordionSetter from './group/accordion-setter'
 import CollapseSetter from './group/collapse-setter'
@@ -23,6 +24,7 @@ export {
   SubTabSetter,
   SwitchSetter,
   TabSetter,
+  ToggleGroupSetter,
 }
 
 export * from './custom-field-item'

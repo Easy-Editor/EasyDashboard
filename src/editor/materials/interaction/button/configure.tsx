@@ -1,4 +1,12 @@
 import type { Configure } from '@easy-editor/core'
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  AlignVerticalJustifyStart,
+} from 'lucide-react'
 import Button from './component'
 
 const configure: Configure = {
@@ -88,6 +96,59 @@ const configure: Configure = {
                         },
                       },
                     },
+                    {
+                      name: 'horizontalAlign',
+                      title: '水平对齐',
+                      setter: {
+                        componentName: 'ToggleGroupSetter',
+                        props: {
+                          options: [
+                            {
+                              label: '左对齐',
+                              value: 'flex-start',
+                              icon: <AlignLeft />,
+                            },
+                            {
+                              label: '居中',
+                              value: 'center',
+                              icon: <AlignCenter />,
+                            },
+                            {
+                              label: '右对齐',
+                              value: 'flex-end',
+                              icon: <AlignRight />,
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    {
+                      name: 'verticalAlign',
+                      title: '垂直对齐',
+                      setter: {
+                        componentName: 'ToggleGroupSetter',
+                        props: {
+                          options: [
+                            {
+                              label: '上对齐',
+                              value: 'flex-start',
+                              icon: <AlignVerticalJustifyStart />,
+                            },
+                            {
+                              label: '居中',
+                              value: 'center',
+                              icon: <AlignVerticalJustifyCenter />,
+                            },
+                            {
+                              label: '下对齐',
+                              value: 'flex-end',
+                              icon: <AlignVerticalJustifyEnd />,
+                            },
+                          ],
+                        },
+                      },
+                    },
+
                     {
                       name: 'variant',
                       title: '按钮样式',

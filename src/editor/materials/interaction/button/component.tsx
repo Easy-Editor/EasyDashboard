@@ -12,17 +12,31 @@ interface ButtonProps {
   textDirection?: 'horizontal' | 'vertical'
   variant?: VariantProps<typeof buttonVariants>['variant']
   loading?: boolean
+  horizontalAlign?: 'flex-start' | 'center' | 'flex-end'
+  verticalAlign?: 'flex-start' | 'center' | 'flex-end'
 }
 
 const Button = (props: ButtonProps) => {
-  const { ref, text, onClick, className, textDirection = 'horizontal', variant = 'default', loading = false } = props
+  const {
+    ref,
+    text,
+    onClick,
+    className,
+    textDirection = 'horizontal',
+    variant = 'default',
+    loading = false,
+    horizontalAlign = 'center',
+    verticalAlign = 'center',
+  } = props
 
   return (
     <UButton
       ref={ref}
-      className={cn('w-full h-full flex items-center justify-center writing-mode', className)}
+      className={cn('w-full h-full flex writing-mode', className)}
       style={{
         writingMode: textDirection === 'horizontal' ? 'horizontal-tb' : 'vertical-lr',
+        justifyContent: horizontalAlign,
+        alignItems: verticalAlign,
       }}
       onClick={onClick}
       aria-label={text}
