@@ -1,5 +1,6 @@
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { cn } from '@/lib/utils'
 import type { SetterProps } from '@easy-editor/core'
 
 interface RadioSetterProps extends SetterProps<string> {
@@ -8,10 +9,14 @@ interface RadioSetterProps extends SetterProps<string> {
 }
 
 const RadioSetter = (props: RadioSetterProps) => {
-  const { value, onChange, options, orientation = 'horizontal' } = props
+  const { value, onChange, initialValue, options, orientation = 'horizontal' } = props
 
   return (
-    <RadioGroup defaultValue={value} className='w-full' onValueChange={onChange} orientation={orientation}>
+    <RadioGroup
+      defaultValue={value || initialValue}
+      className={cn('w-full', orientation === 'horizontal' && 'flex space-x-2')}
+      onValueChange={onChange}
+    >
       {options.map(item => (
         <div key={item.value} className='flex items-center space-x-2'>
           <RadioGroupItem value={item.value} id={item.value} />

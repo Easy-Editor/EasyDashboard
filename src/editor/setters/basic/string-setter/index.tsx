@@ -8,12 +8,12 @@ interface StringSetterProps extends SetterProps<string> {
 }
 
 const StringSetter = (props: StringSetterProps) => {
-  const { value, placeholder, onChange, suffix } = props
+  const { value, initialValue, placeholder, onChange, suffix } = props
 
   return (
     <div className='relative w-full'>
       <Input
-        value={value}
+        value={value || initialValue}
         placeholder={placeholder || ''}
         onChange={e => onChange(e.target.value)}
         className={cn('h-8 !text-xs px-2 py-[5px]', suffix && 'pr-8')}

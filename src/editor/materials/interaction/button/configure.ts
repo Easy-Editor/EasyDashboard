@@ -40,7 +40,7 @@ const configure: Configure = {
               setter: {
                 componentName: 'CollapseSetter',
                 props: {
-                  icon: true,
+                  icon: false,
                 },
               },
               items: [
@@ -57,59 +57,53 @@ const configure: Configure = {
                     },
                   },
                 },
-                {
-                  name: 'textDirection',
-                  title: '文字方向',
-                  setter: {
-                    componentName: 'RadioSetter',
-                    props: {
-                      // orientation: '',
-                      options: [
-                        {
-                          label: '横排',
-                          value: 'horizontal',
-                        },
-                        {
-                          label: '竖排',
-                          value: 'vertical',
-                        },
-                      ],
-                    },
-                  },
-                },
-                {
-                  name: 'text',
-                  title: '内容',
-                  setter: 'StringSetter',
-                },
-                {
-                  name: 'testNum',
-                  title: '内容',
-                  setter: 'NumberSetter',
-                },
               ],
             },
             {
               type: 'group',
-              title: '基础属性',
               setter: 'SubTabSetter',
               items: [
                 {
                   type: 'group',
                   key: 'basic',
-                  title: '测试1',
+                  title: '全局',
                   items: [
                     {
+                      name: 'textDirection',
+                      title: '文字方向',
+                      setter: {
+                        componentName: 'RadioSetter',
+                        props: {
+                          // orientation: '',
+                          options: [
+                            {
+                              label: '横排',
+                              value: 'horizontal',
+                            },
+                            {
+                              label: '竖排',
+                              value: 'vertical',
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    {
                       name: 'text',
-                      title: '内容123',
+                      title: '内容',
                       setter: 'StringSetter',
+                    },
+                    {
+                      name: 'testNum',
+                      title: '内容',
+                      setter: 'NumberSetter',
                     },
                   ],
                 },
                 {
                   type: 'group',
                   key: 'test',
-                  title: '测试2',
+                  title: '样式',
                   items: [
                     {
                       name: 'text',

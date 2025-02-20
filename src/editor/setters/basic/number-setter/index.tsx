@@ -8,7 +8,7 @@ interface NumberSetterProps extends SetterProps<number> {
 }
 
 const NumberSetter = (props: NumberSetterProps) => {
-  const { value, placeholder, onChange, suffix } = props
+  const { value, initialValue, placeholder, onChange, suffix } = props
 
   return (
     <div className='relative w-full'>
@@ -19,7 +19,7 @@ const NumberSetter = (props: NumberSetterProps) => {
           suffix && 'pr-8',
         )}
         placeholder={placeholder || ''}
-        value={value}
+        value={value || initialValue}
         onChange={e => onChange(+e.target.value)}
       />
       {suffix && (

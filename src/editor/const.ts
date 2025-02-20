@@ -22,6 +22,7 @@ export const defaultRootSchema: RootSchema = {
       props: {
         type: 'primary',
         text: 'Button in Root',
+        textDirection: 'horizontal',
       },
       $dashboard: {
         rect: {
