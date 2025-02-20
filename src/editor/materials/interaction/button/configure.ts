@@ -89,6 +89,46 @@ const configure: Configure = {
                       },
                     },
                     {
+                      name: 'variant',
+                      title: '按钮样式',
+                      setter: {
+                        componentName: 'SelectSetter',
+                        props: {
+                          options: [
+                            {
+                              label: '默认',
+                              value: 'default',
+                            },
+                            {
+                              label: '次要',
+                              value: 'secondary',
+                            },
+                            {
+                              label: '危险',
+                              value: 'destructive',
+                            },
+                            {
+                              label: '线框',
+                              value: 'outline',
+                            },
+                            {
+                              label: '幽灵',
+                              value: 'ghost',
+                            },
+                            {
+                              label: '链接',
+                              value: 'link',
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    {
+                      name: 'loading',
+                      title: '加载',
+                      setter: 'SwitchSetter',
+                    },
+                    {
                       name: 'text',
                       title: '内容',
                       setter: 'StringSetter',

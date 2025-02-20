@@ -48,7 +48,7 @@ const SubTabSetter = (props: SubTabSetterProps) => {
           <TabsContent
             key={child.props.field.config.key}
             value={child.props.field.config.key}
-            className='box-border px-4 py-2 mt-0 space-y-3'
+            className='box-border px-4 py-2 mt-0 space-y-4'
           >
             {child}
           </TabsContent>

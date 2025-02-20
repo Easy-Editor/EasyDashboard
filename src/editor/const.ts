@@ -23,6 +23,8 @@ export const defaultRootSchema: RootSchema = {
         type: 'primary',
         text: 'Button in Root',
         textDirection: 'horizontal',
+        variant: 'default',
+        loading: false,
       },
       $dashboard: {
         rect: {

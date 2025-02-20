@@ -9,7 +9,7 @@ export const customFieldItem = (field: SettingField, setter: ReactNode) => {
 
   return (
     <div className='flex w-full items-center text-xs'>
-      <Label className='basis-[100px] text-xs' htmlFor={field.id}>
+      <Label className='basis-[100px] text-xs shrink-0 grow-0' htmlFor={field.id}>
         {field.title}
       </Label>
       {setter}
