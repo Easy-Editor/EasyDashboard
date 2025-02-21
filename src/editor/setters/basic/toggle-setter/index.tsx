@@ -2,11 +2,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { SetterProps } from '@easy-editor/core'
 import type React from 'react'
 
-interface ToggleGroupSetterProps extends SetterProps<string> {
+interface ToggleSetterProps extends SetterProps<string> {
   options: { label: string; value: string; icon?: React.ReactNode }[]
 }
 
-const ToggleGroupSetter = (props: ToggleGroupSetterProps) => {
+const ToggleSetter = (props: ToggleSetterProps) => {
   const { value, onChange, initialValue, options } = props
 
   return (
@@ -26,4 +26,4 @@ const ToggleGroupSetter = (props: ToggleGroupSetterProps) => {
   )
 }
 
-export default ToggleGroupSetter
+export default ToggleSetter

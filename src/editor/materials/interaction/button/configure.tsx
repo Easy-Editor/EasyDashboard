@@ -100,7 +100,7 @@ const configure: Configure = {
                       name: 'horizontalAlign',
                       title: '水平对齐',
                       setter: {
-                        componentName: 'ToggleGroupSetter',
+                        componentName: 'ToggleSetter',
                         props: {
                           options: [
                             {
@@ -126,7 +126,7 @@ const configure: Configure = {
                       name: 'verticalAlign',
                       title: '垂直对齐',
                       setter: {
-                        componentName: 'ToggleGroupSetter',
+                        componentName: 'ToggleSetter',
                         props: {
                           options: [
                             {
@@ -189,16 +189,6 @@ const configure: Configure = {
                       title: '加载',
                       setter: 'SwitchSetter',
                     },
-                    {
-                      name: 'text',
-                      title: '内容',
-                      setter: 'StringSetter',
-                    },
-                    {
-                      name: 'testNum',
-                      title: '内容',
-                      setter: 'NumberSetter',
-                    },
                   ],
                 },
                 {
@@ -207,9 +197,46 @@ const configure: Configure = {
                   title: '样式',
                   items: [
                     {
-                      name: 'text',
-                      title: '内容312',
-                      setter: 'StringSetter',
+                      type: 'group',
+                      setter: 'ToggleGroupSetter',
+                      items: [
+                        {
+                          type: 'group',
+                          key: 'default',
+                          title: '默认',
+                          items: [
+                            {
+                              name: 'text',
+                              title: '内容111',
+                              setter: 'StringSetter',
+                            },
+                          ],
+                        },
+                        {
+                          type: 'group',
+                          key: 'click',
+                          title: '点击',
+                          items: [
+                            {
+                              name: 'text',
+                              title: '内容222',
+                              setter: 'StringSetter',
+                            },
+                          ],
+                        },
+                        {
+                          type: 'group',
+                          key: 'hover',
+                          title: '悬停',
+                          items: [
+                            {
+                              name: 'text',
+                              title: '内容333',
+                              setter: 'StringSetter',
+                            },
+                          ],
+                        },
+                      ],
                     },
                   ],
                 },
