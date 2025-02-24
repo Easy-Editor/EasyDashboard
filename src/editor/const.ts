@@ -21,12 +21,22 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: 'Button in Root',
+        content: 'Button in Root',
         textDirection: 'horizontal',
         variant: 'default',
         loading: false,
         horizontalAlign: 'center',
         verticalAlign: 'center',
+        radius: 6,
+        text: {
+          fontFamily: 'Arial',
+          fontSize: 16,
+          color: '#000000',
+          fontWeight: false,
+          fontStyle: false,
+          letterSpacing: 0,
+          lineHeight: 18,
+        },
       },
       $dashboard: {
         rect: {
@@ -41,7 +51,7 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: 'Button in Root with hidden',
+        content: 'Button in Root with hidden',
       },
       hidden: true,
       $dashboard: {
@@ -57,7 +67,7 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: 'Button in Root with locked',
+        content: 'Button in Root with locked',
       },
       locked: true,
       $dashboard: {
@@ -81,7 +91,7 @@ export const defaultRootSchema: RootSchema = {
               componentName: 'Button',
               props: {
                 type: 'primary',
-                text: 'Button in Group2',
+                content: 'Button in Group2',
               },
               $dashboard: {
                 rect: {
@@ -96,7 +106,7 @@ export const defaultRootSchema: RootSchema = {
               componentName: 'Button',
               props: {
                 type: 'primary',
-                text: 'Button2 in Group2',
+                content: 'Button2 in Group2',
               },
               $dashboard: {
                 rect: {
@@ -113,7 +123,7 @@ export const defaultRootSchema: RootSchema = {
           componentName: 'Button',
           props: {
             type: 'primary',
-            text: 'Hidden Button in Group',
+            content: 'Hidden Button in Group',
           },
           $dashboard: {
             rect: {
@@ -129,7 +139,7 @@ export const defaultRootSchema: RootSchema = {
           componentName: 'Button',
           props: {
             type: 'primary',
-            text: 'Locked Button in Group',
+            content: 'Locked Button in Group',
           },
           $dashboard: {
             rect: {
@@ -147,7 +157,7 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: {
+        content: {
           type: 'JSExpression',
           value: 'this.state.text',
           mock: 'Button with state',
@@ -166,7 +176,7 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: 'Button with event',
+        content: 'Button with event',
         __events: {
           eventDataList: [
             {
@@ -201,7 +211,7 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: 'Button with Condition',
+        content: 'Button with Condition',
       },
       $dashboard: {
         rect: {
@@ -217,7 +227,7 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: 'Button with Loop',
+        content: 'Button with Loop',
       },
       $dashboard: {
         rect: {
@@ -234,7 +244,7 @@ export const defaultRootSchema: RootSchema = {
     //   componentName: 'Button',
     //   props: {
     //     type: 'primary',
-    //     text: { error: 'error' },
+    //     content: { error: 'error' },
     //   },
     //   $dashboard: {
     //     rect: {
@@ -249,7 +259,7 @@ export const defaultRootSchema: RootSchema = {
       componentName: 'Button',
       props: {
         type: 'primary',
-        text: 'Button with className',
+        content: 'Button with className',
         className: 'button test',
       },
       $dashboard: {

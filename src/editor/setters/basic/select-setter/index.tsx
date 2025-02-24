@@ -9,13 +9,13 @@ import {
 } from '@/components/ui/select'
 import type { SetterProps } from '@easy-editor/core'
 
-interface RadioSetterProps extends SetterProps<string> {
+interface SelectSetterProps extends SetterProps<string> {
   options: { label: string; value: string; group?: boolean; items?: { label: string; value: string }[] }[]
   orientation?: 'horizontal' | 'vertical'
   placeholder?: string
 }
 
-const RadioSetter = (props: RadioSetterProps) => {
+const SelectSetter = (props: SelectSetterProps) => {
   const { value, onChange, initialValue, options, placeholder } = props
 
   return (
@@ -48,4 +48,4 @@ const RadioSetter = (props: RadioSetterProps) => {
   )
 }
 
-export default RadioSetter
+export default SelectSetter

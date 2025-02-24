@@ -206,9 +206,86 @@ const configure: Configure = {
                           title: '默认',
                           items: [
                             {
-                              name: 'text',
-                              title: '内容111',
-                              setter: 'StringSetter',
+                              name: 'radius',
+                              title: '圆角',
+                              setter: {
+                                componentName: 'NumberSetter',
+                                props: {
+                                  suffix: 'px',
+                                },
+                              },
+                            },
+                            {
+                              type: 'group',
+                              title: '文字',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'text.fontFamily',
+                                  title: '字体',
+                                  setter: {
+                                    componentName: 'SelectSetter',
+                                    props: {
+                                      options: [
+                                        {
+                                          label: 'Arial',
+                                          value: 'Arial',
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.fontSize',
+                                  title: '字体大小',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                // {
+                                //   name: 'text.color',
+                                //   title: '字体颜色',
+                                //   setter: 'ColorSetter',
+                                // },
+                                {
+                                  name: 'text.fontWeight',
+                                  title: '字体粗细',
+                                  setter: 'SwitchSetter',
+                                },
+                                {
+                                  name: 'text.fontStyle',
+                                  title: '斜体',
+                                  setter: 'SwitchSetter',
+                                },
+                                {
+                                  name: 'text.letterSpacing',
+                                  title: '字距',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.lineHeight',
+                                  title: '行高',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                              ],
                             },
                           ],
                         },
@@ -239,28 +316,6 @@ const configure: Configure = {
                       ],
                     },
                   ],
-                },
-              ],
-            },
-            {
-              type: 'group',
-              title: '基础属性',
-              setter: {
-                componentName: 'AccordionSetter',
-                props: {
-                  orientation: 'horizontal',
-                },
-              },
-              items: [
-                {
-                  name: 'text',
-                  title: '内容',
-                  setter: 'StringSetter',
-                },
-                {
-                  name: 'text',
-                  title: '内容',
-                  setter: 'StringSetter',
                 },
               ],
             },
