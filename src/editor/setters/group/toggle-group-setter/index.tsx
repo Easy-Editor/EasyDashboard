@@ -33,7 +33,7 @@ const ToggleGroupSetter = (props: ToggleGroupSetterProps) => {
         value={value}
         defaultValue={initialValue ?? firstOptionValue}
         onValueChange={setValue}
-        className='w-full text-xs'
+        className='w-full text-xs border'
       >
         {optionsList.map(item => (
           <ToggleGroupItem

@@ -10,7 +10,7 @@ const ToggleSetter = (props: ToggleSetterProps) => {
   const { value, onChange, initialValue, options } = props
 
   return (
-    <ToggleGroup type='single' value={value || initialValue} onValueChange={onChange} className='w-full text-xs'>
+    <ToggleGroup type='single' value={value || initialValue} onValueChange={onChange} className='w-full text-xs border'>
       {options.map(item => (
         <ToggleGroupItem
           key={item.value}

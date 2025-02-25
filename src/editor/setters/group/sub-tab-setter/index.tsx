@@ -27,7 +27,7 @@ const SubTabSetter = (props: SubTabSetterProps) => {
 
   return (
     <Tabs defaultValue={initialValue ?? firstTabValue} className='w-[calc(100%_+_32px)] space-y-2 -translate-x-4'>
-      <TabsList className='flex w-full gap-x-6 border-b bg-transparent p-0'>
+      <TabsList className='flex w-full gap-x-6 border-b bg-transparent p-0 rounded-none'>
         {tabsList.map(tab => (
           <TabsTrigger
             key={tab.value}

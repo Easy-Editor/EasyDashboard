@@ -65,9 +65,17 @@ const OutlineTree = observer(({ item }: { item: NodeSchema }) => {
         className='flex w-full items-center rounded-md p-2 text-left text-sm justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer'
       >
         {item.componentName}
-        <SidebarMenuExtra className={cn('invisible', isShowExtra && 'visible')}>
-          <SidebarMenuExtraItem onClick={handleHide}>{node?.hidden ? <EyeOff /> : <Eye />}</SidebarMenuExtraItem>
-          <SidebarMenuExtraItem onClick={handleLock}>
+        <SidebarMenuExtra>
+          <SidebarMenuExtraItem
+            className={cn('invisible', (isShowExtra || node?.hidden) && 'visible')}
+            onClick={handleHide}
+          >
+            {node?.hidden ? <EyeOff /> : <Eye />}
+          </SidebarMenuExtraItem>
+          <SidebarMenuExtraItem
+            className={cn('invisible', (isShowExtra || node?.locked) && 'visible')}
+            onClick={handleLock}
+          >
             {node?.locked ? <LockKeyhole /> : <LockKeyholeOpen />}
           </SidebarMenuExtraItem>
         </SidebarMenuExtra>
@@ -90,9 +98,17 @@ const OutlineTree = observer(({ item }: { item: NodeSchema }) => {
             </CollapsibleTrigger>
             {item.componentName}
           </div>
-          <SidebarMenuExtra className={cn('invisible', isShowExtra && 'visible')}>
-            <SidebarMenuExtraItem onClick={handleHide}>{node?.hidden ? <EyeOff /> : <Eye />}</SidebarMenuExtraItem>
-            <SidebarMenuExtraItem onClick={handleLock}>
+          <SidebarMenuExtra>
+            <SidebarMenuExtraItem
+              className={cn('invisible', (isShowExtra || node?.hidden) && 'visible')}
+              onClick={handleHide}
+            >
+              {node?.hidden ? <EyeOff /> : <Eye />}
+            </SidebarMenuExtraItem>
+            <SidebarMenuExtraItem
+              className={cn('invisible', (isShowExtra || node?.locked) && 'visible')}
+              onClick={handleLock}
+            >
               {node?.locked ? <LockKeyhole /> : <LockKeyholeOpen />}
             </SidebarMenuExtraItem>
           </SidebarMenuExtra>
