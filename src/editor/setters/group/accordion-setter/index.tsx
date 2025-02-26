@@ -10,6 +10,7 @@ interface AccordionSetterProps extends SetterProps<string>, PropsWithChildren {
 
 const AccordionSetter = (props: AccordionSetterProps) => {
   const { field, children, initialValue, disabled = false, dir = 'ltr', orientation = 'vertical' } = props
+
   return (
     <Accordion
       type='single'

@@ -1,3 +1,4 @@
+import { systemFonts } from '@/editor/utils'
 import type { Configure } from '@easy-editor/core'
 import {
   AlignCenter,
@@ -231,12 +232,7 @@ const configure: Configure = {
                                   setter: {
                                     componentName: 'SelectSetter',
                                     props: {
-                                      options: [
-                                        {
-                                          label: 'Arial',
-                                          value: 'Arial',
-                                        },
-                                      ],
+                                      options: systemFonts,
                                     },
                                   },
                                 },
