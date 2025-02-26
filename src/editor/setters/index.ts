@@ -1,3 +1,4 @@
+import ColorSetter from './basic/color-setter'
 import NodeIdSetter from './basic/id-setter'
 import NumberSetter from './basic/number-setter'
 import RadioSetter from './basic/radio-setter'
@@ -16,6 +17,7 @@ import ToggleGroupSetter from './group/toggle-group-setter'
 export {
   AccordionSetter,
   CollapseSetter,
+  ColorSetter,
   NodeIdSetter,
   NumberSetter,
   RadioSetter,

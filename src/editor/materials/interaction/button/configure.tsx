@@ -246,11 +246,11 @@ const configure: Configure = {
                                     },
                                   },
                                 },
-                                // {
-                                //   name: 'text.color',
-                                //   title: '字体颜色',
-                                //   setter: 'ColorSetter',
-                                // },
+                                {
+                                  name: 'text.color',
+                                  title: '字体颜色',
+                                  setter: 'ColorSetter',
+                                },
                                 {
                                   name: 'text.fontWeight',
                                   title: '字体粗细',
