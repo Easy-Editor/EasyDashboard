@@ -119,6 +119,7 @@
     from {
       height: 0;
     }
+
     to {
       height: var(--radix-accordion-content-height);
     }
@@ -128,6 +129,7 @@
     from {
       height: var(--radix-accordion-content-height);
     }
+
     to {
       height: 0;
     }
@@ -256,7 +258,27 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+[data-color-mode*="dark"] .w-color-sketch {
+  --sketch-background: var(--popover) !important;
+}
+
+[data-color-mode*="dark"] .w-color-swatch {
+  --sketch-swatch-border-top: 1px solid var(--border) !important;
+}
+
+[data-color-mode*="dark"] .w-color-editable-input {
+  --editable-input-label-color: var(--primary) !important;
+  --editable-input-box-shadow: var(--border) 0px 0px 0px 1px inset !important;
+  --editable-input-color: var(--primary) !important;
+}
+
+[data-color-mode*="dark"] .w-color-alpha {
+  --alpha-pointer-background-color: var(--popover) !important;
+  --alpha-pointer-box-shadow: transparent 0px 1px 4px 0px !important;
 }

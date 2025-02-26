@@ -33,14 +33,11 @@ export function ThemeProvider({
 
     root.classList.remove('light', 'dark')
 
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    const currentTheme =
+      theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
 
-      root.classList.add(systemTheme)
-      return
-    }
-
-    root.classList.add(theme)
+    root.classList.add(currentTheme)
+    root.setAttribute('data-color-mode', currentTheme)
   }, [theme])
 
   const value = {

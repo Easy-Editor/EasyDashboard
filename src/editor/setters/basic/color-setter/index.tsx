@@ -15,11 +15,11 @@ const ColorSetter = (props: ColorSetterProps) => {
       <PopoverTrigger asChild>
         <Button
           variant={'outline'}
-          className={'w-full h-8 justify-start text-left font-normal text-xs gap-2 px-2 py-[5px]'}
+          className={'w-full h-8 justify-start text-left font-normal text-xs gap-2 px-2 py-[5px] bg-transparent'}
           aria-label='Select color'
         >
           <div
-            className='h-3.5 w-3.5 rounded-full border border-border'
+            className='h-3.5 w-3.5 rounded-full border border-muted-foreground'
             style={{ backgroundColor: value ?? initialValue }}
             aria-label='Current color'
           />
