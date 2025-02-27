@@ -1,8 +1,29 @@
 import type { Configure } from '@easy-editor/core'
+import { generalBasicConfigure } from '../../configure'
 import Toggle from './component'
 
 const configure: Configure = {
-  props: [],
+  props: [
+    {
+      type: 'group',
+      title: '功能',
+      setter: 'TabSetter',
+      items: [
+        {
+          type: 'group',
+          key: 'basic',
+          title: '基本',
+          items: [...generalBasicConfigure],
+        },
+        {
+          type: 'group',
+          key: 'advanced',
+          title: '高级',
+          items: [],
+        },
+      ],
+    },
+  ],
   component: {},
   supports: {},
   advanced: {

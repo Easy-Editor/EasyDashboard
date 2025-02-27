@@ -16,7 +16,7 @@ const RectSetter = (props: RectSetterProps) => {
         <Input
           className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
-          value={value.x}
+          value={formatDecimal(value.x)}
           onChange={e => handleChange('x', Number(e.target.value))}
         />
         <span
@@ -30,7 +30,7 @@ const RectSetter = (props: RectSetterProps) => {
         <Input
           className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
-          value={value.y}
+          value={formatDecimal(value.y)}
           onChange={e => handleChange('y', Number(e.target.value))}
         />
         <span
@@ -44,7 +44,7 @@ const RectSetter = (props: RectSetterProps) => {
         <Input
           className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
-          value={value.width}
+          value={formatDecimal(value.width)}
           onChange={e => handleChange('width', Number(e.target.value))}
         />
         <span
@@ -58,7 +58,7 @@ const RectSetter = (props: RectSetterProps) => {
         <Input
           className='h-8 !text-xs px-2 py-[5px] pr-8 [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           type='number'
-          value={value.height}
+          value={formatDecimal(value.height)}
           onChange={e => handleChange('height', Number(e.target.value))}
         />
         <span
@@ -73,3 +73,7 @@ const RectSetter = (props: RectSetterProps) => {
 }
 
 export default RectSetter
+
+const formatDecimal = (num: number) => {
+  return num.toString().replace(/(\.\d{2})\d+$/, '$1')
+}

@@ -1,4 +1,5 @@
 import type { Configure } from '@easy-editor/core'
+import { generalBasicConfigure } from '../configure'
 import Root from './component'
 
 const configure: Configure = {
@@ -6,11 +7,19 @@ const configure: Configure = {
     {
       type: 'group',
       title: '功能',
+      setter: 'TabSetter',
       items: [
         {
-          name: 'backgroundColor',
-          title: '背景颜色',
-          setter: 'StringSetter',
+          type: 'group',
+          key: 'basic',
+          title: '基本',
+          items: [...generalBasicConfigure],
+        },
+        {
+          type: 'group',
+          key: 'advanced',
+          title: '高级',
+          items: [],
         },
       ],
     },

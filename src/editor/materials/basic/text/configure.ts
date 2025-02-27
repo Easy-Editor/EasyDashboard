@@ -1,17 +1,25 @@
 import type { Configure } from '@easy-editor/core'
-import Button from './component'
+import { generalBasicConfigure } from '../../configure'
+import Text from './component'
 
 const configure: Configure = {
   props: [
     {
       type: 'group',
       title: '功能',
+      setter: 'TabSetter',
       items: [
         {
-          type: 'field',
-          name: 'text',
-          title: '内容',
-          setter: 'StringSetter',
+          type: 'group',
+          key: 'basic',
+          title: '基本',
+          items: [...generalBasicConfigure],
+        },
+        {
+          type: 'group',
+          key: 'advanced',
+          title: '高级',
+          items: [],
         },
       ],
     },
@@ -19,7 +27,7 @@ const configure: Configure = {
   component: {},
   supports: {},
   advanced: {
-    view: Button,
+    view: Text,
   },
 }
 
