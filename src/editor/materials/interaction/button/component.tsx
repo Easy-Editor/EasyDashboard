@@ -1,7 +1,7 @@
 import { Button as UButton, type buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { VariantProps } from 'class-variance-authority'
-import { Loader2 } from 'lucide-react'
+import { Biohazard, Loader2 } from 'lucide-react'
 import type { Ref } from 'react'
 
 interface ButtonProps {
@@ -24,6 +24,19 @@ interface ButtonProps {
     letterSpacing?: number
     lineHeight?: number
   }
+  background?: {
+    color?: string
+  }
+  border?: {
+    color?: string
+    type?: string
+    width?: number
+  }
+  icon?: {
+    enable?: boolean
+    name?: string
+    size?: number
+  }
 }
 
 const Button = (props: ButtonProps) => {
@@ -39,6 +52,9 @@ const Button = (props: ButtonProps) => {
     verticalAlign = 'center',
     radius = 6,
     text,
+    background,
+    border,
+    icon,
   } = props
   const {
     fontFamily = 'Arial',
@@ -49,6 +65,9 @@ const Button = (props: ButtonProps) => {
     letterSpacing = 0,
     lineHeight = 18,
   } = text || {}
+  const { color: backgroundColor } = background || {}
+  const { color: borderColor = '#000000', width: borderWidth = 0, type: borderStyle = 'solid' } = border || {}
+  const { enable: iconEnable = false, size: iconSize = 16 } = icon || {}
 
   return (
     <UButton
@@ -66,6 +85,10 @@ const Button = (props: ButtonProps) => {
         fontStyle: fontStyle ? 'italic' : 'normal',
         letterSpacing,
         lineHeight,
+        backgroundColor,
+        borderColor,
+        borderWidth,
+        borderStyle,
       }}
       onClick={onClick}
       aria-label={content}
@@ -74,6 +97,7 @@ const Button = (props: ButtonProps) => {
       disabled={loading}
     >
       {loading && <Loader2 className='w-4 h-4 animate-spin' />}
+      {iconEnable && <Biohazard fontSize={iconSize} />}
       {content}
     </UButton>
   )

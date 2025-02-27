@@ -22,7 +22,7 @@ const AccordionSetter = (props: AccordionSetterProps) => {
       collapsible
     >
       <AccordionItem value={field.id}>
-        <AccordionTrigger className='text-xs font-bold'>{field.title}</AccordionTrigger>
+        <AccordionTrigger className='text-xs font-bold py-0 pb-3'>{field.title}</AccordionTrigger>
         <AccordionContent className='space-y-3'>{children}</AccordionContent>
       </AccordionItem>
     </Accordion>

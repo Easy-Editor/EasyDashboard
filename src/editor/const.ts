@@ -37,6 +37,18 @@ export const defaultRootSchema: RootSchema = {
           letterSpacing: 0,
           lineHeight: 18,
         },
+        background: {
+          // color: 'transparent',
+        },
+        border: {
+          color: '#000000',
+          width: 0,
+          type: 'solid',
+        },
+        icon: {
+          enable: false,
+          size: 16,
+        },
       },
       $dashboard: {
         rect: {

@@ -283,6 +283,105 @@ const configure: Configure = {
                                 },
                               ],
                             },
+                            {
+                              type: 'group',
+                              title: '背景',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'background.color',
+                                  title: '颜色',
+                                  setter: 'ColorSetter',
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '边框',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'border.type',
+                                  title: '线条类型',
+                                  setter: {
+                                    componentName: 'SelectSetter',
+                                    props: {
+                                      options: [
+                                        {
+                                          label: '实线',
+                                          value: 'solid',
+                                        },
+                                        {
+                                          label: '虚线',
+                                          value: 'dashed',
+                                        },
+                                        {
+                                          label: '点线',
+                                          value: 'dotted',
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'border.width',
+                                  title: '线条宽度',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'border.color',
+                                  title: '线条颜色',
+                                  setter: 'ColorSetter',
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '图标',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'icon.enable',
+                                  title: '显示',
+                                  setter: 'SwitchSetter',
+                                },
+                                // {
+                                //   name: 'icon.name',
+                                //   title: '图标',
+                                //   setter: 'IconSetter',
+                                // },
+                                {
+                                  name: 'icon.size',
+                                  title: '尺寸',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                              ],
+                            },
                           ],
                         },
                         {
@@ -291,9 +390,180 @@ const configure: Configure = {
                           title: '点击',
                           items: [
                             {
-                              name: 'text',
-                              title: '内容222',
-                              setter: 'StringSetter',
+                              name: 'radius',
+                              title: '圆角',
+                              setter: {
+                                componentName: 'NumberSetter',
+                                props: {
+                                  suffix: 'px',
+                                },
+                              },
+                            },
+                            {
+                              type: 'group',
+                              title: '文字',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'text.fontFamily',
+                                  title: '字体',
+                                  setter: {
+                                    componentName: 'SelectSetter',
+                                    props: {
+                                      options: systemFonts,
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.fontSize',
+                                  title: '字体大小',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.color',
+                                  title: '字体颜色',
+                                  setter: 'ColorSetter',
+                                },
+                                {
+                                  name: 'text.fontWeight',
+                                  title: '字体粗细',
+                                  setter: 'SwitchSetter',
+                                },
+                                {
+                                  name: 'text.fontStyle',
+                                  title: '斜体',
+                                  setter: 'SwitchSetter',
+                                },
+                                {
+                                  name: 'text.letterSpacing',
+                                  title: '字距',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.lineHeight',
+                                  title: '行高',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '背景',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'background.color',
+                                  title: '颜色',
+                                  setter: 'ColorSetter',
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '边框',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'border.type',
+                                  title: '线条类型',
+                                  setter: {
+                                    componentName: 'SelectSetter',
+                                    props: {
+                                      options: [
+                                        {
+                                          label: '实线',
+                                          value: 'solid',
+                                        },
+                                        {
+                                          label: '虚线',
+                                          value: 'dashed',
+                                        },
+                                        {
+                                          label: '点线',
+                                          value: 'dotted',
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'border.width',
+                                  title: '线条宽度',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'border.color',
+                                  title: '线条颜色',
+                                  setter: 'ColorSetter',
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '图标',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'icon.enable',
+                                  title: '显示',
+                                  setter: 'SwitchSetter',
+                                },
+                                // {
+                                //   name: 'icon.name',
+                                //   title: '图标',
+                                //   setter: 'IconSetter',
+                                // },
+                                {
+                                  name: 'icon.size',
+                                  title: '尺寸',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                              ],
                             },
                           ],
                         },
@@ -303,9 +573,180 @@ const configure: Configure = {
                           title: '悬停',
                           items: [
                             {
-                              name: 'text',
-                              title: '内容333',
-                              setter: 'StringSetter',
+                              name: 'radius',
+                              title: '圆角',
+                              setter: {
+                                componentName: 'NumberSetter',
+                                props: {
+                                  suffix: 'px',
+                                },
+                              },
+                            },
+                            {
+                              type: 'group',
+                              title: '文字',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'text.fontFamily',
+                                  title: '字体',
+                                  setter: {
+                                    componentName: 'SelectSetter',
+                                    props: {
+                                      options: systemFonts,
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.fontSize',
+                                  title: '字体大小',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.color',
+                                  title: '字体颜色',
+                                  setter: 'ColorSetter',
+                                },
+                                {
+                                  name: 'text.fontWeight',
+                                  title: '字体粗细',
+                                  setter: 'SwitchSetter',
+                                },
+                                {
+                                  name: 'text.fontStyle',
+                                  title: '斜体',
+                                  setter: 'SwitchSetter',
+                                },
+                                {
+                                  name: 'text.letterSpacing',
+                                  title: '字距',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'text.lineHeight',
+                                  title: '行高',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '背景',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'background.color',
+                                  title: '颜色',
+                                  setter: 'ColorSetter',
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '边框',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'border.type',
+                                  title: '线条类型',
+                                  setter: {
+                                    componentName: 'SelectSetter',
+                                    props: {
+                                      options: [
+                                        {
+                                          label: '实线',
+                                          value: 'solid',
+                                        },
+                                        {
+                                          label: '虚线',
+                                          value: 'dashed',
+                                        },
+                                        {
+                                          label: '点线',
+                                          value: 'dotted',
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'border.width',
+                                  title: '线条宽度',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                                {
+                                  name: 'border.color',
+                                  title: '线条颜色',
+                                  setter: 'ColorSetter',
+                                },
+                              ],
+                            },
+                            {
+                              type: 'group',
+                              title: '图标',
+                              setter: {
+                                componentName: 'AccordionSetter',
+                                props: {
+                                  orientation: 'horizontal',
+                                },
+                              },
+                              items: [
+                                {
+                                  name: 'icon.enable',
+                                  title: '显示',
+                                  setter: 'SwitchSetter',
+                                },
+                                // {
+                                //   name: 'icon.name',
+                                //   title: '图标',
+                                //   setter: 'IconSetter',
+                                // },
+                                {
+                                  name: 'icon.size',
+                                  title: '尺寸',
+                                  setter: {
+                                    componentName: 'NumberSetter',
+                                    props: {
+                                      suffix: 'px',
+                                    },
+                                  },
+                                },
+                              ],
                             },
                           ],
                         },
