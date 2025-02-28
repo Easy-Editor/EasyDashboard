@@ -1,6 +1,6 @@
-import type { EditorProps, OnMount } from '@monaco-editor/react'
+import { useDebounceFn } from '@/hooks/use-debounce-fn'
+import type { EditorProps, OnChange, OnMount } from '@monaco-editor/react'
 import { Editor as MonacoEditor, loader } from '@monaco-editor/react'
-// import { useDebounceFn } from 'ahooks'
 import { type FC, useState } from 'react'
 import { libType } from './lib'
 
@@ -33,19 +33,19 @@ const defaultOptions: EditorProps['options'] = {
 }
 
 export const CodeEditor: FC<EditorProps> = props => {
-  const [theme, setTheme] = useState('vs')
+  const [theme, setTheme] = useState('vs-dark')
 
   // 处理代码修改， args需要做一层透传来完善防抖，避免触发重复构建
-  // const { run: handleChange } = useDebounceFn<OnChange>(
-  //   (...args) => {
-  //     if (props.onChange) {
-  //       props.onChange(...args)
-  //     }
-  //   },
-  //   {
-  //     wait: 400,
-  //   },
-  // )
+  const { run: handleChange } = useDebounceFn<OnChange>(
+    (...args) => {
+      if (props.onChange) {
+        props.onChange(...args)
+      }
+    },
+    {
+      wait: 400,
+    },
+  )
 
   // 编辑器Mount钩子，需要注册一些事例
   const onEditorMount: OnMount = (_editor, _monaco) => {
@@ -62,8 +62,7 @@ export const CodeEditor: FC<EditorProps> = props => {
       loading={<span>loading</span>}
       theme={theme}
       {...props}
-      // onChange={handleChange}
-      onChange={props.onChange}
+      onChange={handleChange}
       onMount={onEditorMount}
       options={{
         ...defaultOptions,

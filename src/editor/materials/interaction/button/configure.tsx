@@ -718,7 +718,44 @@ const configure: Configure = {
           type: 'group',
           key: 'advanced',
           title: '高级',
-          items: [],
+          items: [
+            {
+              type: 'group',
+              title: '事件设置',
+              setter: {
+                componentName: 'CollapseSetter',
+                props: {
+                  icon: false,
+                },
+              },
+              items: [
+                {
+                  name: 'events',
+                  title: '点击绑定事件',
+                  setter: {
+                    componentName: 'EventSetter',
+                    props: {
+                      events: [
+                        {
+                          title: '组件自带事件',
+                          children: [
+                            {
+                              label: 'onClick',
+                              value: 'onClick',
+                              description: '点击',
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                  extraProps: {
+                    wrap: true,
+                  },
+                },
+              ],
+            },
+          ],
         },
       ],
     },
