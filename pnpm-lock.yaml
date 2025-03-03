@@ -110,6 +110,9 @@ importers:
       mobx-react:
         specifier: ^9.2.0
         version: 9.2.0(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      nanoid:
+        specifier: ^5.1.2
+        version: 5.1.2
       next-themes:
         specifier: ^0.4.4
         version: 0.4.4(react-dom@19.0.0(react@19.0.0))(react@19.0.0)

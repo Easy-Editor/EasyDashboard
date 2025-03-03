@@ -1,9 +1,11 @@
+import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { project } from '@/editor'
-import type { JSExpression, JSFunction } from '@easy-editor/core'
+import type { JSExpression, JSFunction, Node, RootSchema } from '@easy-editor/core'
 import { observer } from 'mobx-react'
+import { nanoid } from 'nanoid'
 
 const tabsList = [
   {
@@ -44,10 +46,10 @@ export const MethodStateSidebar = observer(() => {
             ))}
           </TabsList>
           <TabsContent value='methods' className='box-border p-2 mt-2 space-y-6'>
-            <MethodList lifeCycles={lifeCycles} methods={methods} />
+            <MethodList rootNode={rootNode} methods={methods} lifeCycles={lifeCycles} />
           </TabsContent>
           <TabsContent value='state' className='box-border p-2 mt-2 space-y-6'>
-            <StateList state={state} />
+            <StateList rootNode={rootNode} state={state} />
           </TabsContent>
         </Tabs>
       </SidebarMenuItem>
@@ -55,40 +57,101 @@ export const MethodStateSidebar = observer(() => {
   )
 })
 
-const MethodList = ({
-  lifeCycles,
-  methods,
-}: { lifeCycles: Record<string, JSFunction>; methods: Record<string, JSFunction> }) => {
-  return (
-    <>
-      {Object.keys(lifeCycles).length > 0 && (
-        <div className='space-y-4'>
-          <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mb-4'>生命周期方法</h3>
-          {Object.entries(lifeCycles).map(([key, value]) => (
-            <CardItem key={key} name={key} description={value?.description} />
-          ))}
-        </div>
-      )}
+const MethodList = observer(
+  ({
+    rootNode,
+    methods,
+    lifeCycles,
+  }: { rootNode: Node<RootSchema>; methods: Record<string, JSFunction>; lifeCycles: Record<string, JSFunction> }) => {
+    const handleDelete = (type: string, key: string) => () => {
+      // TODO: extraProp 添加 clear
+      rootNode.getExtraProp(`${type}.${key}`)?.unset()
+    }
 
-      {Object.keys(methods).length > 0 && (
-        <div className='space-y-4'>
-          <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4'>普通方法</h3>
-          {Object.entries(methods).map(([key, value]) => (
-            <CardItem key={key} name={key} description={value?.description} />
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
+    const handleCopy = (type: string, key: string) => () => {
+      let copyMethod: JSFunction
+      let entries: [string, JSFunction][]
 
-const StateList = ({ state }: { state: Record<string, JSExpression> }) => {
+      if (type === 'lifeCycles') {
+        copyMethod = lifeCycles[key]
+        entries = Object.entries(lifeCycles)
+      } else {
+        copyMethod = methods[key]
+        entries = Object.entries(methods)
+      }
+
+      // 插入
+      const index = entries.findIndex(([k]) => k === key)
+      const newEntries = [...entries.slice(0, index + 1), [`${key}-${id()}`, copyMethod], ...entries.slice(index + 1)]
+
+      rootNode.setExtraPropValue(type, Object.fromEntries(newEntries))
+    }
+
+    return (
+      <>
+        {Object.keys(lifeCycles).length > 0 && (
+          <div className='space-y-4'>
+            <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mb-4'>生命周期方法</h3>
+            {Object.entries(lifeCycles).map(([key, value]) => (
+              <CardItem
+                key={key}
+                name={key}
+                description={value?.description}
+                onCopy={handleCopy('lifeCycles', key)}
+                onDelete={handleDelete('lifeCycles', key)}
+                disabled={{ copy: true }}
+              />
+            ))}
+          </div>
+        )}
+        {Object.keys(methods).length > 0 && (
+          <div className='space-y-4'>
+            <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4'>普通方法</h3>
+            {Object.entries(methods).map(([key, value]) => (
+              <CardItem
+                key={key}
+                name={key}
+                description={value?.description}
+                onCopy={handleCopy('methods', key)}
+                onDelete={handleDelete('methods', key)}
+              />
+            ))}
+          </div>
+        )}
+      </>
+    )
+  },
+)
+
+const StateList = ({ rootNode, state }: { rootNode: Node<RootSchema>; state: Record<string, JSExpression> }) => {
+  const handleDelete = (key: string) => {
+    // TODO: extraProp 添加 clear
+    rootNode.getExtraProp(`state.${key}`)?.unset()
+  }
+
+  const handleCopy = (key: string) => {
+    const copyMethod = state[key]
+    const entries = Object.entries(state)
+
+    // 插入
+    const index = entries.findIndex(([k]) => k === key)
+    const newEntries = [...entries.slice(0, index + 1), [`${key}-${id()}`, copyMethod], ...entries.slice(index + 1)]
+
+    rootNode.setExtraPropValue('state', Object.fromEntries(newEntries))
+  }
+
   return (
     <>
       {Object.keys(state).length > 0 && (
         <div className='space-y-4'>
           {Object.entries(state).map(([key, value]) => (
-            <CardItem key={key} name={key} description={value?.description} />
+            <CardItem
+              key={key}
+              name={key}
+              description={value?.description}
+              onDelete={() => handleDelete(key)}
+              onCopy={() => handleCopy(key)}
+            />
           ))}
         </div>
       )}
@@ -102,13 +165,27 @@ const CardItem = ({
   onEdit,
   onDelete,
   onCopy,
+  disabled,
 }: {
   name: string
   description?: string
   onEdit?: () => void
   onDelete?: () => void
   onCopy?: () => void
+  disabled?:
+    | boolean
+    | {
+        edit?: boolean
+        del?: boolean
+        copy?: boolean
+      }
 }) => {
+  const {
+    edit = false,
+    del = false,
+    copy = false,
+  } = typeof disabled === 'boolean' ? { edit: disabled, del: disabled, copy: disabled } : (disabled ?? {})
+
   return (
     <div>
       <div className='space-y-1'>
@@ -117,18 +194,35 @@ const CardItem = ({
       </div>
       <Separator className='my-3' />
       <div className='flex h-4 items-center space-x-4 text-xs'>
-        <div className='hover:text-primary transition-colors cursor-pointer' onClick={onEdit}>
+        <Button
+          variant='link'
+          className='hover:text-primary transition-colors cursor-pointer text-xs px-0 py-0'
+          onClick={onEdit}
+          disabled={edit}
+        >
           编辑
-        </div>
+        </Button>
         <Separator orientation='vertical' />
-        <div className='hover:text-primary transition-colors cursor-pointer' onClick={onDelete}>
+        <Button
+          variant='link'
+          className='hover:text-primary transition-colors cursor-pointer text-xs px-0 py-0'
+          onClick={onDelete}
+          disabled={del}
+        >
           删除
-        </div>
+        </Button>
         <Separator orientation='vertical' />
-        <div className='hover:text-primary transition-colors cursor-pointer' onClick={onCopy}>
+        <Button
+          variant='link'
+          className='hover:text-primary transition-colors cursor-pointer text-xs px-0 py-0'
+          onClick={onCopy}
+          disabled={copy}
+        >
           复制
-        </div>
+        </Button>
       </div>
     </div>
   )
 }
+
+const id = (size = 6) => nanoid(size)
