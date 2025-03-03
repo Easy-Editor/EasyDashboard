@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collap
 import { SidebarMenuExtra, SidebarMenuExtraItem } from './ui/sidebar-extra'
 
 export const OutlineSidebar = observer(() => {
+  // TODO: performance
   const docSchema = project.currentDocument?.export()
 
   return (

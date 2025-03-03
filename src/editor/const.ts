@@ -309,10 +309,12 @@ export const defaultRootSchema: RootSchema = {
     text: {
       type: 'JSExpression',
       value: '"outer"',
+      description: '文本状态',
     },
     isShowDialog: {
       type: 'JSExpression',
       value: 'false',
+      description: '是否显示对话框',
     },
   },
   css: 'body {\n  font-size: 12px;\n}\n\n.button {\n  color: #ff00ff\n}',
@@ -322,11 +324,13 @@ export const defaultRootSchema: RootSchema = {
       value:
         "function componentDidMount() {\n  console.log('did mount ===========', this);\n  console.log(this.state.text, this.testFunc() );\n}",
       source: "function componentDidMount() {\n  console.log('did mount');\n}",
+      description: '页面挂载时触发',
     },
     componentWillUnmount: {
       type: 'JSFunction',
       value: "function componentWillUnmount() {\n  console.log('will unmount');\n}",
       source: "function componentWillUnmount() {\n  console.log('will unmount');\n}",
+      description: '页面卸载时触发',
     },
   },
   methods: {
@@ -334,11 +338,13 @@ export const defaultRootSchema: RootSchema = {
       type: 'JSFunction',
       value: "function testFunc(...params) {\n  console.log('test func', params);\n}",
       source: "function testFunc(...params) {\n  console.log('test func', params);\n}",
+      description: '测试方法',
     },
     changeState: {
       type: 'JSFunction',
       value: "function changeState() {\n  this.setState({text: 'inner'});\n}",
       source: "function changeState() {\n  this.setState({text: 'inner'});\n}",
+      description: '改变状态',
     },
   },
 }
