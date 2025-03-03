@@ -11,12 +11,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
+import type { JSFunction } from '@easy-editor/core'
 import { observer } from 'mobx-react'
-import { type PropsWithChildren, useState } from 'react'
+import { type PropsWithChildren, useMemo, useState } from 'react'
 
-enum Tab {
+export enum Tab {
   BUILTIN = 'builtin',
-  COMPONENT = 'component',
+  COMPONENT = 'componentEvent',
 }
 
 const tabList = [
@@ -30,18 +31,47 @@ const tabList = [
   },
 ]
 
-interface EventBindModalProps extends PropsWithChildren {
+const defaultExtendParam = '{\n  "name": "test" \n}'
+
+export interface EventBindModalProps extends PropsWithChildren {
+  methods: Record<string, JSFunction>
   open: boolean
-  onConfirm?: (event: string, extendParam: string) => void
+  onConfirm?: (param: { kind: Tab; event: string; method: JSFunction; extendParam?: string }) => void
   onClose?: () => void
 }
 
 const EventBindModal = observer((props: EventBindModalProps) => {
-  const { open, onConfirm, onClose, children } = props
+  const { open, onConfirm, onClose, children, methods } = props
   const [tab, setTab] = useState<Tab>(Tab.COMPONENT)
   const [event, setEvent] = useState<string | undefined>(undefined)
   const [enabledExtendParam, setEnabledExtendParam] = useState(false)
-  const [extendParam, setExtendParam] = useState<string | undefined>('{\n  "name": "test" \n}')
+  const [extendParam, setExtendParam] = useState<string | undefined>(defaultExtendParam)
+
+  const currentMethods = useMemo(() => {
+    if (tab === Tab.BUILTIN) {
+      return {}
+    }
+    return methods
+  }, [tab, methods])
+
+  const handleConfirm = () => {
+    if (!event) {
+      return console.error('event is required')
+    }
+
+    const param: any = {
+      kind: tab,
+      event,
+      method: currentMethods[event],
+    }
+
+    if (enabledExtendParam) {
+      param.extendParam = extendParam
+    }
+
+    onConfirm?.(param)
+    onClose?.()
+  }
 
   return (
     <Dialog open={open}>
@@ -62,23 +92,34 @@ const EventBindModal = observer((props: EventBindModalProps) => {
                           'w-full h-7 flex items-center pl-2 cursor-pointer',
                           tab === item.value && 'bg-accent/70',
                         )}
-                        onClick={() => setTab(item.value)}
+                        onClick={() => {
+                          setTab(item.value)
+                          setEvent(undefined)
+                        }}
                       >
                         {item.label}
                       </div>
                     ))}
                   </div>
                   <div className='flex flex-col w-[150px]'>
-                    <div className='w-full h-7 flex items-center pl-2 cursor-pointer bg-accent/70'>textFunc</div>
-                    <div className='w-full h-7 flex items-center pl-2 cursor-pointer'>textFunc</div>
-                    <div className='w-full h-7 flex items-center pl-2 cursor-pointer'>textFunc</div>
-                    <div className='w-full h-7 flex items-center pl-2 cursor-pointer'>textFunc</div>
+                    {Object.keys(currentMethods).map(key => (
+                      <div
+                        key={key}
+                        className={cn(
+                          'w-full h-7 flex items-center pl-2 cursor-pointer',
+                          event === key && 'bg-accent/70',
+                        )}
+                        onClick={() => setEvent(key)}
+                      >
+                        {key}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
               <div className='flex-1 flex flex-col gap-2'>
                 <div className='font-bold'>事件名称</div>
-                <Input className='h-8 !text-xs px-2 py-[5px]' value={'textFunc'} disabled />
+                <Input className='h-8 !text-xs px-2 py-[5px]' value={event} disabled />
                 <div className='flex gap-4 mt-2'>
                   <div className='font-bold'>扩展参数设置</div>
                   <Switch checked={enabledExtendParam} onCheckedChange={setEnabledExtendParam} />
@@ -106,7 +147,7 @@ const EventBindModal = observer((props: EventBindModalProps) => {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type='submit' onClick={() => onConfirm(event, extendParam)} className='h-8 text-xs px-4 py-[5px]'>
+          <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>
             确定
           </Button>
           <Button variant='outline' onClick={onClose} className='h-8 text-xs px-4 py-[5px]'>

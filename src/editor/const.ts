@@ -332,8 +332,8 @@ export const defaultRootSchema: RootSchema = {
   methods: {
     testFunc: {
       type: 'JSFunction',
-      value: "function testFunc() {\n  console.log('test func');\n}",
-      source: "function testFunc() {\n  console.log('test func');\n}",
+      value: "function testFunc(...params) {\n  console.log('test func', params);\n}",
+      source: "function testFunc(...params) {\n  console.log('test func', params);\n}",
     },
     changeState: {
       type: 'JSFunction',

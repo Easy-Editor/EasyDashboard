@@ -46,9 +46,23 @@ export const editor = createEasyEditor({
 })
 console.log('🚀 ~ easyEditor:', editor)
 
-export const designer = await editor.onceGot<Designer>('designer')
-export const project = await editor.onceGot<Project>('project')
-export const simulator = await editor.onceGot<Simulator>('simulator')
+export const initProject = async () => {
+  const [designer, project, simulator] = await Promise.all([
+    editor.onceGot<Designer>('designer'),
+    editor.onceGot<Project>('project'),
+    editor.onceGot<Simulator>('simulator'),
+  ])
+
+  // 设置模拟器样式
+  simulator.set('deviceStyle', { viewport: { width: 1920, height: 1080 } })
+
+  project.open(defaultRootSchema)
+
+  return { designer, project, simulator }
+}
+
+// 导出初始化后的实例
+export const { designer, project, simulator } = await initProject()
 
 console.log('--------------------------------')
 console.log('designer', designer)
@@ -66,8 +80,3 @@ console.log('componentMetas', componentMetaManager.componentMetasMap)
 console.log('--------------------------------')
 // simulator.setupEvents()
 // renderer.mount(simulator)
-
-project.open(defaultRootSchema)
-
-// 设置模拟器样式
-simulator.set('deviceStyle', { viewport: { width: 1920, height: 1080 } })

@@ -1,7 +1,9 @@
 import { createRoot } from 'react-dom/client'
 import { scan } from 'react-scan'
-import './styles/global.css'
 import App from './App'
+import './styles/global.css'
+
+import './editor'
 
 if (typeof window !== 'undefined') {
   scan({

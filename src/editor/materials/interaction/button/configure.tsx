@@ -1,3 +1,4 @@
+import type { Event } from '@/editor/setters/basic/event-setter'
 import { systemFonts } from '@/editor/utils'
 import type { Configure } from '@easy-editor/core'
 import {
@@ -730,7 +731,7 @@ const configure: Configure = {
               },
               items: [
                 {
-                  name: 'events',
+                  name: '__events',
                   title: '点击绑定事件',
                   setter: {
                     componentName: 'EventSetter',
@@ -751,6 +752,24 @@ const configure: Configure = {
                   },
                   extraProps: {
                     wrap: true,
+                    setValue(target, value: Event) {
+                      const { eventDataList } = value
+
+                      // 添加事件到组件中
+                      Array.isArray(eventDataList) &&
+                        eventDataList.map(item => {
+                          target.parent.setPropValue(item.name, {
+                            type: 'JSFunction',
+                            // 需要传下入参
+                            value: `function(){return this.${
+                              item.relatedEventName
+                            }.apply(this,Array.prototype.slice.call(arguments).concat([${item.paramStr ? item.paramStr : ''}])) }`,
+                          })
+                          return item
+                        })
+
+                      console.log('target', target.getNode().export())
+                    },
                   },
                 },
               ],
