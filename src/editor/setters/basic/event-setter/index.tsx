@@ -1,6 +1,9 @@
+import { Button } from '@/components/ui/button'
 import { DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { JSFunction, SetterProps } from '@easy-editor/core'
+import { Settings, Trash } from 'lucide-react'
 import { useState } from 'react'
 import EventBindModal, { type EventBindModalProps, type Tab } from './event-bind-modal'
 
@@ -13,7 +16,11 @@ interface EventData {
 
 export interface Event {
   eventDataList?: EventData[]
-  eventList?: EventData[]
+  eventList?: Array<{
+    name: string
+    description?: string
+    disabled?: boolean
+  }>
 }
 
 interface EventSetterProps extends SetterProps<Event> {
@@ -34,6 +41,7 @@ const EventSetter = (props: EventSetterProps) => {
   const [openKey, setOpenKey] = useState(0)
   const [open, setOpen] = useState(false)
   const [eventName, setEventName] = useState<string | undefined>(undefined)
+  const [editEventName, setEditEventName] = useState<string | undefined>(undefined)
   const handleValueChange = (value: string) => {
     setOpenKey(prev => prev + 1)
     setOpen(true)
@@ -55,13 +63,35 @@ const EventSetter = (props: EventSetterProps) => {
       newEventData.paramStr = param.extendParam
     }
 
+    // 编辑
+    if (editEventName) {
+      onChange?.({
+        ...value,
+        eventDataList: value?.eventDataList?.map(item => (item.name === editEventName ? newEventData : item)),
+      })
+      setEditEventName(undefined)
+    }
+    // 新增
+    else {
+      onChange?.({
+        eventDataList: [...(value?.eventDataList || []), newEventData],
+        eventList: [...(value?.eventList || []), { name: newEventData.name }],
+      })
+      setEventName(undefined)
+    }
+  }
+
+  const handleDeleteEvent = (eventData: EventData) => {
     onChange?.({
-      ...value,
-      eventDataList: [...(value?.eventDataList || []), newEventData],
+      eventDataList: value?.eventDataList?.filter(item => item.name !== eventData.name),
+      eventList: value?.eventList?.filter(item => item.name !== eventData.name),
     })
   }
 
-  console.log('value', value)
+  const handleEditEvent = (eventData: EventData) => {
+    setOpen(true)
+    setEditEventName(eventData.name)
+  }
 
   return (
     <EventBindModal open={open} onClose={() => setOpen(false)} methods={methods} onConfirm={handleModalConfirm}>
@@ -75,7 +105,12 @@ const EventSetter = (props: EventSetterProps) => {
               <SelectGroup>
                 {event.children.map(child => (
                   <DialogTrigger key={child.value} asChild>
-                    <SelectItem value={child.value}>{child.label}</SelectItem>
+                    <SelectItem
+                      value={child.value}
+                      disabled={value?.eventDataList?.some(item => item.name === child.value)}
+                    >
+                      {child.label}
+                    </SelectItem>
                   </DialogTrigger>
                 ))}
               </SelectGroup>
@@ -83,6 +118,31 @@ const EventSetter = (props: EventSetterProps) => {
           </Select>
         ))}
       </div>
+      <Table className='mt-4'>
+        <TableHeader>
+          <TableRow>
+            <TableHead className='w-[220px] text-xs'>已有事件</TableHead>
+            <TableHead className='text-xs'>操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {value?.eventDataList?.map(eventData => (
+            <TableRow key={eventData.name}>
+              <TableCell className='font-medium text-xs'>
+                {eventData.name}
+                <span className='px-2'>-</span>
+                <Button variant='link' className='text-xs px-0 py-0 h-0'>
+                  {eventData.relatedEventName}
+                </Button>
+              </TableCell>
+              <TableCell className='flex gap-2'>
+                <Settings className='h-4 w-4 cursor-pointer' onClick={() => handleEditEvent(eventData)} />
+                <Trash className='h-4 w-4 cursor-pointer' onClick={() => handleDeleteEvent(eventData)} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </EventBindModal>
   )
 }

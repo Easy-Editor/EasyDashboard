@@ -752,10 +752,18 @@ const configure: Configure = {
                   },
                   extraProps: {
                     wrap: true,
-                    setValue(target, value: Event) {
+                    setValue(target, value: Event, oldValue: Event) {
                       const { eventDataList } = value
+                      const { eventList: oldEventList } = oldValue
 
-                      // 添加事件到组件中
+                      // 删除老事件
+                      Array.isArray(oldEventList) &&
+                        oldEventList.map(item => {
+                          target.parent.clearPropValue(item.name)
+                          return item
+                        })
+
+                      // 重新添加新事件
                       Array.isArray(eventDataList) &&
                         eventDataList.map(item => {
                           target.parent.setPropValue(item.name, {
