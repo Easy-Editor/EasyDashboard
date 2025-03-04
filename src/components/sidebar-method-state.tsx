@@ -6,6 +6,9 @@ import { project } from '@/editor'
 import type { JSExpression, JSFunction, Node, RootSchema } from '@easy-editor/core'
 import { observer } from 'mobx-react'
 import { nanoid } from 'nanoid'
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
+import MethodEditorModal, { type MethodEditorModalProps } from './event/method-editor-modal'
 
 const tabsList = [
   {
@@ -63,6 +66,31 @@ const MethodList = observer(
     methods,
     lifeCycles,
   }: { rootNode: Node<RootSchema>; methods: Record<string, JSFunction>; lifeCycles: Record<string, JSFunction> }) => {
+    const [open, setOpen] = useState(false)
+    const currentType = useRef<'lifeCycles' | 'methods'>('methods')
+    const [currentMethod, setCurrentMethod] = useState<JSFunction & { name: string; description?: string }>()
+
+    const handleEdit = (type: 'lifeCycles' | 'methods', key: string) => () => {
+      currentType.current = type
+      setCurrentMethod({
+        ...(type === 'lifeCycles' ? lifeCycles[key] : methods[key]),
+        name: key,
+      })
+      setOpen(true)
+    }
+
+    const handleEditConfirm: MethodEditorModalProps['onConfirm'] = (name, method) => {
+      const currentMethods = currentType.current === 'lifeCycles' ? lifeCycles : methods
+      const editMethod = currentMethods[name]
+
+      if (!editMethod) {
+        toast.warning('方法不存在')
+        return
+      }
+
+      rootNode.setExtraPropValue(`${currentType.current}.${name}`, method)
+    }
+
     const handleDelete = (type: string, key: string) => () => {
       // TODO: extraProp 添加 clear
       rootNode.getExtraProp(`${type}.${key}`)?.unset()
@@ -88,7 +116,12 @@ const MethodList = observer(
     }
 
     return (
-      <>
+      <MethodEditorModal
+        open={open}
+        method={currentMethod}
+        onClose={() => setOpen(false)}
+        onConfirm={handleEditConfirm}
+      >
         {Object.keys(lifeCycles).length > 0 && (
           <div className='space-y-4'>
             <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mb-4'>生命周期方法</h3>
@@ -97,6 +130,7 @@ const MethodList = observer(
                 key={key}
                 name={key}
                 description={value?.description}
+                onEdit={handleEdit('lifeCycles', key)}
                 onCopy={handleCopy('lifeCycles', key)}
                 onDelete={handleDelete('lifeCycles', key)}
                 disabled={{ copy: true }}
@@ -112,13 +146,14 @@ const MethodList = observer(
                 key={key}
                 name={key}
                 description={value?.description}
+                onEdit={handleEdit('methods', key)}
                 onCopy={handleCopy('methods', key)}
                 onDelete={handleDelete('methods', key)}
               />
             ))}
           </div>
         )}
-      </>
+      </MethodEditorModal>
     )
   },
 )
