@@ -17,16 +17,10 @@ import { toast } from 'sonner'
 
 export interface MethodEditorModalProps extends PropsWithChildren {
   open: boolean
-  onConfirm?: (
-    name: string,
-    method: JSFunction & {
-      description?: string
-    },
-  ) => void
+  onConfirm?: (name: string, method: JSFunction) => void
   onClose?: () => void
   method?: JSFunction & {
     name: string
-    description?: string
   }
 }
 

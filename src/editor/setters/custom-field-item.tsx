@@ -3,22 +3,6 @@ import { cn } from '@/lib/utils'
 import type { SettingField } from '@easy-editor/core'
 import type { ReactNode } from 'react'
 
-declare module '@easy-editor/core' {
-  interface FieldExtraProps {
-    /**
-     * 是否显示 label
-     * @default true
-     */
-    label?: boolean
-
-    /**
-     * 是否换行
-     * @default false
-     */
-    wrap?: boolean
-  }
-}
-
 export const customFieldItem = (field: SettingField, setter: ReactNode) => {
   if (typeof field.config.extraProps?.label === 'boolean' && !field.config.extraProps?.label) {
     return <div className='flex w-full items-center'>{setter}</div>
