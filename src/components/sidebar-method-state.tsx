@@ -15,6 +15,7 @@ import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { project } from '@/editor'
 import type { JSExpression, JSFunction, Node, RootSchema } from '@easy-editor/core'
+import { Plus } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { nanoid } from 'nanoid'
 import { useRef, useState } from 'react'
@@ -82,6 +83,11 @@ const MethodList = observer(
     const currentType = useRef<'lifeCycles' | 'methods'>('methods')
     const [currentMethod, setCurrentMethod] = useState<JSFunction & { name: string; description?: string }>()
 
+    const handleAdd = (type: 'lifeCycles' | 'methods') => () => {
+      currentType.current = type
+      setOpen(true)
+    }
+
     const handleEdit = (type: 'lifeCycles' | 'methods', key: string) => () => {
       currentType.current = type
       setCurrentMethod({
@@ -91,16 +97,21 @@ const MethodList = observer(
       setOpen(true)
     }
 
-    const handleEditConfirm: MethodEditorModalProps['onConfirm'] = (name, method) => {
+    const handleConfirm: MethodEditorModalProps['onConfirm'] = (name, method) => {
+      const isEdit = !!currentMethod
       const currentMethods = currentType.current === 'lifeCycles' ? lifeCycles : methods
-      const editMethod = currentMethods[name]
 
-      if (!editMethod) {
-        toast.warning('方法不存在')
-        return
+      if (isEdit) {
+        const editMethod = currentMethods[name]
+
+        if (!editMethod) {
+          toast.warning('方法不存在')
+          return
+        }
       }
 
       rootNode.setExtraPropValue(`${currentType.current}.${name}`, method)
+      setCurrentMethod(undefined)
     }
 
     const handleDelete = (type: string, key: string) => () => {
@@ -128,12 +139,7 @@ const MethodList = observer(
     }
 
     return (
-      <MethodEditorModal
-        open={open}
-        method={currentMethod}
-        onClose={() => setOpen(false)}
-        onConfirm={handleEditConfirm}
-      >
+      <MethodEditorModal open={open} method={currentMethod} onClose={() => setOpen(false)} onConfirm={handleConfirm}>
         {Object.keys(lifeCycles).length > 0 && (
           <div className='space-y-4'>
             <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mb-4'>生命周期方法</h3>
@@ -152,7 +158,10 @@ const MethodList = observer(
         )}
         {Object.keys(methods).length > 0 && (
           <div className='space-y-4'>
-            <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4'>普通方法</h3>
+            <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
+              <span>普通方法</span>
+              <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd('methods')} />
+            </h3>
             {Object.entries(methods).map(([key, value]) => (
               <CardItem
                 key={key}
@@ -174,6 +183,10 @@ const StateList = ({ rootNode, state }: { rootNode: Node<RootSchema>; state: Rec
   const [open, setOpen] = useState(false)
   const [currentState, setCurrentState] = useState<JSExpression & { name: string }>()
 
+  const handleAdd = () => {
+    setOpen(true)
+  }
+
   const handleEdit = (key: string) => () => {
     setCurrentState({
       name: key,
@@ -183,14 +196,19 @@ const StateList = ({ rootNode, state }: { rootNode: Node<RootSchema>; state: Rec
   }
 
   const handleEditConfirm: StateEditorModalProps['onConfirm'] = (name, newState) => {
-    const editState = state[name]
+    const isEdit = !!currentState
 
-    if (!editState) {
-      toast.warning('状态不存在')
-      return
+    if (isEdit) {
+      const editState = state[name]
+
+      if (!editState) {
+        toast.warning('状态不存在')
+        return
+      }
     }
 
     rootNode.setExtraPropValue(`state.${name}`, newState)
+    setCurrentState(undefined)
   }
 
   const handleDelete = (key: string) => {
@@ -213,6 +231,10 @@ const StateList = ({ rootNode, state }: { rootNode: Node<RootSchema>; state: Rec
     <StateEditorModal open={open} state={currentState} onClose={() => setOpen(false)} onConfirm={handleEditConfirm}>
       {Object.keys(state).length > 0 && (
         <div className='space-y-4'>
+          <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
+            <span>状态</span>
+            <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd} />
+          </h3>
           {Object.entries(state).map(([key, value]) => (
             <CardItem
               key={key}

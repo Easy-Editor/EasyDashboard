@@ -66,7 +66,7 @@ const StateEditorModal = observer((props: StateEditorModalProps) => {
       {children}
       <DialogContent className='!max-w-[1000px]'>
         <DialogHeader>
-          <DialogTitle>状态编辑{isEdit ? ` - ${name}` : ''}</DialogTitle>
+          <DialogTitle>状态{isEdit ? `编辑 - ${name}` : '新增'}</DialogTitle>
           <DialogDescription className='flex flex-col gap-4 h-[400px] mt-2'>
             <div className='flex items-center space-x-2'>
               <Label htmlFor='name' className='text-xs basis-15 text-right'>

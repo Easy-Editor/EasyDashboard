@@ -65,7 +65,7 @@ const MethodEditorModal = observer((props: MethodEditorModalProps) => {
       {children}
       <DialogContent className='!max-w-[1000px]'>
         <DialogHeader>
-          <DialogTitle>方法编辑{isEdit ? ` - ${name}` : ''}</DialogTitle>
+          <DialogTitle>方法{isEdit ? `编辑 - ${name}` : '新增'}</DialogTitle>
           <DialogDescription className='flex flex-col gap-4 h-[600px] mt-2'>
             <div className='flex items-center space-x-2'>
               <Label htmlFor='name' className='text-xs basis-15 text-right'>
