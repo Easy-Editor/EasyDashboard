@@ -10,15 +10,18 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Select } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { project } from '@/editor'
+import { cn } from '@/lib/utils'
 import type { JSExpression, JSFunction, Node, RootSchema } from '@easy-editor/core'
 import { Plus } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { nanoid } from 'nanoid'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import MethodEditorModal, { type MethodEditorModalProps } from './event/method-editor-modal'
 import StateEditorModal, { type StateEditorModalProps } from './event/state-editor-modal'
@@ -62,7 +65,8 @@ export const MethodStateSidebar = observer(() => {
             ))}
           </TabsList>
           <TabsContent value='methods' className='box-border p-2 mt-2 space-y-6'>
-            <MethodList rootNode={rootNode} methods={methods} lifeCycles={lifeCycles} />
+            <LifeCycleList rootNode={rootNode} lifeCycles={lifeCycles} />
+            <MethodList rootNode={rootNode} methods={methods} />
           </TabsContent>
           <TabsContent value='state' className='box-border p-2 mt-2 space-y-6'>
             <StateList rootNode={rootNode} state={state} />
@@ -73,103 +77,178 @@ export const MethodStateSidebar = observer(() => {
   )
 })
 
-const MethodList = observer(
-  ({
-    rootNode,
-    methods,
-    lifeCycles,
-  }: { rootNode: Node<RootSchema>; methods: Record<string, JSFunction>; lifeCycles: Record<string, JSFunction> }) => {
-    const [open, setOpen] = useState(false)
-    const currentType = useRef<'lifeCycles' | 'methods'>('methods')
-    const [currentMethod, setCurrentMethod] = useState<JSFunction & { name: string; description?: string }>()
+const lifeCycleOptions = [
+  { name: 'componentDidMount', description: '组件挂载时' },
+  { name: 'componentDidUpdate', description: '组件更新时' },
+  { name: 'componentWillUnmount', description: '组件卸载时' },
+  { name: 'render', description: '组件渲染时' },
+  { name: 'componentDidCatch', description: '组件错误时' },
+  { name: 'getSnapshotBeforeUpdate', description: '组件更新时获取快照' },
+  { name: 'getDerivedStateFromProps', description: '组件更新时获取状态' },
+]
 
-    const handleAdd = (type: 'lifeCycles' | 'methods') => () => {
-      currentType.current = type
+const LifeCycleList = observer(
+  ({ rootNode, lifeCycles }: { rootNode: Node<RootSchema>; lifeCycles: Record<string, JSFunction> }) => {
+    const [open, setOpen] = useState(false)
+    const [currentLifeCycle, setCurrentLifeCycle] = useState<JSFunction & { name: string; description?: string }>()
+    const usedLifeCycles = Object.keys(lifeCycles)
+
+    const handleAdd = (type: string) => {
+      const lifeCycle = lifeCycleOptions.find(option => option.name === type)
+
+      if (!lifeCycle) {
+        toast.warning('生命周期不存在')
+        return
+      }
+
+      setCurrentLifeCycle({
+        ...lifeCycle,
+        type: 'JSFunction',
+        value: `function ${lifeCycle.name}() {\n  // TODO: 实现\n}`,
+      })
       setOpen(true)
     }
 
-    const handleEdit = (type: 'lifeCycles' | 'methods', key: string) => () => {
-      currentType.current = type
-      setCurrentMethod({
-        ...(type === 'lifeCycles' ? lifeCycles[key] : methods[key]),
+    const handleEdit = (key: string) => () => {
+      setCurrentLifeCycle({
+        ...lifeCycles[key],
         name: key,
       })
       setOpen(true)
     }
 
     const handleConfirm: MethodEditorModalProps['onConfirm'] = (name, method) => {
-      const isEdit = !!currentMethod
-      const currentMethods = currentType.current === 'lifeCycles' ? lifeCycles : methods
-
-      if (isEdit) {
-        const editMethod = currentMethods[name]
-
-        if (!editMethod) {
-          toast.warning('方法不存在')
-          return
-        }
-      }
-
-      rootNode.setExtraPropValue(`${currentType.current}.${name}`, method)
-      setCurrentMethod(undefined)
+      rootNode.setExtraPropValue(`lifeCycles.${name}`, method)
+      setCurrentLifeCycle(undefined)
     }
 
-    const handleDelete = (type: string, key: string) => () => {
+    const handleDelete = (key: string) => () => {
       // TODO: extraProp 添加 clear
-      rootNode.getExtraProp(`${type}.${key}`)?.unset()
+      rootNode.getExtraProp(`lifeCycles.${key}`)?.unset()
     }
 
-    const handleCopy = (type: string, key: string) => () => {
-      let copyMethod: JSFunction
-      let entries: [string, JSFunction][]
-
-      if (type === 'lifeCycles') {
-        copyMethod = lifeCycles[key]
-        entries = Object.entries(lifeCycles)
-      } else {
-        copyMethod = methods[key]
-        entries = Object.entries(methods)
-      }
+    const handleCopy = (key: string) => () => {
+      const copyMethod = lifeCycles[key]
+      const entries = Object.entries(lifeCycles)
 
       // 插入
       const index = entries.findIndex(([k]) => k === key)
       const newEntries = [...entries.slice(0, index + 1), [`${key}-${id()}`, copyMethod], ...entries.slice(index + 1)]
 
-      rootNode.setExtraPropValue(type, Object.fromEntries(newEntries))
+      rootNode.setExtraPropValue('lifeCycles', Object.fromEntries(newEntries))
     }
 
     return (
-      <MethodEditorModal open={open} method={currentMethod} onClose={() => setOpen(false)} onConfirm={handleConfirm}>
+      <MethodEditorModal open={open} method={currentLifeCycle} onClose={() => setOpen(false)} onConfirm={handleConfirm}>
         {Object.keys(lifeCycles).length > 0 && (
           <div className='space-y-4'>
-            <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mb-4'>生命周期方法</h3>
+            <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
+              <span>生命周期方法</span>
+              <Select>
+                <HoverCard>
+                  <HoverCardTrigger>
+                    <Plus className='w-4 h-4 cursor-pointer' />
+                  </HoverCardTrigger>
+                  <HoverCardContent>
+                    <ul className='space-y-2'>
+                      {lifeCycleOptions.map(option => (
+                        <li
+                          key={option.name}
+                          onClick={() => (usedLifeCycles?.includes(option.name) ? undefined : handleAdd(option.name))}
+                        >
+                          <a
+                            className={cn(
+                              'block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors',
+                              usedLifeCycles?.includes(option.name)
+                                ? 'bg-muted/50 text-muted-foreground/50 cursor-not-allowed pointer-events-none'
+                                : 'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
+                            )}
+                            aria-disabled={usedLifeCycles?.includes(option.name)}
+                          >
+                            <div className='text-xs font-medium leading-none normal-case'>{option.name}</div>
+                            <p className='line-clamp-2 text-xs leading-snug text-muted-foreground'>
+                              {option.description}
+                            </p>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </HoverCardContent>
+                </HoverCard>
+              </Select>
+            </h3>
             {Object.entries(lifeCycles).map(([key, value]) => (
               <CardItem
                 key={key}
                 name={key}
                 description={value?.description}
-                onEdit={handleEdit('lifeCycles', key)}
-                onCopy={handleCopy('lifeCycles', key)}
-                onDelete={handleDelete('lifeCycles', key)}
+                onEdit={handleEdit(key)}
+                onCopy={handleCopy(key)}
+                onDelete={handleDelete(key)}
                 disabled={{ copy: true }}
               />
             ))}
           </div>
         )}
+      </MethodEditorModal>
+    )
+  },
+)
+
+const MethodList = observer(
+  ({ rootNode, methods }: { rootNode: Node<RootSchema>; methods: Record<string, JSFunction> }) => {
+    const [open, setOpen] = useState(false)
+    const [currentMethod, setCurrentMethod] = useState<JSFunction & { name: string; description?: string }>()
+
+    const handleAdd = () => {
+      setOpen(true)
+    }
+
+    const handleEdit = (key: string) => () => {
+      setCurrentMethod({
+        ...methods[key],
+        name: key,
+      })
+      setOpen(true)
+    }
+
+    const handleConfirm: MethodEditorModalProps['onConfirm'] = (name, method) => {
+      rootNode.setExtraPropValue(`methods.${name}`, method)
+      setCurrentMethod(undefined)
+    }
+
+    const handleDelete = (key: string) => () => {
+      // TODO: extraProp 添加 clear
+      rootNode.getExtraProp(`methods.${key}`)?.unset()
+    }
+
+    const handleCopy = (key: string) => () => {
+      const copyMethod = methods[key]
+      const entries = Object.entries(methods)
+
+      // 插入
+      const index = entries.findIndex(([k]) => k === key)
+      const newEntries = [...entries.slice(0, index + 1), [`${key}-${id()}`, copyMethod], ...entries.slice(index + 1)]
+
+      rootNode.setExtraPropValue('methods', Object.fromEntries(newEntries))
+    }
+
+    return (
+      <MethodEditorModal open={open} method={currentMethod} onClose={() => setOpen(false)} onConfirm={handleConfirm}>
         {Object.keys(methods).length > 0 && (
           <div className='space-y-4'>
             <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
               <span>普通方法</span>
-              <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd('methods')} />
+              <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd} />
             </h3>
             {Object.entries(methods).map(([key, value]) => (
               <CardItem
                 key={key}
                 name={key}
                 description={value?.description}
-                onEdit={handleEdit('methods', key)}
-                onCopy={handleCopy('methods', key)}
-                onDelete={handleDelete('methods', key)}
+                onEdit={handleEdit(key)}
+                onCopy={handleCopy(key)}
+                onDelete={handleDelete(key)}
               />
             ))}
           </div>
