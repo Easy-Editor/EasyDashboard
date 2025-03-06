@@ -20,6 +20,7 @@ import { nanoid } from 'nanoid'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import MethodEditorModal, { type MethodEditorModalProps } from './event/method-editor-modal'
+import StateEditorModal, { type StateEditorModalProps } from './event/state-editor-modal'
 
 const tabsList = [
   {
@@ -170,6 +171,28 @@ const MethodList = observer(
 )
 
 const StateList = ({ rootNode, state }: { rootNode: Node<RootSchema>; state: Record<string, JSExpression> }) => {
+  const [open, setOpen] = useState(false)
+  const [currentState, setCurrentState] = useState<JSExpression & { name: string }>()
+
+  const handleEdit = (key: string) => () => {
+    setCurrentState({
+      name: key,
+      ...state[key],
+    })
+    setOpen(true)
+  }
+
+  const handleEditConfirm: StateEditorModalProps['onConfirm'] = (name, newState) => {
+    const editState = state[name]
+
+    if (!editState) {
+      toast.warning('状态不存在')
+      return
+    }
+
+    rootNode.setExtraPropValue(`state.${name}`, newState)
+  }
+
   const handleDelete = (key: string) => {
     // TODO: extraProp 添加 clear
     rootNode.getExtraProp(`state.${key}`)?.unset()
@@ -187,7 +210,7 @@ const StateList = ({ rootNode, state }: { rootNode: Node<RootSchema>; state: Rec
   }
 
   return (
-    <>
+    <StateEditorModal open={open} state={currentState} onClose={() => setOpen(false)} onConfirm={handleEditConfirm}>
       {Object.keys(state).length > 0 && (
         <div className='space-y-4'>
           {Object.entries(state).map(([key, value]) => (
@@ -195,13 +218,14 @@ const StateList = ({ rootNode, state }: { rootNode: Node<RootSchema>; state: Rec
               key={key}
               name={key}
               description={value?.description}
+              onEdit={handleEdit(key)}
               onDelete={() => handleDelete(key)}
               onCopy={() => handleCopy(key)}
             />
           ))}
         </div>
       )}
-    </>
+    </StateEditorModal>
   )
 }
 
