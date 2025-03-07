@@ -49,6 +49,26 @@ export const defaultRootSchema: RootSchema = {
           enable: false,
           size: 16,
         },
+        __events: {
+          eventDataList: [
+            {
+              type: 'componentEvent',
+              name: 'onClick',
+              relatedEventName: 'testFunc',
+            },
+          ],
+          eventList: [
+            {
+              name: 'onClick',
+              description: '鼠标点击',
+              disabled: true,
+            },
+          ],
+        },
+        onClick: {
+          type: 'JSFunction',
+          value: 'function(){return this.testFunc.apply(this,Array.prototype.slice.call(arguments).concat([])) }',
+        },
       },
       $dashboard: {
         rect: {

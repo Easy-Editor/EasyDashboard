@@ -94,7 +94,7 @@ const EventSetter = (props: EventSetterProps) => {
   }
 
   return (
-    <EventBindModal open={open} onClose={() => setOpen(false)} methods={methods} onConfirm={handleModalConfirm}>
+    <EventBindModal open={open} setOpen={setOpen} methods={methods} onConfirm={handleModalConfirm}>
       <div className='flex flex-col w-full'>
         {events.map((event, index) => (
           <Select key={`${event.title}-${openKey}-${index}`} value={undefined} onValueChange={handleValueChange}>
@@ -108,8 +108,10 @@ const EventSetter = (props: EventSetterProps) => {
                     <SelectItem
                       value={child.value}
                       disabled={value?.eventDataList?.some(item => item.name === child.value)}
+                      className='flex justify-between'
                     >
-                      {child.label}
+                      <span>{child.label}</span>
+                      <span className='text-xs text-gray-500'>{child.description}</span>
                     </SelectItem>
                   </DialogTrigger>
                 ))}
@@ -136,8 +138,8 @@ const EventSetter = (props: EventSetterProps) => {
                 </Button>
               </TableCell>
               <TableCell className='flex gap-2'>
-                <Settings className='h-4 w-4 cursor-pointer' onClick={() => handleEditEvent(eventData)} />
-                <Trash className='h-4 w-4 cursor-pointer' onClick={() => handleDeleteEvent(eventData)} />
+                <Settings className='h-3 w-3 cursor-pointer' onClick={() => handleEditEvent(eventData)} />
+                <Trash className='h-3 w-3 cursor-pointer' onClick={() => handleDeleteEvent(eventData)} />
               </TableCell>
             </TableRow>
           ))}

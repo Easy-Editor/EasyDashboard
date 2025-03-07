@@ -36,12 +36,12 @@ const defaultExtendParam = '{\n  "name": "test" \n}'
 export interface EventBindModalProps extends PropsWithChildren {
   methods: Record<string, JSFunction>
   open: boolean
+  setOpen: (open: boolean) => void
   onConfirm?: (param: { kind: Tab; event: string; method: JSFunction; extendParam?: string }) => void
-  onClose?: () => void
 }
 
 const EventBindModal = observer((props: EventBindModalProps) => {
-  const { open, onConfirm, onClose, children, methods } = props
+  const { open, onConfirm, setOpen, children, methods } = props
   const [tab, setTab] = useState<Tab>(Tab.COMPONENT)
   const [event, setEvent] = useState<string | undefined>(undefined)
   const [enabledExtendParam, setEnabledExtendParam] = useState(false)
@@ -70,11 +70,11 @@ const EventBindModal = observer((props: EventBindModalProps) => {
     }
 
     onConfirm?.(param)
-    onClose?.()
+    setOpen(false)
   }
 
   return (
-    <Dialog open={open}>
+    <Dialog open={open} onOpenChange={setOpen}>
       {children}
       <DialogContent className='!max-w-[800px]'>
         <DialogHeader>
@@ -150,7 +150,7 @@ const EventBindModal = observer((props: EventBindModalProps) => {
           <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>
             确定
           </Button>
-          <Button variant='outline' onClick={onClose} className='h-8 text-xs px-4 py-[5px]'>
+          <Button variant='outline' onClick={() => setOpen(false)} className='h-8 text-xs px-4 py-[5px]'>
             取消
           </Button>
         </DialogFooter>

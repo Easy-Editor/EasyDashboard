@@ -743,7 +743,7 @@ const configure: Configure = {
                             {
                               label: 'onClick',
                               value: 'onClick',
-                              description: '点击',
+                              description: '点击事件',
                             },
                           ],
                         },
