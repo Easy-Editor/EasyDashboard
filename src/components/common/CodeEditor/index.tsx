@@ -1,4 +1,4 @@
-import { useDebounceFn } from '@/hooks/use-debounce-fn'
+import { useDebounceFn } from '@/hooks/useDebounceFn'
 import type { EditorProps, OnChange, OnMount } from '@monaco-editor/react'
 import { Editor as MonacoEditor, loader } from '@monaco-editor/react'
 import { type FC, useState } from 'react'

@@ -1,6 +1,6 @@
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { MainNav } from './main-nav'
-import { Button } from './ui/button'
+import { MainNav } from './Nav'
 
 export function AppHeader({ className }: { className?: string }) {
   return (
@@ -14,7 +14,7 @@ export function AppHeader({ className }: { className?: string }) {
         <div className='flex h-14 items-center px-4'>
           <MainNav />
           <div className='flex flex-1 items-center justify-between gap-2 md:justify-end'>
-            <div className='w-full flex-1 md:w-auto md:flex-none'></div>
+            <div className='w-full flex-1 md:w-auto md:flex-none' />
             <div className='flex items-center gap-2'>
               <Button variant='outline'>预览</Button>
               <Button variant='outline'>保存</Button>

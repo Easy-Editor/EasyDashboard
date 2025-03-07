@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import {
   Sidebar,
   SidebarContent,
@@ -10,13 +11,12 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Code, Component, ListTree, Pin, PinOff, X } from 'lucide-react'
 import * as React from 'react'
-import { ComponentSidebar } from './sidebar-component'
-import { MethodStateSidebar } from './sidebar-method-state'
-import { OutlineSidebar } from './sidebar-outline'
-import { Button } from './ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { ComponentSidebar } from './Components'
+import { MethodStateSidebar } from './MethodState'
+import { OutlineSidebar } from './Outline'
 
 const data = {
   navMain: [

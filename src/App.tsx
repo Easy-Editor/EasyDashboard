@@ -1,9 +1,9 @@
+import { AppLayout } from '@/layouts'
 import { SimulatorRenderer } from '@easy-editor/react-renderer-dashboard'
 import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { ThemeProvider } from './components/theme-provider'
 import { simulator } from './editor'
-import { AppLayout } from './layouts/app-layout'
 
 function App() {
   return (

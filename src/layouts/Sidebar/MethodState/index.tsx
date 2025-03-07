@@ -1,3 +1,5 @@
+import MethodEditorModal, { type MethodEditorModalProps } from '@/components/event/MethodEditorModal'
+import StateEditorModal, { type StateEditorModalProps } from '@/components/event/StateEditorModal'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,8 +25,6 @@ import { observer } from 'mobx-react'
 import { nanoid } from 'nanoid'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import MethodEditorModal, { type MethodEditorModalProps } from './event/method-editor-modal'
-import StateEditorModal, { type StateEditorModalProps } from './event/state-editor-modal'
 
 const tabsList = [
   {

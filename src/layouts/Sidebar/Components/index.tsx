@@ -1,11 +1,11 @@
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Card, CardContent } from '@/components/ui/card'
 import { designer, simulator } from '@/editor'
 import type { MaterialGroup } from '@/editor/materials/type'
 import { cn } from '@/lib/utils'
 import type { ComponentMeta, Snippet as ISnippet } from '@easy-editor/core'
 import { observer } from 'mobx-react'
 import React, { useEffect } from 'react'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion'
-import { Card, CardContent } from './ui/card'
 
 const Snippet = ({ snippet }: { snippet: ISnippet }) => {
   const ref = React.useRef<HTMLDivElement>(null)

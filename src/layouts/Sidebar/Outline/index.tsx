@@ -1,12 +1,12 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub } from '@/components/ui/sidebar'
+import { SidebarMenuExtra, SidebarMenuExtraItem } from '@/components/ui/sidebar-extra'
 import { project } from '@/editor'
 import { cn } from '@/lib/utils'
 import type { Node, NodeSchema } from '@easy-editor/core'
 import { ChevronRight, Container, Eye, EyeOff, LockKeyhole, LockKeyholeOpen } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { type Key, useState } from 'react'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
-import { SidebarMenuExtra, SidebarMenuExtraItem } from './ui/sidebar-extra'
 
 export const OutlineSidebar = observer(() => {
   const currentDocumentRootNode = project.currentDocument?.rootNode

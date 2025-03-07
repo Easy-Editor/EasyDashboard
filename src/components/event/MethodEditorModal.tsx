@@ -1,4 +1,4 @@
-import { CodeEditor } from '@/components/code-editor'
+import { CodeEditor } from '@/components/common/CodeEditor'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
