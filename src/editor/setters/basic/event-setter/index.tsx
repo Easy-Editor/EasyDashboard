@@ -1,3 +1,4 @@
+import { AlertModal } from '@/components/common/AlertModal'
 import { Button } from '@/components/ui/button'
 import { DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -149,7 +150,12 @@ const EventSetter = (props: EventSetterProps) => {
               </TableCell>
               <TableCell className='flex gap-2'>
                 <Settings className='h-3 w-3 cursor-pointer' onClick={() => handleEditEvent(eventData)} />
-                <Trash className='h-3 w-3 cursor-pointer' onClick={() => handleDeleteEvent(eventData)} />
+                <AlertModal
+                  title='确定删除吗？'
+                  description='删除后，该状态将无法恢复。'
+                  trigger={<Trash className='h-3 w-3 cursor-pointer' />}
+                  onConfirm={() => handleDeleteEvent(eventData)}
+                />
               </TableCell>
             </TableRow>
           ))}
