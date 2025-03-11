@@ -4,8 +4,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { JSFunction, SetterProps } from '@easy-editor/core'
 import { Settings, Trash } from 'lucide-react'
-import { useState } from 'react'
-import EventBindModal, { type EventBindModalProps, type Tab } from './event-bind-modal'
+import { useMemo, useState } from 'react'
+import { EventBindModal, type EventBindModalProps, type Tab } from './EventBindModal'
 
 interface EventData {
   type: Tab
@@ -42,6 +42,10 @@ const EventSetter = (props: EventSetterProps) => {
   const [open, setOpen] = useState(false)
   const [eventName, setEventName] = useState<string | undefined>(undefined)
   const [editEventName, setEditEventName] = useState<string | undefined>(undefined)
+  const releatedEventName = useMemo(() => {
+    return value?.eventDataList?.find(item => item.name === editEventName)?.relatedEventName
+  }, [editEventName, value?.eventDataList])
+
   const handleValueChange = (value: string) => {
     setOpenKey(prev => prev + 1)
     setOpen(true)
@@ -94,7 +98,13 @@ const EventSetter = (props: EventSetterProps) => {
   }
 
   return (
-    <EventBindModal open={open} setOpen={setOpen} methods={methods} onConfirm={handleModalConfirm}>
+    <EventBindModal
+      open={open}
+      setOpen={setOpen}
+      methods={methods}
+      onConfirm={handleModalConfirm}
+      method={releatedEventName}
+    >
       <div className='flex flex-col w-full'>
         {events.map((event, index) => (
           <Select key={`${event.title}-${openKey}-${index}`} value={undefined} onValueChange={handleValueChange}>

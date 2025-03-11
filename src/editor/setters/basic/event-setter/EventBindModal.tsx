@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import type { JSFunction } from '@easy-editor/core'
 import { observer } from 'mobx-react'
-import { type PropsWithChildren, useMemo, useState } from 'react'
+import { type PropsWithChildren, useEffect, useMemo, useState } from 'react'
 
 export enum Tab {
   BUILTIN = 'builtin',
@@ -38,12 +38,13 @@ export interface EventBindModalProps extends PropsWithChildren {
   open: boolean
   setOpen: (open: boolean) => void
   onConfirm?: (param: { kind: Tab; event: string; method: JSFunction; extendParam?: string }) => void
+  method?: string
 }
 
-const EventBindModal = observer((props: EventBindModalProps) => {
-  const { open, onConfirm, setOpen, children, methods } = props
+export const EventBindModal = observer((props: EventBindModalProps) => {
+  const { open, onConfirm, setOpen, children, methods, method } = props
   const [tab, setTab] = useState<Tab>(Tab.COMPONENT)
-  const [event, setEvent] = useState<string | undefined>(undefined)
+  const [event, setEvent] = useState<string | undefined>(method)
   const [enabledExtendParam, setEnabledExtendParam] = useState(false)
   const [extendParam, setExtendParam] = useState<string | undefined>(defaultExtendParam)
 
@@ -72,6 +73,12 @@ const EventBindModal = observer((props: EventBindModalProps) => {
     onConfirm?.(param)
     setOpen(false)
   }
+
+  useEffect(() => {
+    if (method) {
+      setEvent(method)
+    }
+  }, [method])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -158,5 +165,3 @@ const EventBindModal = observer((props: EventBindModalProps) => {
     </Dialog>
   )
 })
-
-export default EventBindModal
