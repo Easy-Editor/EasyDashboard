@@ -95,6 +95,7 @@ const EventSetter = (props: EventSetterProps) => {
 
   const handleEditEvent = (eventData: EventData) => {
     setOpen(true)
+    setEventName(eventData.name)
     setEditEventName(eventData.name)
   }
 
