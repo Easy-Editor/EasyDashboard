@@ -8,6 +8,7 @@ import SelectSetter from './basic/select-setter'
 import StringSetter from './basic/string-setter'
 import SwitchSetter from './basic/switch-setter'
 import ToggleSetter from './basic/toggle-setter'
+import UploadSetter from './basic/upload-setter'
 
 import AccordionSetter from './group/accordion-setter'
 import CollapseSetter from './group/collapse-setter'
@@ -31,6 +32,7 @@ export {
   TabSetter,
   ToggleGroupSetter,
   ToggleSetter,
+  UploadSetter,
 }
 
 export * from './custom-field-item'

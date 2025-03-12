@@ -1,3 +1,4 @@
+import type { UploadValue } from '@/editor/setters/basic/upload-setter'
 import type { Configure } from '@easy-editor/core'
 import { generalBasicConfigure } from '../../configure'
 import Image from './component'
@@ -13,7 +14,34 @@ const configure: Configure = {
           type: 'group',
           key: 'basic',
           title: '基本',
-          items: [...generalBasicConfigure],
+          items: [
+            ...generalBasicConfigure,
+            {
+              type: 'group',
+              title: '图片属性',
+              setter: {
+                componentName: 'CollapseSetter',
+                props: {
+                  icon: false,
+                },
+              },
+              items: [
+                {
+                  name: '__image',
+                  title: '图片地址',
+                  setter: 'UploadSetter',
+                  extraProps: {
+                    setValue(target, value: UploadValue) {
+                      const { base64, raw } = value
+                      base64 && target.parent.setPropValue('src', base64)
+                      raw?.width && target.parent.setExtraPropValue('$dashboard.rect.width', raw.width)
+                      raw?.height && target.parent.setExtraPropValue('$dashboard.rect.height', raw.height)
+                    },
+                  },
+                },
+              ],
+            },
+          ],
         },
         {
           type: 'group',
