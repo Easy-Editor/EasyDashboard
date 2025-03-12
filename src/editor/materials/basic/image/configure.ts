@@ -32,10 +32,14 @@ const configure: Configure = {
                   setter: 'UploadSetter',
                   extraProps: {
                     setValue(target, value: UploadValue) {
-                      const { base64, raw } = value
-                      base64 && target.parent.setPropValue('src', base64)
-                      raw?.width && target.parent.setExtraPropValue('$dashboard.rect.width', raw.width)
-                      raw?.height && target.parent.setExtraPropValue('$dashboard.rect.height', raw.height)
+                      if (value) {
+                        const { base64, raw } = value
+                        base64 && target.parent.setPropValue('src', base64)
+                        raw?.width && target.parent.setExtraPropValue('$dashboard.rect.width', raw.width)
+                        raw?.height && target.parent.setExtraPropValue('$dashboard.rect.height', raw.height)
+                      } else {
+                        target.parent.clearPropValue('src')
+                      }
                     },
                   },
                 },

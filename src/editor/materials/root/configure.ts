@@ -1,3 +1,4 @@
+import type { UploadValue } from '@/editor/setters/basic/upload-setter'
 import type { Configure } from '@easy-editor/core'
 import { generalBasicConfigure } from '../configure'
 import Root from './component'
@@ -13,7 +14,35 @@ const configure: Configure = {
           type: 'group',
           key: 'basic',
           title: '基本',
-          items: [...generalBasicConfigure],
+          items: [
+            ...generalBasicConfigure,
+            {
+              type: 'group',
+              title: '全局属性',
+              setter: {
+                componentName: 'CollapseSetter',
+                props: {
+                  icon: false,
+                },
+              },
+              items: [
+                {
+                  name: '__image',
+                  title: '图片地址',
+                  setter: 'UploadSetter',
+                  extraProps: {
+                    setValue(target, value: UploadValue) {
+                      if (value) {
+                        target.parent.setPropValue('backgroundImage', value.base64)
+                      } else {
+                        target.parent.clearPropValue('backgroundImage')
+                      }
+                    },
+                  },
+                },
+              ],
+            },
+          ],
         },
         {
           type: 'group',
