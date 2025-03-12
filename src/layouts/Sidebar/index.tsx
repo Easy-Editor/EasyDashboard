@@ -12,9 +12,10 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Code, Component, ListTree, Pin, PinOff, X } from 'lucide-react'
+import { Code, Component, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
 import * as React from 'react'
 import { ComponentSidebar } from './Components'
+import { MaterialsSidebar } from './Materials'
 import { MethodStateSidebar } from './MethodState'
 import { OutlineSidebar } from './Outline'
 
@@ -37,6 +38,12 @@ const data = {
       title: '方法状态',
       icon: Code,
       component: <MethodStateSidebar />,
+    },
+    {
+      key: 'materials',
+      title: '素材',
+      icon: Wand,
+      component: <MaterialsSidebar />,
     },
   ],
 }
