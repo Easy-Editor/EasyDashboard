@@ -21,7 +21,7 @@ import { OutlineSidebar } from './Outline'
 import { SchemaSidebar } from './Schema'
 
 const data = {
-  navMain: [
+  navTop: [
     {
       key: 'outline',
       title: '大纲',
@@ -46,6 +46,8 @@ const data = {
       icon: Wand,
       component: <MaterialsSidebar />,
     },
+  ],
+  navBottom: [
     {
       key: 'schema',
       title: 'Schema',
@@ -56,7 +58,7 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [activeItem, setActiveItem] = React.useState(data.navMain[0])
+  const [activeItem, setActiveItem] = React.useState(data.navTop[0])
   const { open, setOpen, fixed, toggleFixedSidebar } = useSidebar()
 
   return (
@@ -68,34 +70,57 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       style={
         {
           ...props.style,
-          '--sidebar-width': activeItem.key === 'schema' ? '1000px' : '350px',
+          '--sidebar-width': activeItem?.key === 'schema' ? '1000px' : '350px',
         } as React.CSSProperties
       }
     >
       <Sidebar collapsible='none' className='!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r'>
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent className='px-1.5 md:px-0'>
-              <SidebarMenu>
-                {data.navMain.map(item => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      tooltip={{
-                        children: item.title,
-                        hidden: false,
-                      }}
-                      onClick={() => {
-                        setActiveItem(item)
-                        setOpen(item.key === activeItem.key ? !open : true)
-                      }}
-                      isActive={activeItem.key === item.key}
-                      className='px-2.5 md:px-2'
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+          <SidebarGroup className='h-full'>
+            <SidebarGroupContent className='h-full px-1.5 md:px-0'>
+              <SidebarMenu className='h-full flex flex-col justify-between'>
+                <div>
+                  {data.navTop.map(item => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        tooltip={{
+                          children: item.title,
+                          hidden: false,
+                        }}
+                        onClick={() => {
+                          setActiveItem(item)
+                          setOpen(item.key === activeItem?.key ? !open : true)
+                        }}
+                        isActive={activeItem?.key === item.key}
+                        className='px-2.5 md:px-2'
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </div>
+                <div>
+                  {data.navBottom.map(item => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        tooltip={{
+                          children: item.title,
+                          hidden: false,
+                        }}
+                        onClick={() => {
+                          setActiveItem(item)
+                          setOpen(item.key === activeItem.key ? !open : true)
+                        }}
+                        isActive={activeItem?.key === item.key}
+                        className='px-2.5 md:px-2'
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </div>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -106,9 +131,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <Sidebar collapsible='none' className='hidden flex-1 md:flex'>
         <SidebarHeader className='gap-3.5 border-b p-2'>
           <div className='flex w-full items-center justify-between'>
-            <div className='text-base font-medium text-foreground'>{activeItem.title}</div>
+            <div className='text-base font-medium text-foreground'>{activeItem?.title}</div>
             <div className='flex items-center gap-2 text-sm'>
-              {activeItem.key !== 'schema' && (
+              {activeItem?.key !== 'schema' && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant='ghost' size='icon' onClick={toggleFixedSidebar}>
@@ -131,7 +156,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </div>
           </div>
         </SidebarHeader>
-        <SidebarContent>{activeItem.component}</SidebarContent>
+        <SidebarContent>{activeItem?.component}</SidebarContent>
       </Sidebar>
     </Sidebar>
   )
