@@ -12,16 +12,20 @@ loader.config({
 
 // 初始化配置
 const defaultOptions: EditorProps['options'] = {
-  folding: false,
+  folding: true,
+  showFoldingControls: 'mouseover',
+  foldingStrategy: 'auto',
   lineNumbersMinChars: 3,
   lineNumbers: 'on',
   automaticLayout: true,
   acceptSuggestionOnEnter: 'smart',
   scrollbar: {
-    verticalScrollbarSize: 0,
-    verticalSliderSize: 4,
-    horizontal: 'hidden',
+    verticalScrollbarSize: 6,
+    verticalSliderSize: 8,
+    horizontalScrollbarSize: 6,
+    horizontalSliderSize: 8,
     useShadows: false,
+    alwaysConsumeMouseWheel: false,
   },
   smoothScrolling: true,
   minimap: {

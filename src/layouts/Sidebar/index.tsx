@@ -12,12 +12,13 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Code, Component, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
+import { Code, CodeXml, Component, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
 import * as React from 'react'
 import { ComponentSidebar } from './Components'
 import { MaterialsSidebar } from './Materials'
 import { MethodStateSidebar } from './MethodState'
 import { OutlineSidebar } from './Outline'
+import { SchemaSidebar } from './Schema'
 
 const data = {
   navMain: [
@@ -45,6 +46,12 @@ const data = {
       icon: Wand,
       component: <MaterialsSidebar />,
     },
+    {
+      key: 'schema',
+      title: 'Schema',
+      icon: CodeXml,
+      component: <SchemaSidebar />,
+    },
   ],
 }
 
@@ -58,6 +65,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       variant='sidebar'
       className='overflow-hidden [&>[data-sidebar=sidebar]]:flex-row'
       {...props}
+      style={
+        {
+          ...props.style,
+          '--sidebar-width': activeItem.key === 'schema' ? '1000px' : '350px',
+        } as React.CSSProperties
+      }
     >
       <Sidebar collapsible='none' className='!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r'>
         <SidebarContent>
@@ -95,15 +108,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <div className='flex w-full items-center justify-between'>
             <div className='text-base font-medium text-foreground'>{activeItem.title}</div>
             <div className='flex items-center gap-2 text-sm'>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant='ghost' size='icon' onClick={toggleFixedSidebar}>
-                    {fixed ? <Pin /> : <PinOff />}
-                    <span className='sr-only'>{fixed ? '取消固定' : '固定'}</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{fixed ? '取消固定' : '固定'}</TooltipContent>
-              </Tooltip>
+              {activeItem.key !== 'schema' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant='ghost' size='icon' onClick={toggleFixedSidebar}>
+                      {fixed ? <Pin /> : <PinOff />}
+                      <span className='sr-only'>{fixed ? '取消固定' : '固定'}</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{fixed ? '取消固定' : '固定'}</TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant='ghost' size='icon' onClick={() => setOpen(false)}>
