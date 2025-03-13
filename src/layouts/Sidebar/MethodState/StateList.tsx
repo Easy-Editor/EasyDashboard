@@ -40,8 +40,7 @@ export const StateList = ({ rootNode }: { rootNode: Node<RootSchema> }) => {
   }
 
   const handleDelete = (key: string) => {
-    // TODO: extraProp 添加 clear
-    rootNode.getExtraProp(`state.${key}`)?.unset()
+    rootNode.clearExtraPropValue(`state.${key}`)
   }
 
   const handleCopy = (key: string) => {

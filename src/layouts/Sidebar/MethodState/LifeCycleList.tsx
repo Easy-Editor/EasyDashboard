@@ -56,8 +56,7 @@ export const LifeCycleList = observer(({ rootNode }: { rootNode: Node<RootSchema
   }
 
   const handleDelete = (key: string) => () => {
-    // TODO: extraProp 添加 clear
-    rootNode.getExtraProp(`lifeCycles.${key}`)?.unset()
+    rootNode.clearExtraPropValue(`lifeCycles.${key}`)
   }
 
   const handleCopy = (key: string) => () => {

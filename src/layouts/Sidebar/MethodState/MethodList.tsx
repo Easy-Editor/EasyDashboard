@@ -29,8 +29,7 @@ export const MethodList = observer(({ rootNode }: { rootNode: Node<RootSchema> }
   }
 
   const handleDelete = (key: string) => () => {
-    // TODO: extraProp 添加 clear
-    rootNode.getExtraProp(`methods.${key}`)?.unset()
+    rootNode.clearExtraPropValue(`methods.${key}`)
   }
 
   const handleCopy = (key: string) => () => {

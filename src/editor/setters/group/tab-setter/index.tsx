@@ -39,7 +39,7 @@ const TabSetter = (props: TabSetterProps) => {
           </TabsTrigger>
         ))}
       </TabsList>
-      {/* TODO：两种 group 的渲染方式，一种是 field.items，一种是 children */}
+      {/* INFO：两种 group 的渲染方式，一种是 field.items，一种是 children */}
       {/* {field.items?.map(item => (
         <TabsContent key={item.config.key} value={item.config.key as string} className='box-border p-4 mt-0'>
           {item.items?.map(item => (
