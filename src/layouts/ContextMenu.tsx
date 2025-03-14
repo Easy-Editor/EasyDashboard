@@ -9,7 +9,8 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { designer } from '@/editor'
+import { designer, project } from '@/editor'
+import { TRANSFORM_STAGE, insertChildren } from '@easy-editor/core'
 import {
   ArrowDown,
   ArrowUp,
@@ -26,7 +27,14 @@ import {
   Trash2,
   Ungroup,
 } from 'lucide-react'
+import { observer } from 'mobx-react'
 import { Fragment, type PropsWithChildren } from 'react'
+
+enum SelectionType {
+  NONE = 'none',
+  SINGLE = 'single',
+  MULTIPLE = 'multiple',
+}
 
 interface MenuItem {
   key: string
@@ -82,32 +90,79 @@ const menuItems: MenuItem[] = [
     label: '复制',
     icon: ClipboardCopy,
     shortcut: '⌘C',
+    async onClick() {
+      const doc = project.currentDocument
+      if (!doc) {
+        return
+      }
+
+      const selected = designer.selection.getTopNodes(false)
+      if (!selected || selected.length < 1) {
+        return
+      }
+
+      const componentsTree = selected.map(item => item?.export(TRANSFORM_STAGE.CLONE))
+      const data = { type: 'NodeSchema', componentsMap: {}, componentsTree }
+
+      await navigator.clipboard.writeText(JSON.stringify(data))
+    },
   },
   {
     key: 'paste',
     label: '粘贴',
     icon: ClipboardPaste,
     shortcut: '⌘V',
+    async onClick() {
+      const doc = project.currentDocument
+      const selection = designer.selection
+      if (!doc) {
+        return
+      }
+
+      const data = JSON.parse(await navigator.clipboard.readText())
+      if (data.componentsTree) {
+        const target = doc?.rootNode
+
+        if (!target) {
+          return
+        }
+
+        const nodes = insertChildren(target, data.componentsTree)
+        if (nodes) {
+          selection.selectAll(nodes.map(o => o.id))
+        }
+      }
+    },
   },
   {
     key: 'cv',
     label: '拷贝',
     icon: ClipboardPen,
     onClick() {
-      const selected = designer.selection.getTopNodes()
-      if (selected.length === 0) return
+      const doc = project.currentDocument
+      const selection = designer.selection
+      if (!doc) {
+        return
+      }
 
+      const selected = selection.getTopNodes(false)
+      if (!selected || selected.length < 1) {
+        return
+      }
+
+      const newNodesId: string[] = []
       for (const node of selected) {
-        if (node.isRoot) continue
-
-        const document = node.document
-        const cloneNodeSchema = node.export()
+        const cloneNodeSchema = node.export(TRANSFORM_STAGE.CLONE)
         // 添加偏移
         cloneNodeSchema.$dashboard!.rect!.x = (cloneNodeSchema.$dashboard!.rect!.x ?? 0) + 10
         cloneNodeSchema.$dashboard!.rect!.y = (cloneNodeSchema.$dashboard!.rect!.y ?? 0) + 10
         // 插入
-        document.insertNode(node.parent!, cloneNodeSchema, node.index + 1)
+        const newNode = doc.insertNode(node.parent!, cloneNodeSchema, node.index + 1)
+        if (newNode) {
+          newNodesId.push(newNode.id)
+        }
       }
+      selection.selectAll(newNodesId)
     },
   },
   {
@@ -134,11 +189,72 @@ const menuItems: MenuItem[] = [
     ],
     separator: true,
   },
+
+  {
+    key: 'show',
+    label: '显示',
+    icon: Eye,
+    shortcut: '⌘⇧H',
+    onClick() {
+      const selection = designer.selection
+      if (!selection) {
+        return
+      }
+
+      const selected = selection.getTopNodes(false)
+      if (!selected || selected.length < 1) {
+        return
+      }
+
+      for (const node of selected) {
+        node.hide(false)
+      }
+    },
+  },
   {
     key: 'hide',
     label: '隐藏',
     icon: Eye,
     shortcut: '⌘⇧H',
+    onClick() {
+      const selection = designer.selection
+      if (!selection) {
+        return
+      }
+
+      const selected = selection.getTopNodes(false)
+      if (!selected || selected.length < 1) {
+        return
+      }
+
+      for (const node of selected) {
+        node.hide()
+      }
+      selection.clear()
+    },
+  },
+  {
+    key: 'unlock',
+    label: '解锁',
+    icon: Lock,
+    shortcut: '⌘⇧L',
+    separator: true,
+    onClick() {
+      const selection = designer.selection
+      if (!selection) {
+        return
+      }
+
+      const selected = selection.getTopNodes(false)
+      if (!selected || selected.length < 1) {
+        return
+      }
+
+      for (const node of selected) {
+        node.lock(false)
+      }
+      selection.clear()
+    },
   },
   {
     key: 'lock',
@@ -146,22 +262,77 @@ const menuItems: MenuItem[] = [
     icon: Lock,
     shortcut: '⌘⇧L',
     separator: true,
+    onClick() {
+      const selection = designer.selection
+      if (!selection) {
+        return
+      }
+
+      const selected = selection.getTopNodes(false)
+      if (!selected || selected.length < 1) {
+        return
+      }
+
+      for (const node of selected) {
+        node.lock()
+      }
+      selection.clear()
+    },
   },
   {
     key: 'delete',
     label: '删除',
     icon: Trash2,
     shortcut: 'Del',
+    onClick() {
+      const selection = designer.selection
+      if (!selection) {
+        return
+      }
+
+      const selected = selection.getTopNodes(false)
+      if (!selected || selected.length < 1) {
+        return
+      }
+
+      for (const node of selected) {
+        node.remove()
+      }
+      selection.clear()
+    },
   },
 ]
 
+const getMenuItems = (selectionType: SelectionType) => {
+  let keys = []
+  switch (selectionType) {
+    case SelectionType.NONE:
+      keys = ['paste']
+      break
+    case SelectionType.SINGLE:
+      keys = ['layer', 'group', 'ungroup', 'copy', 'paste', 'cv', 'copy-paste-as', 'hide', 'lock', 'delete']
+      break
+    case SelectionType.MULTIPLE:
+      keys = ['layer', 'group', 'ungroup', 'copy', 'paste', 'cv', 'hide', 'lock', 'delete']
+      break
+  }
+
+  return menuItems.filter(item => keys.includes(item.key))
+}
+
 interface RendererContextMenuProps extends PropsWithChildren {}
 
-export const RendererContextMenu = ({ children }: RendererContextMenuProps) => {
+export const RendererContextMenu = observer(({ children }: RendererContextMenuProps) => {
+  const selection = designer.selection
+  const selected = selection.getTopNodes(false)
+  const selectionType =
+    selected.length === 0 ? SelectionType.NONE : selected.length === 1 ? SelectionType.SINGLE : SelectionType.MULTIPLE
+  const menuItems = getMenuItems(selectionType)
+
   return (
     <ContextMenu>
       <ContextMenuTrigger className='w-full h-full'>{children}</ContextMenuTrigger>
-      <ContextMenuContent className='w-64'>
+      <ContextMenuContent className='w-40'>
         {menuItems.map(item => (
           <Fragment key={item.key}>
             {item.children ? (
@@ -171,7 +342,7 @@ export const RendererContextMenu = ({ children }: RendererContextMenuProps) => {
                   {item.label}
                   {item.shortcut && <ContextMenuShortcut className='text-xs'>{item.shortcut}</ContextMenuShortcut>}
                 </ContextMenuSubTrigger>
-                <ContextMenuSubContent className='w-48 text-xs'>
+                <ContextMenuSubContent className='w-32 text-xs'>
                   {item.children.map(child => (
                     <Fragment key={child.key}>
                       <ContextMenuItem className='h-8 px-2 text-xs gap-0' onClick={child?.onClick}>
@@ -199,4 +370,4 @@ export const RendererContextMenu = ({ children }: RendererContextMenuProps) => {
       </ContextMenuContent>
     </ContextMenu>
   )
-}
+})
