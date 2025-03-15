@@ -1,83 +1,73 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub } from '@/components/ui/sidebar'
+import { SidebarMenu, SidebarMenuItem, SidebarMenuSub } from '@/components/ui/sidebar'
 import { SidebarMenuExtra, SidebarMenuExtraItem } from '@/components/ui/sidebar-extra'
-import { project } from '@/editor'
+import { designer, project } from '@/editor'
 import { cn } from '@/lib/utils'
 import type { Node, NodeSchema } from '@easy-editor/core'
-import { ChevronRight, Container, Eye, EyeOff, LockKeyhole, LockKeyholeOpen } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff, LockKeyhole, LockKeyholeOpen } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { type Key, useState } from 'react'
+import { RendererContextMenu } from '../ContextMenu'
 
 export const OutlineSidebar = observer(() => {
-  const currentDocumentRootNode = project.currentDocument?.rootNode
+  if (!project.currentDocument?.rootNode) {
+    return null
+  }
 
   return (
     <SidebarMenu>
-      <SidebarMenuItem>
-        <Collapsible className='group/collapsible [&[data-state=open]>button>svg:first-child]:rotate-90'>
-          <SidebarMenuButton className='cursor-pointer'>
-            <CollapsibleTrigger asChild>
-              <ChevronRight className='transition-transform' />
-            </CollapsibleTrigger>
-            <Container />
-            {currentDocumentRootNode?.componentName}
-          </SidebarMenuButton>
-          <CollapsibleContent>
-            <SidebarMenuSub>
-              {currentDocumentRootNode?.childrenNodes.map(
-                (childrenNode: Node<NodeSchema>, index: Key | null | undefined) => (
-                  <OutlineTree key={index} childrenNode={childrenNode} />
-                ),
-              )}
-            </SidebarMenuSub>
-          </CollapsibleContent>
-        </Collapsible>
+      <SidebarMenuItem className='p-2'>
+        <RendererContextMenu>
+          <OutlineTree node={project.currentDocument?.rootNode} />
+        </RendererContextMenu>
       </SidebarMenuItem>
     </SidebarMenu>
   )
 })
 
-const OutlineTree = observer(({ childrenNode }: { childrenNode: Node<NodeSchema> }) => {
+const OutlineTree = observer(({ node }: { node: Node<NodeSchema> }) => {
+  const selected = designer.selection.getTopNodes(true)
   const [isShowExtra, setIsShowExtra] = useState(false)
 
-  const handleHide = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    childrenNode.hide(!childrenNode.isHidden)
+  const handleHide = () => {
+    node.hide(!node.isHidden)
   }
 
-  const handleLock = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    childrenNode.lock(!childrenNode.isLocked)
+  const handleLock = () => {
+    node.lock(!node.isLocked)
   }
 
-  const handleSelect = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (childrenNode.canSelect()) {
-      childrenNode.select()
+  const handleSelect = () => {
+    if (node.canSelect()) {
+      node.select()
     }
   }
 
-  if (!childrenNode.childrenNodes?.length) {
+  if (!node.childrenNodes?.length) {
     return (
       <div
         onClick={handleSelect}
+        onContextMenu={handleSelect}
         onMouseEnter={() => setIsShowExtra(true)}
         onMouseLeave={() => setIsShowExtra(false)}
-        className='flex w-full items-center rounded-md p-2 text-left text-sm justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer'
+        className={cn(
+          'flex w-full items-center rounded-md p-2 text-left text-sm justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer',
+          selected.includes(node) && 'bg-sidebar-accent text-sidebar-accent-foreground',
+        )}
       >
-        {childrenNode.componentName}
+        {node.componentName}
         <SidebarMenuExtra>
           <SidebarMenuExtraItem
-            className={cn('invisible', (isShowExtra || childrenNode?.hidden) && 'visible')}
+            className={cn('invisible', (isShowExtra || node?.hidden) && 'visible')}
             onClick={handleHide}
           >
-            {childrenNode?.hidden ? <EyeOff /> : <Eye />}
+            {node?.hidden ? <EyeOff /> : <Eye />}
           </SidebarMenuExtraItem>
           <SidebarMenuExtraItem
-            className={cn('invisible', (isShowExtra || childrenNode?.locked) && 'visible')}
+            className={cn('invisible', (isShowExtra || node?.locked) && 'visible')}
             onClick={handleLock}
           >
-            {childrenNode?.locked ? <LockKeyhole /> : <LockKeyholeOpen />}
+            {node?.locked ? <LockKeyhole /> : <LockKeyholeOpen />}
           </SidebarMenuExtraItem>
         </SidebarMenuExtra>
       </div>
@@ -86,38 +76,44 @@ const OutlineTree = observer(({ childrenNode }: { childrenNode: Node<NodeSchema>
 
   return (
     <SidebarMenuItem>
-      <Collapsible className='group/collapsible [&[data-state=open]>div>div>svg:first-child]:rotate-90'>
+      <Collapsible className='group/collapsible [&[data-state=open]>div>div>svg:first-child]:rotate-90' defaultOpen>
         <div
           onClick={handleSelect}
+          onContextMenu={handleSelect}
           onMouseEnter={() => setIsShowExtra(true)}
           onMouseLeave={() => setIsShowExtra(false)}
-          className='flex w-full items-center justify-between rounded-md p-2 text-left text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer'
+          className={cn(
+            'flex w-full items-center rounded-md p-2 text-left text-sm justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer',
+            selected.includes(node) && 'bg-sidebar-accent text-sidebar-accent-foreground',
+          )}
         >
           <div className='flex items-center gap-2 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground'>
             <CollapsibleTrigger asChild>
               <ChevronRight className='transition-transform' />
             </CollapsibleTrigger>
-            {childrenNode.componentName}
+            {node.componentName}
           </div>
-          <SidebarMenuExtra>
-            <SidebarMenuExtraItem
-              className={cn('invisible', (isShowExtra || childrenNode?.hidden) && 'visible')}
-              onClick={handleHide}
-            >
-              {childrenNode?.hidden ? <EyeOff /> : <Eye />}
-            </SidebarMenuExtraItem>
-            <SidebarMenuExtraItem
-              className={cn('invisible', (isShowExtra || childrenNode?.locked) && 'visible')}
-              onClick={handleLock}
-            >
-              {childrenNode?.locked ? <LockKeyhole /> : <LockKeyholeOpen />}
-            </SidebarMenuExtraItem>
-          </SidebarMenuExtra>
+          {!node.isRoot && (
+            <SidebarMenuExtra>
+              <SidebarMenuExtraItem
+                className={cn('invisible', (isShowExtra || node?.hidden) && 'visible')}
+                onClick={handleHide}
+              >
+                {node?.hidden ? <EyeOff /> : <Eye />}
+              </SidebarMenuExtraItem>
+              <SidebarMenuExtraItem
+                className={cn('invisible', (isShowExtra || node?.locked) && 'visible')}
+                onClick={handleLock}
+              >
+                {node?.locked ? <LockKeyhole /> : <LockKeyholeOpen />}
+              </SidebarMenuExtraItem>
+            </SidebarMenuExtra>
+          )}
         </div>
         <CollapsibleContent>
           <SidebarMenuSub className='mr-0 pr-0'>
-            {childrenNode.childrenNodes?.map((childrenNode: Node<NodeSchema>, index: Key | null | undefined) => (
-              <OutlineTree key={index} childrenNode={childrenNode} />
+            {node.childrenNodes?.map((childrenNode: Node<NodeSchema>, index: Key | null | undefined) => (
+              <OutlineTree key={index} node={childrenNode} />
             ))}
           </SidebarMenuSub>
         </CollapsibleContent>

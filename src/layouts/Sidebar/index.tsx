@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Code, CodeXml, Component, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
 import * as React from 'react'
+import { useEffect } from 'react'
 import { ComponentSidebar } from './Components'
 import { MaterialsSidebar } from './Materials'
 import { MethodStateSidebar } from './MethodState'
@@ -60,6 +61,10 @@ const data = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [activeItem, setActiveItem] = React.useState(data.navTop[0])
   const { open, setOpen, fixed, toggleFixedSidebar } = useSidebar()
+
+  useEffect(() => {
+    setOpen(true)
+  }, [])
 
   return (
     <Sidebar
