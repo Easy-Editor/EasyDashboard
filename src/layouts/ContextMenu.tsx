@@ -56,21 +56,85 @@ const menuItems: MenuItem[] = [
         key: 'layer-top',
         label: '置顶',
         icon: PanelTop,
+        onClick: () => {
+          const selection = designer.selection
+          if (!selection) {
+            return
+          }
+
+          const selected = selection.getTopNodes(false)
+          if (!selected || selected.length < 1) {
+            return
+          }
+
+          for (let i = selected.length - 1; i >= 0; i--) {
+            const node = selected[i]
+            node.levelTop()
+          }
+        },
       },
       {
         key: 'layer-bottom',
         label: '置底',
         icon: PanelBottom,
+        onClick: () => {
+          const selection = designer.selection
+          if (!selection) {
+            return
+          }
+
+          const selected = selection.getTopNodes(false)
+          if (!selected || selected.length < 1) {
+            return
+          }
+
+          for (let i = selected.length - 1; i >= 0; i--) {
+            const node = selected[i]
+            node.levelBottom()
+          }
+        },
       },
       {
         key: 'layer-up',
         label: '上移一层',
         icon: ArrowUp,
+        onClick: () => {
+          const selection = designer.selection
+          if (!selection) {
+            return
+          }
+
+          const selected = selection.getTopNodes(false)
+          if (!selected || selected.length < 1) {
+            return
+          }
+
+          for (let i = selected.length - 1; i >= 0; i--) {
+            const node = selected[i]
+            node.levelUp()
+          }
+        },
       },
       {
         key: 'layer-down',
         label: '下移一层',
         icon: ArrowDown,
+        onClick: () => {
+          const selection = designer.selection
+          if (!selection) {
+            return
+          }
+
+          const selected = selection.getTopNodes(false)
+          if (!selected || selected.length < 1) {
+            return
+          }
+
+          for (let i = selected.length - 1; i >= 0; i--) {
+            const node = selected[i]
+            node.levelDown()
+          }
+        },
       },
     ],
   },
