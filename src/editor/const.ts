@@ -7,6 +7,7 @@ export const defaultRootSchema: RootSchema = {
     backgroundColor: '#232630',
     className: 'page test',
   },
+  isRoot: true,
   $dashboard: {
     rect: {
       x: 0,
