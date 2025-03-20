@@ -387,6 +387,11 @@ const getMenuItems = (selectionType: SelectionType) => {
 interface RendererContextMenuProps extends PropsWithChildren {}
 
 export const RendererContextMenu = observer(({ children }: RendererContextMenuProps) => {
+  const currentDoc = project.currentDocument
+  if (!currentDoc) {
+    return null
+  }
+
   const selection = designer.selection
   const selected = selection.getTopNodes(false)
   const selectionType =

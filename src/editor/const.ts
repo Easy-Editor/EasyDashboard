@@ -2,6 +2,58 @@ import type { RootSchema } from '@easy-editor/core'
 
 export const defaultRootSchema: RootSchema = {
   fileName: 'home',
+  fileDesc: '首页',
+  componentName: 'Root',
+  props: {
+    backgroundColor: '#232630',
+    className: 'page test',
+  },
+  isRoot: true,
+  $dashboard: {
+    rect: {
+      x: 0,
+      y: 0,
+      // TODO: 根节点需要动态调整
+      width: 1920,
+      height: 1080,
+    },
+  },
+  children: [],
+  state: {
+    testState: {
+      type: 'JSExpression',
+      value: '"testState"',
+      description: '文本状态',
+    },
+  },
+  lifeCycles: {
+    componentDidMount: {
+      type: 'JSFunction',
+      value:
+        "function componentDidMount() {\n  console.log('did mount ===========', this);\n  console.log(this.state.text, this.testFunc() );\n}",
+      source: "function componentDidMount() {\n  console.log('did mount');\n}",
+      description: '页面挂载时触发',
+    },
+    componentWillUnmount: {
+      type: 'JSFunction',
+      value: "function componentWillUnmount() {\n  console.log('will unmount');\n}",
+      source: "function componentWillUnmount() {\n  console.log('will unmount');\n}",
+      description: '页面卸载时触发',
+    },
+  },
+  methods: {
+    testFunc: {
+      type: 'JSFunction',
+      value: "function testFunc(...params) {\n  console.log('test func', params);\n}",
+      source: "function testFunc(...params) {\n  console.log('test func', params);\n}",
+      description: '测试方法',
+    },
+  },
+}
+
+export const _defaultRootSchema: RootSchema = {
+  fileName: 'home',
+  fileDesc: '首页',
   componentName: 'Root',
   props: {
     backgroundColor: '#232630',

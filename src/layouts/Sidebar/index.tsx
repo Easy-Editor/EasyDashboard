@@ -12,17 +12,24 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Code, CodeXml, Component, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
+import { Code, CodeXml, Component, File, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
 import * as React from 'react'
 import { useEffect } from 'react'
 import { ComponentSidebar } from './Components'
 import { MaterialsSidebar } from './Materials'
 import { MethodStateSidebar } from './MethodState'
 import { OutlineSidebar } from './Outline'
+import { PageSidebar } from './Page'
 import { SchemaSidebar } from './Schema'
 
 const data = {
   navTop: [
+    {
+      key: 'page',
+      title: '页面',
+      icon: File,
+      component: <PageSidebar />,
+    },
     {
       key: 'outline',
       title: '大纲',

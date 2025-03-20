@@ -56,7 +56,55 @@ export const initProject = async () => {
   // 设置模拟器样式
   simulator.set('deviceStyle', { viewport: { width: 1920, height: 1080 } })
 
-  project.open(defaultRootSchema)
+  // project.open(defaultRootSchema)
+  project.load(
+    {
+      componentsTree: [
+        {
+          ...defaultRootSchema,
+          fileName: 'home',
+          fileDesc: '首页',
+          children: [
+            {
+              componentName: 'Button',
+              props: {
+                type: 'primary',
+                content: 'Button in Root',
+              },
+              $dashboard: {
+                rect: {
+                  x: 600,
+                  y: 100,
+                  width: 180,
+                  height: 150,
+                },
+              },
+            },
+          ],
+        },
+        {
+          ...defaultRootSchema,
+          fileName: 'test',
+          fileDesc: '测试',
+          children: [
+            {
+              componentName: 'Image',
+              $dashboard: {
+                rect: {
+                  x: 1000,
+                  y: 100,
+                  width: 370,
+                  height: 60,
+                },
+              },
+            },
+          ],
+        },
+      ],
+      version: '1.0.0',
+    },
+    true,
+  )
 
   return { designer, project, simulator }
 }
