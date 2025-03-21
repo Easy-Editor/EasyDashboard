@@ -1,3 +1,4 @@
+import { AlertModal } from '@/components/common/AlertModal'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { SidebarMenu, SidebarMenuItem, SidebarMenuSub } from '@/components/ui/sidebar'
 import { SidebarMenuExtra, SidebarMenuExtraItem } from '@/components/ui/sidebar-extra'
@@ -28,19 +29,34 @@ export const PageSidebar = observer(() => {
   }
 
   const handleConfirm: PageModalProps['onConfirm'] = formData => {
-    project.createDocument({
-      ...defaultRootSchema,
-      fileName: formData.fileName,
-      fileDesc: formData.fileDesc,
-    })
-    console.log('project.export()', project.export())
+    if (editData) {
+      const doc = project.getDocument(editData.fileName)
+      if (doc) {
+        doc.rootNode?.setExtraPropValue('fileDesc', formData.fileDesc)
+      }
+    } else {
+      project.open({
+        ...defaultRootSchema,
+        fileName: formData.fileName,
+        fileDesc: formData.fileDesc,
+      })
+    }
+    setEditData(undefined)
   }
 
   return (
     <SidebarMenu>
       <SidebarMenuItem className='p-2'>
         <SidebarMenuItem>
-          <PageModal open={open} data={editData} onConfirm={handleConfirm} onClose={() => setOpen(false)}>
+          <PageModal
+            open={open}
+            data={editData}
+            onConfirm={handleConfirm}
+            onClose={() => {
+              setOpen(false)
+              setEditData(undefined)
+            }}
+          >
             <Collapsible
               className='group/collapsible [&[data-state=open]>div>div>svg:first-child]:rotate-90'
               defaultOpen
@@ -82,18 +98,17 @@ const Page: React.FC<{
   const { doc, currentDoc, handleEdit } = props
   const [isShowExtra, setIsShowExtra] = useState(false)
 
-  const handleDelete = (doc: Document) => {
-    console.log(doc)
-  }
-
   const handleSelect = (doc: Document) => {
     doc.open()
+  }
+
+  const handleDelete = (doc: Document) => {
+    doc.remove()
   }
 
   return (
     <div
       key={doc.id}
-      onClick={() => handleSelect(doc)}
       onMouseEnter={() => setIsShowExtra(true)}
       onMouseLeave={() => setIsShowExtra(false)}
       className={cn(
@@ -101,7 +116,10 @@ const Page: React.FC<{
         doc.id === currentDoc?.id && 'bg-sidebar-accent text-sidebar-accent-foreground',
       )}
     >
-      <div className='flex items-center gap-2 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground'>
+      <div
+        className='flex-1 flex items-center gap-2 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground'
+        onClick={() => handleSelect(doc)}
+      >
         <File />
         <span>
           {doc.rootNode?.getExtraPropValue('fileDesc') as string}
@@ -113,7 +131,12 @@ const Page: React.FC<{
           <FilePenLine onClick={() => handleEdit(doc)} />
         </SidebarMenuExtraItem>
         <SidebarMenuExtraItem className={cn('invisible', isShowExtra && 'visible')}>
-          <Trash2 onClick={() => handleDelete(doc)} />
+          <AlertModal
+            title='确定删除吗？'
+            description='删除后，该页面将无法恢复。'
+            trigger={<Trash2 onClick={e => e.stopPropagation()} />}
+            onConfirm={() => handleDelete(doc)}
+          />
         </SidebarMenuExtraItem>
       </SidebarMenuExtra>
     </div>

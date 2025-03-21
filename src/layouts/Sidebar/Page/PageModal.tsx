@@ -28,6 +28,7 @@ export interface PageModalProps extends PropsWithChildren {
 
 export const PageModal = observer((props: PageModalProps) => {
   const { data, open, onConfirm, onClose, children } = props
+  const isEdit = !!data
   const [fileName, setFileName] = useState(data?.fileName)
   const [fileDesc, setFileDesc] = useState(data?.fileDesc)
 
@@ -50,10 +51,8 @@ export const PageModal = observer((props: PageModalProps) => {
   }
 
   useEffect(() => {
-    if (data) {
-      setFileName(data.fileName)
-      setFileDesc(data.fileDesc)
-    }
+    setFileName(data?.fileName)
+    setFileDesc(data?.fileDesc)
   }, [data])
 
   return (
@@ -61,7 +60,7 @@ export const PageModal = observer((props: PageModalProps) => {
       {children}
       <DialogContent className='!max-w-[500px]'>
         <DialogHeader>
-          <DialogTitle>页面{data ? `编辑 - ${data.fileName}` : '新增'}</DialogTitle>
+          <DialogTitle>页面{isEdit ? `编辑 - ${data.fileName}` : '新增'}</DialogTitle>
           <DialogDescription className='flex flex-col gap-4 h-[1test00px] mt-2'>
             <div className='flex items-center space-x-2'>
               <Label htmlFor='fileDesc' className='text-xs basis-15 text-right'>
@@ -85,6 +84,7 @@ export const PageModal = observer((props: PageModalProps) => {
                 className='h-8 !text-xs px-2 py-[5px]'
                 value={fileName}
                 onChange={e => setFileName(e.target.value)}
+                disabled={isEdit}
               />
             </div>
           </DialogDescription>

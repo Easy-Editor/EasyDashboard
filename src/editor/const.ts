@@ -18,7 +18,19 @@ export const defaultRootSchema: RootSchema = {
       height: 1080,
     },
   },
-  children: [],
+  children: [
+    {
+      componentName: 'Image',
+      $dashboard: {
+        rect: {
+          x: 600,
+          y: 480,
+          width: 740,
+          height: 120,
+        },
+      },
+    },
+  ],
   state: {
     testState: {
       type: 'JSExpression',

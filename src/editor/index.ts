@@ -64,23 +64,6 @@ export const initProject = async () => {
           ...defaultRootSchema,
           fileName: 'index',
           fileDesc: '首页',
-          children: [
-            {
-              componentName: 'Button',
-              props: {
-                type: 'primary',
-                content: 'Button in Root',
-              },
-              $dashboard: {
-                rect: {
-                  x: 600,
-                  y: 100,
-                  width: 180,
-                  height: 150,
-                },
-              },
-            },
-          ],
         },
         {
           ...defaultRootSchema,
@@ -91,10 +74,10 @@ export const initProject = async () => {
               componentName: 'Image',
               $dashboard: {
                 rect: {
-                  x: 1000,
-                  y: 100,
-                  width: 370,
-                  height: 60,
+                  x: 0,
+                  y: 0,
+                  width: 740,
+                  height: 120,
                 },
               },
             },

@@ -12,8 +12,8 @@ import {
 import { Button } from '@/components/ui/button'
 
 interface AlertModalProps {
-  onCancel?: () => void
-  onConfirm?: () => void
+  onCancel?: (e: React.MouseEvent<HTMLElement>) => void
+  onConfirm?: (e: React.MouseEvent<HTMLElement>) => void
   title: string
   description?: string
   confirmText?: string
