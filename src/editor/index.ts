@@ -62,7 +62,7 @@ export const initProject = async () => {
       componentsTree: [
         {
           ...defaultRootSchema,
-          fileName: 'home',
+          fileName: 'index',
           fileDesc: '首页',
           children: [
             {
