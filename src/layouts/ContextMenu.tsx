@@ -389,7 +389,7 @@ interface RendererContextMenuProps extends PropsWithChildren {}
 export const RendererContextMenu = observer(({ children }: RendererContextMenuProps) => {
   const currentDoc = project.currentDocument
   if (!currentDoc) {
-    return null
+    return children
   }
 
   const selection = designer.selection
