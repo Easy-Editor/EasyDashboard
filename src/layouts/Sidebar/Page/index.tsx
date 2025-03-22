@@ -104,6 +104,9 @@ const Page: React.FC<{
 
   const handleDelete = (doc: Document) => {
     doc.remove()
+    if (project.documents.length > 0) {
+      project.documents[0].open()
+    }
   }
 
   return (

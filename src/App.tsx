@@ -1,10 +1,8 @@
 import { AppLayout } from '@/layouts'
-import { SimulatorRenderer } from '@easy-editor/react-renderer-dashboard'
 import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { ThemeProvider } from './components/theme-provider'
-import { simulator } from './editor'
-import { RendererContextMenu } from './layouts/ContextMenu'
+import Renderer from './layouts/Renderer'
 
 function App() {
   return (
@@ -12,9 +10,7 @@ function App() {
       <ThemeProvider defaultTheme='system' storageKey='easy-dashboard-theme'>
         <Suspense fallback={<div className='w-full h-screen flex items-center justify-center'>初始化编辑器中...</div>}>
           <AppLayout>
-            <RendererContextMenu>
-              <SimulatorRenderer host={simulator} />
-            </RendererContextMenu>
+            <Renderer />
           </AppLayout>
         </Suspense>
       </ThemeProvider>
