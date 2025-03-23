@@ -9,6 +9,7 @@ import type { Document } from '@easy-editor/core'
 import { ChevronRight, CirclePlus, File, FilePenLine, Folder, Trash2 } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { PageModal, type PageModalProps } from './PageModal'
 
 export const PageSidebar = observer(() => {
@@ -103,8 +104,15 @@ const Page: React.FC<{
   }
 
   const handleDelete = (doc: Document) => {
+    // TODO: 待修复，删除最后一个页面时，再创建后页面无法显示
+    if (project.documents.length === 1) {
+      toast.error('至少需要一个页面')
+      return
+    }
+
     doc.remove()
-    if (project.documents.length > 0) {
+
+    if (doc.id === currentDoc?.id) {
       project.documents[0].open()
     }
   }
