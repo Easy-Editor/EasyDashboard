@@ -1,8 +1,24 @@
 import { Button } from '@/components/ui/button'
+import { project } from '@/editor'
 import { cn } from '@/lib/utils'
+import { TRANSFORM_STAGE } from '@easy-editor/core'
 import { MainNav } from './Nav'
+import { savePageInfoToLocalStorage, savePageSchemaToLocalStorage, saveProjectSchemaToLocalStorage } from './utils'
 
 export function AppHeader({ className }: { className?: string }) {
+  const save = (kind: 'project' | 'page' = 'page') => {
+    if (kind === 'project') {
+      saveProjectSchemaToLocalStorage(project.export(TRANSFORM_STAGE.SAVE))
+    } else {
+      const pageInfo = []
+      for (const doc of project.documents) {
+        pageInfo.push({ id: doc.fileName, name: doc.rootNode?.getExtraPropValue('fileDesc') as string })
+        savePageSchemaToLocalStorage(doc.fileName, doc.export(TRANSFORM_STAGE.SAVE))
+      }
+      savePageInfoToLocalStorage(pageInfo)
+    }
+  }
+
   return (
     <header
       className={cn(
@@ -17,7 +33,12 @@ export function AppHeader({ className }: { className?: string }) {
             <div className='w-full flex-1 md:w-auto md:flex-none' />
             <div className='flex items-center gap-2'>
               <Button variant='outline'>预览</Button>
-              <Button variant='outline'>保存</Button>
+              <Button variant='outline' onClick={() => save('page')}>
+                保存
+              </Button>
+              {/* <Button variant='outline' onClick={() => save('project')}>
+                保存项目
+              </Button> */}
             </div>
           </div>
         </div>
