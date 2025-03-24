@@ -4,7 +4,7 @@ import { ConfigureSidebar } from './Configure'
 import { AppHeader } from './Header'
 import { AppSidebar } from './Sidebar'
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className='h-full relative flex flex-col bg-background'>
       <div className='h-full border-grid flex flex-1 flex-col'>
@@ -46,3 +46,5 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     </div>
   )
 }
+
+export default AppLayout
