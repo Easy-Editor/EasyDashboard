@@ -28,7 +28,7 @@ export const saveProjectSchemaToLocalStorage = (schema: any) => {
 
 export const getPageSchemaFromLocalStorage = (pageId: string) => {
   const pageSchema = localStorage.getItem(getPageName(pageId))
-  return pageSchema ? JSON.parse(pageSchema) : defaultRootSchema
+  return pageSchema ? JSON.parse(pageSchema) : null
 }
 
 export const savePageSchemaToLocalStorage = (pageId: string, schema: any) => {

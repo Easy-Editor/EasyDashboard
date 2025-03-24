@@ -1,11 +1,14 @@
 import { Button } from '@/components/ui/button'
 import { project } from '@/editor'
+import { savePageInfoToLocalStorage, savePageSchemaToLocalStorage, saveProjectSchemaToLocalStorage } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { TRANSFORM_STAGE } from '@easy-editor/core'
+import { useNavigate } from 'react-router'
 import { MainNav } from './Nav'
-import { savePageInfoToLocalStorage, savePageSchemaToLocalStorage, saveProjectSchemaToLocalStorage } from './utils'
 
 export function AppHeader({ className }: { className?: string }) {
+  const navigate = useNavigate()
+
   const save = (kind: 'project' | 'page' = 'page') => {
     if (kind === 'project') {
       saveProjectSchemaToLocalStorage(project.export(TRANSFORM_STAGE.SAVE))
@@ -17,6 +20,12 @@ export function AppHeader({ className }: { className?: string }) {
       }
       savePageInfoToLocalStorage(pageInfo)
     }
+  }
+
+  const preview = () => {
+    // navigate('/preview')
+    save('page')
+    window.open('/preview', '_blank')
   }
 
   return (
