@@ -28,14 +28,14 @@ export const saveProjectSchemaToLocalStorage = (schema: any) => {
 
 export const getPageSchemaFromLocalStorage = (pageId: string) => {
   const pageSchema = localStorage.getItem(getPageName(pageId))
-  return pageSchema ? JSON.parse(pageSchema) : null
+  return pageSchema ? (JSON.parse(pageSchema) as ProjectSchema) : null
 }
 
 export const savePageSchemaToLocalStorage = (pageId: string, schema: any) => {
   localStorage.setItem(getPageName(pageId), JSON.stringify(generateProjectSchema(schema)))
 }
 
-export const savePageInfoToLocalStorage = (info: Array<{ id: string; name: string }>) => {
+export const savePageInfoToLocalStorage = (info: Array<{ path: string; title: string }>) => {
   localStorage.setItem(PAGE_INFO, JSON.stringify(info))
 }
 

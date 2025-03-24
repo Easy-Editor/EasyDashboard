@@ -15,7 +15,7 @@ export function AppHeader({ className }: { className?: string }) {
     } else {
       const pageInfo = []
       for (const doc of project.documents) {
-        pageInfo.push({ id: doc.fileName, name: doc.rootNode?.getExtraPropValue('fileDesc') as string })
+        pageInfo.push({ path: doc.fileName, title: doc.rootNode?.getExtraPropValue('fileDesc') as string })
         savePageSchemaToLocalStorage(doc.fileName, doc.export(TRANSFORM_STAGE.SAVE))
       }
       savePageInfoToLocalStorage(pageInfo)
@@ -41,7 +41,9 @@ export function AppHeader({ className }: { className?: string }) {
           <div className='flex flex-1 items-center justify-between gap-2 md:justify-end'>
             <div className='w-full flex-1 md:w-auto md:flex-none' />
             <div className='flex items-center gap-2'>
-              <Button variant='outline'>预览</Button>
+              <Button variant='outline' onClick={preview}>
+                预览
+              </Button>
               <Button variant='outline' onClick={() => save('page')}>
                 保存
               </Button>

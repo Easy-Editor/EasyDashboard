@@ -4,6 +4,8 @@ import { ConfigureSidebar } from './Configure'
 import { AppHeader } from './Header'
 import { AppSidebar } from './Sidebar'
 
+import '@/editor'
+
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className='h-full relative flex flex-col bg-background'>

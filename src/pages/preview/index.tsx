@@ -1,6 +1,6 @@
 import { components } from '@/editor'
 import { getPageInfoFromLocalStorage, getPageSchemaFromLocalStorage } from '@/lib/schema'
-import { LowCodeRenderer } from '@easy-editor/react-renderer-dashboard'
+import { Renderer } from '@easy-editor/react-renderer-dashboard'
 import { useEffect, useState } from 'react'
 
 const Preview = () => {
@@ -12,16 +12,19 @@ const Preview = () => {
       return
     }
 
-    const pageSchema = getPageSchemaFromLocalStorage(pageInfo[0].id)
-    setSchema(pageSchema)
+    const pageSchema = getPageSchemaFromLocalStorage(pageInfo[0].path)
+    if (!pageSchema) {
+      return
+    }
 
+    setSchema(pageSchema?.componentsTree[0])
     console.log(pageInfo, pageSchema)
   }, [])
 
   return (
     <div className='h-full w-full'>
       {schema ? (
-        <LowCodeRenderer schema={schema} components={components} />
+        <Renderer schema={schema} components={components} viewport={{ width: 1920, height: 1080 }} />
       ) : (
         <div className='flex h-full w-full items-center justify-center'>
           <div className='text-sm text-muted-foreground'>loading...</div>

@@ -3,8 +3,6 @@ import { scan } from 'react-scan'
 import App from './App'
 import './styles/global.css'
 
-import './editor'
-
 if (typeof window !== 'undefined') {
   scan({
     enabled: true,
