@@ -35,8 +35,22 @@ const MRadarChart = (props: MRadarChartProps) => {
         <ChartTooltip cursor={false} content={<ChartTooltipContent indicator='line' />} />
         <PolarAngleAxis dataKey='month' />
         <PolarGrid radialLines={false} />
-        <Radar dataKey='desktop' fill='var(--chart-1)' fillOpacity={0} stroke='var(--chart-1)' strokeWidth={2} />
-        <Radar dataKey='mobile' fill='var(--chart-2)' fillOpacity={0} stroke='var(--chart-2)' strokeWidth={2} />
+        <Radar
+          dataKey='desktop'
+          fill='var(--chart-1)'
+          fillOpacity={0}
+          stroke='var(--chart-1)'
+          strokeWidth={2}
+          isAnimationActive={false}
+        />
+        <Radar
+          dataKey='mobile'
+          fill='var(--chart-2)'
+          fillOpacity={0}
+          stroke='var(--chart-2)'
+          strokeWidth={2}
+          isAnimationActive={false}
+        />
       </RadarChart>
     </ChartContainer>
   )

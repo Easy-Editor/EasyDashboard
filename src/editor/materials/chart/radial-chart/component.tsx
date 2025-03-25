@@ -47,7 +47,7 @@ const MRadialChart = (props: MRadialChartProps) => {
     <ChartContainer ref={ref} config={chartConfig} className='w-full h-full mx-auto aspect-square'>
       <RadialBarChart data={chartData} innerRadius={30} outerRadius={110}>
         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel nameKey='browser' />} />
-        <RadialBar dataKey='visitors' background />
+        <RadialBar dataKey='visitors' background isAnimationActive={false} />
       </RadialBarChart>
     </ChartContainer>
   )

@@ -31,7 +31,7 @@ const MRadialChart = (props: MRadialChartProps) => {
           className='first:fill-muted last:fill-background'
           polarRadius={[86, 74]}
         />
-        <RadialBar dataKey='visitors' background cornerRadius={10} />
+        <RadialBar dataKey='visitors' background cornerRadius={10} isAnimationActive={false} />
         <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
           <Label
             content={({ viewBox }) => {

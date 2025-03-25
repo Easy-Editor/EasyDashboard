@@ -51,6 +51,7 @@ const MRadialChart = (props: MRadialChartProps) => {
           cornerRadius={5}
           fill='var(--color-desktop)'
           className='stroke-transparent stroke-2'
+          isAnimationActive={false}
         />
         <RadialBar
           dataKey='mobile'
@@ -58,6 +59,7 @@ const MRadialChart = (props: MRadialChartProps) => {
           stackId='a'
           cornerRadius={5}
           className='stroke-transparent stroke-2'
+          isAnimationActive={false}
         />
       </RadialBarChart>
     </ChartContainer>

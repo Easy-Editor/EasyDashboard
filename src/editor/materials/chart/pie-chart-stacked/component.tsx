@@ -72,8 +72,8 @@ const MPieChart = (props: MPieChartProps) => {
             />
           }
         />
-        <Pie data={desktopData} dataKey='desktop' outerRadius={60} />
-        <Pie data={mobileData} dataKey='mobile' innerRadius={70} outerRadius={90} />
+        <Pie data={desktopData} dataKey='desktop' outerRadius={60} isAnimationActive={false} />
+        <Pie data={mobileData} dataKey='mobile' innerRadius={70} outerRadius={90} isAnimationActive={false} />
       </PieChart>
     </ChartContainer>
   )

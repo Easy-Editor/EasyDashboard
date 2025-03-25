@@ -41,8 +41,8 @@ const MBarChart = (props: MBarChartProps) => {
           tickFormatter={value => value.slice(0, 3)}
         />
         <ChartTooltip cursor={false} content={<ChartTooltipContent indicator='dashed' />} />
-        <Bar dataKey='desktop' fill='var(--chart-1)' radius={4} />
-        <Bar dataKey='mobile' fill='var(--chart-2)' radius={4} />
+        <Bar dataKey='desktop' fill='var(--chart-1)' radius={4} isAnimationActive={false} />
+        <Bar dataKey='mobile' fill='var(--chart-2)' radius={4} isAnimationActive={false} />
       </BarChart>
     </ChartContainer>
   )

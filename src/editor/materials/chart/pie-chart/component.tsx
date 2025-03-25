@@ -47,7 +47,7 @@ const MPieChart = (props: MPieChartProps) => {
     <ChartContainer ref={ref} config={chartConfig} className='w-full h-full mx-auto aspect-square'>
       <PieChart>
         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-        <Pie data={chartData} dataKey='visitors' nameKey='browser' />
+        <Pie data={chartData} dataKey='visitors' nameKey='browser' isAnimationActive={false} />
       </PieChart>
     </ChartContainer>
   )

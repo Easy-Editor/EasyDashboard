@@ -44,7 +44,14 @@ const MLineChart = (props: MLineChartProps) => {
           tickFormatter={value => value.slice(0, 3)}
         />
         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-        <Line dataKey='desktop' type='natural' stroke='var(--chart-1)' strokeWidth={2} dot={false} />
+        <Line
+          dataKey='desktop'
+          type='natural'
+          stroke='var(--chart-1)'
+          strokeWidth={2}
+          dot={false}
+          isAnimationActive={false}
+        />
       </LineChart>
     </ChartContainer>
   )

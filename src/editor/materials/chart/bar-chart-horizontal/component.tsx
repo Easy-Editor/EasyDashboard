@@ -45,7 +45,7 @@ const MBarChart = (props: MBarChartProps) => {
           tickFormatter={value => value.slice(0, 3)}
         />
         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-        <Bar dataKey='desktop' fill='var(--chart-1)' radius={5} />
+        <Bar dataKey='desktop' fill='var(--chart-1)' radius={5} isAnimationActive={false} />
       </BarChart>
     </ChartContainer>
   )

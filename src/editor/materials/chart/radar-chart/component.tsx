@@ -31,7 +31,7 @@ const MRadarChart = (props: MRadarChartProps) => {
         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
         <PolarAngleAxis dataKey='month' />
         <PolarGrid />
-        <Radar dataKey='desktop' fill='var(--chart-1)' fillOpacity={0.6} />
+        <Radar dataKey='desktop' fill='var(--chart-1)' fillOpacity={0.6} isAnimationActive={false} />
       </RadarChart>
     </ChartContainer>
   )

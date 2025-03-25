@@ -55,6 +55,7 @@ const MAreaChart = (props: MAreaChartProps) => {
           fillOpacity={0.4}
           stroke='var(--chart-1)'
           stackId='a'
+          isAnimationActive={false}
         />
         <Area
           dataKey='desktop'
@@ -63,6 +64,7 @@ const MAreaChart = (props: MAreaChartProps) => {
           fillOpacity={0.4}
           stroke='var(--chart-2)'
           stackId='a'
+          isAnimationActive={false}
         />
       </AreaChart>
     </ChartContainer>

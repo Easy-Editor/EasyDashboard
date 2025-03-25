@@ -49,8 +49,8 @@ const MBarChart = (props: MBarChartProps) => {
         />
         <ChartTooltip content={<ChartTooltipContent hideLabel />} />
         <ChartLegend content={<ChartLegendContent />} />
-        <Bar dataKey='desktop' stackId='a' fill='var(--chart-1)' radius={[0, 0, 4, 4]} />
-        <Bar dataKey='mobile' stackId='a' fill='var(--chart-2)' radius={[4, 4, 0, 0]} />
+        <Bar dataKey='desktop' stackId='a' fill='var(--chart-1)' radius={[0, 0, 4, 4]} isAnimationActive={false} />
+        <Bar dataKey='mobile' stackId='a' fill='var(--chart-2)' radius={[4, 4, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </ChartContainer>
   )
