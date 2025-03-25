@@ -69,6 +69,41 @@ export const initProject = async () => {
             {
               componentName: 'Button',
               props: {
+                content: 'Button in Root',
+                __events: {
+                  eventDataList: [
+                    {
+                      type: 'componentEvent',
+                      name: 'onClick',
+                      relatedEventName: 'testFunc',
+                    },
+                  ],
+                  eventList: [
+                    {
+                      name: 'onClick',
+                      description: '鼠标点击',
+                      disabled: true,
+                    },
+                  ],
+                },
+                onClick: {
+                  type: 'JSFunction',
+                  value:
+                    'function(){return this.testFunc.apply(this,Array.prototype.slice.call(arguments).concat([])) }',
+                },
+              },
+              $dashboard: {
+                rect: {
+                  x: 100,
+                  y: 100,
+                  width: 200,
+                  height: 50,
+                },
+              },
+            },
+            {
+              componentName: 'Button',
+              props: {
                 content: 'Next Page',
                 __events: {
                   eventDataList: [
