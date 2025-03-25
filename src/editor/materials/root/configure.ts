@@ -27,6 +27,11 @@ const configure: Configure = {
               },
               items: [
                 {
+                  name: 'backgroundColor',
+                  title: '背景颜色',
+                  setter: 'ColorSetter',
+                },
+                {
                   name: '__image',
                   title: '图片地址',
                   setter: 'UploadSetter',
