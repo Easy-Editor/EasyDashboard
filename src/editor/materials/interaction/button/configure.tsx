@@ -722,6 +722,26 @@ const configure: Configure = {
           items: [
             {
               type: 'group',
+              title: '高级设置',
+              setter: {
+                componentName: 'CollapseSetter',
+                props: {
+                  icon: false,
+                },
+              },
+              items: [
+                {
+                  name: 'visible',
+                  title: '显隐',
+                  setter: 'SwitchSetter',
+                  extraProps: {
+                    supportVariable: true,
+                  },
+                },
+              ],
+            },
+            {
+              type: 'group',
               title: '事件设置',
               setter: {
                 componentName: 'CollapseSetter',

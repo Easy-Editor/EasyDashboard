@@ -126,7 +126,10 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
                         )}
                         onClick={() => setEvent(key)}
                       >
-                        {value.description || key}
+                        <div className='flex items-center gap-1'>
+                          <span>{key}</span>
+                          {value.description && <span className='text-xs text-gray-500'>({value.description})</span>}
+                        </div>
                       </div>
                     ))}
                   </div>

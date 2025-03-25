@@ -45,5 +45,11 @@ declare module '@easy-editor/core' {
      * @default false
      */
     wrap?: boolean
+
+    /**
+     * 是否支持变量绑定
+     * @default false
+     */
+    supportVariable?: boolean
   }
 }

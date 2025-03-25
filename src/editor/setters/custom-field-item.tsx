@@ -2,21 +2,24 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import type { SettingField } from '@easy-editor/core'
 import type { ReactNode } from 'react'
+import { VariableBind } from './VariableBind'
 
 export const customFieldItem = (field: SettingField, setter: ReactNode) => {
-  if (typeof field.config.extraProps?.label === 'boolean' && !field.config.extraProps?.label) {
+  const { label = true, wrap = false, supportVariable = false } = field.config.extraProps || {}
+
+  if (typeof label === 'boolean' && !label) {
     return <div className='flex w-full items-center'>{setter}</div>
   }
 
   return (
-    <div className={cn('flex w-full text-xs', field.config.extraProps?.wrap ? 'flex-col' : 'items-center ')}>
-      <Label
-        className={cn('text-xs shrink-0 grow-0', field.config.extraProps?.wrap ? 'basis-[26px]' : 'basis-[100px]')}
-        htmlFor={field.id}
-      >
+    <div className={cn('flex w-full text-xs', wrap ? 'flex-col' : 'items-center ')}>
+      <Label className={cn('text-xs shrink-0 grow-0', wrap ? 'basis-[26px]' : 'basis-[100px]')} htmlFor={field.id}>
         {field.title}
       </Label>
-      {setter}
+      <div className='flex-1 flex items-center justify-between'>
+        <div className='flex-1'>{setter}</div>
+        {supportVariable && <VariableBind field={field} />}
+      </div>
     </div>
   )
 }
