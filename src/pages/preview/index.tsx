@@ -1,4 +1,4 @@
-import { components } from '@/editor'
+import { components } from '@/editor/materials'
 import { getPageInfoFromLocalStorage, getPageSchemaFromLocalStorage } from '@/lib/schema'
 import { Renderer } from '@easy-editor/react-renderer-dashboard'
 import { useEffect, useRef, useState } from 'react'

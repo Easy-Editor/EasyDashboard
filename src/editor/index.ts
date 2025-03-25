@@ -1,7 +1,5 @@
 import {
-  type Component,
   type ComponentMetaManager,
-  type ComponentMetadata,
   type Designer,
   type Project,
   type Setter,
@@ -12,14 +10,11 @@ import {
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import HotkeyPlugin from '@easy-editor/plugin-hotkey'
 import { defaultRootSchema } from './const'
+import { componentMetas, components } from './materials'
 import { formatMapFromESModule } from './utils'
 
 const plugins = (await import('./plugins')).default
 const setterMap = await import('./setters')
-const componentMap = await import('./materials/component')
-const componentMetaMap = await import('./materials/meta')
-
-export const components = formatMapFromESModule<Component>(componentMap)
 
 export const editor = createEasyEditor({
   lifeCycles: {
@@ -30,10 +25,10 @@ export const editor = createEasyEditor({
       console.log('destroy')
     },
   },
+  components,
+  componentMetas,
   plugins: [DashboardPlugin(), HotkeyPlugin(), ...plugins],
   setters: formatMapFromESModule<Setter>(setterMap),
-  components: formatMapFromESModule<Component>(componentMap),
-  componentMetas: formatMapFromESModule<ComponentMetadata>(componentMetaMap),
   hotkeys: [
     {
       combos: ['ctrl+a'],

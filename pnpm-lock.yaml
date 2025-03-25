@@ -20,6 +20,9 @@ importers:
       '@easy-editor/react-renderer':
         specifier: ^0.0.13
         version: 0.0.13(@easy-editor/core@0.0.13(mobx@6.13.6))(@types/react-dom@19.0.4(@types/react@19.0.10))(@types/react@19.0.10)(mobx-react@9.2.0(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      '@easy-editor/react-renderer-dashboard':
+        specifier: ^0.0.15
+        version: 0.0.15(@easy-editor/core@0.0.13(mobx@6.13.6))(@easy-editor/plugin-dashboard@0.0.13(@easy-editor/core@0.0.13(mobx@6.13.6))(@types/react@19.0.10)(mobx@6.13.6)(react@19.0.0))(@types/react-dom@19.0.4(@types/react@19.0.10))(@types/react@19.0.10)(mobx-react@9.2.0(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.52.2)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -561,6 +564,18 @@ packages:
     resolution: {integrity: sha512-JQyr2akFUci9KvyLXK2AndvaRjTeWhmd2dNX+nj1U5qSJWspGLvtN+Aq6MlDwuQcndpSII744rUBqbprjUTKQw==}
     peerDependencies:
       '@easy-editor/core': ^0.0.12
+
+  '@easy-editor/react-renderer-dashboard@0.0.15':
+    resolution: {integrity: sha512-EZzTKHi2ASvo8QnSrNxEn+U+8OcINjLyopclvCdhWot59Dl0Lah4Z0rKeMtfZsT4aU2r3CrwHTOZvn+GggaeLA==}
+    peerDependencies:
+      '@easy-editor/core': ^0.0.13
+      '@easy-editor/plugin-dashboard': ^0.0.14
+      '@types/react': ^18 || ^19
+      '@types/react-dom': ^18 || ^19
+      mobx: ^6.13.5
+      mobx-react: ^9.2.0
+      react: ^18 || ^19
+      react-dom: ^18 || ^19
 
   '@easy-editor/react-renderer@0.0.13':
     resolution: {integrity: sha512-RfphrKbcMSXfyZqRfQI8kqvVurmYPjemPa9gMNGPrQs69KNjmedoRN16Op0WQTuRATe59VRnZH4LJt+ug5/Zxg==}
@@ -2424,6 +2439,9 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
+  history@5.3.0:
+    resolution: {integrity: sha512-ZqaKwjjrAYUYfLG+htGaIIZ4nioX2L70ZUMIFysS3xvBsSG4x/n1V6TXV3N8ZYNuFGlDirFg32T7B6WOUPDYcQ==}
+
   human-id@4.1.1:
     resolution: {integrity: sha512-3gKm/gCSUipeLsRYZbbdA1BD83lBoWUkZ7G9VFrhWPAU76KwYo5KR8V28bpoPm/ygy0x5/GCbpRQdY7VLYCoIg==}
     hasBin: true
@@ -3912,6 +3930,20 @@ snapshots:
   '@easy-editor/plugin-hotkey@0.0.10(@easy-editor/core@0.0.13(mobx@6.13.6))':
     dependencies:
       '@easy-editor/core': 0.0.13(mobx@6.13.6)
+
+  '@easy-editor/react-renderer-dashboard@0.0.15(@easy-editor/core@0.0.13(mobx@6.13.6))(@easy-editor/plugin-dashboard@0.0.13(@easy-editor/core@0.0.13(mobx@6.13.6))(@types/react@19.0.10)(mobx@6.13.6)(react@19.0.0))(@types/react-dom@19.0.4(@types/react@19.0.10))(@types/react@19.0.10)(mobx-react@9.2.0(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
+    dependencies:
+      '@easy-editor/core': 0.0.13(mobx@6.13.6)
+      '@easy-editor/plugin-dashboard': 0.0.13(@easy-editor/core@0.0.13(mobx@6.13.6))(@types/react@19.0.10)(mobx@6.13.6)(react@19.0.0)
+      '@types/react': 19.0.10
+      '@types/react-dom': 19.0.4(@types/react@19.0.10)
+      history: 5.3.0
+      lodash-es: 4.17.21
+      mobx: 6.13.6
+      mobx-react: 9.2.0(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      react: 19.0.0
+      react-dom: 19.0.0(react@19.0.0)
+      react-router: 7.4.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
 
   '@easy-editor/react-renderer@0.0.13(@easy-editor/core@0.0.13(mobx@6.13.6))(@types/react-dom@19.0.4(@types/react@19.0.10))(@types/react@19.0.10)(mobx-react@9.2.0(mobx@6.13.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
     dependencies:
@@ -5620,6 +5652,10 @@ snapshots:
       slash: 3.0.0
 
   graceful-fs@4.2.11: {}
+
+  history@5.3.0:
+    dependencies:
+      '@babel/runtime': 7.26.9
 
   human-id@4.1.1: {}
 
