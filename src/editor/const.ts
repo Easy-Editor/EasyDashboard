@@ -56,8 +56,8 @@ export const defaultRootSchema: RootSchema = {
   methods: {
     testFunc: {
       type: 'JSFunction',
-      value: "function testFunc(...params) {\n  console.log('test func', params);\n}",
-      source: "function testFunc(...params) {\n  console.log('test func', params);\n}",
+      value: "function testFunc(...params) {\n  console.log('test func', params, this);\n}",
+      source: "function testFunc(...params) {\n  console.log('test func', params, this);\n}",
       description: '测试方法',
     },
   },

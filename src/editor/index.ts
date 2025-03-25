@@ -64,6 +64,45 @@ export const initProject = async () => {
           ...defaultRootSchema,
           fileName: 'index',
           fileDesc: '首页',
+          children: [
+            ...(defaultRootSchema.children || []),
+            {
+              componentName: 'Button',
+              props: {
+                content: 'Next Page',
+                __events: {
+                  eventDataList: [
+                    {
+                      type: 'builtin',
+                      name: 'onClick',
+                      relatedEventName: 'utils.navigate',
+                      paramStr: '"test"',
+                    },
+                  ],
+                  eventList: [
+                    {
+                      name: 'onClick',
+                      description: '鼠标点击',
+                      disabled: true,
+                    },
+                  ],
+                },
+                onClick: {
+                  type: 'JSFunction',
+                  value:
+                    'function(){return this.utils.navigate.apply(this,Array.prototype.slice.call(arguments).concat(["test"])) }',
+                },
+              },
+              $dashboard: {
+                rect: {
+                  x: 1700,
+                  y: 1000,
+                  width: 200,
+                  height: 50,
+                },
+              },
+            },
+          ],
         },
         {
           ...defaultRootSchema,
@@ -78,6 +117,43 @@ export const initProject = async () => {
                   y: 0,
                   width: 740,
                   height: 120,
+                },
+              },
+            },
+
+            {
+              componentName: 'Button',
+              props: {
+                content: 'Prev Page',
+                __events: {
+                  eventDataList: [
+                    {
+                      type: 'builtin',
+                      name: 'onClick',
+                      relatedEventName: 'utils.navigate',
+                      paramStr: '"test"',
+                    },
+                  ],
+                  eventList: [
+                    {
+                      name: 'onClick',
+                      description: '鼠标点击',
+                      disabled: true,
+                    },
+                  ],
+                },
+                onClick: {
+                  type: 'JSFunction',
+                  value:
+                    'function(){return this.utils.navigate.apply(this,Array.prototype.slice.call(arguments).concat(["index"])) }',
+                },
+              },
+              $dashboard: {
+                rect: {
+                  x: 80,
+                  y: 1000,
+                  width: 200,
+                  height: 50,
                 },
               },
             },

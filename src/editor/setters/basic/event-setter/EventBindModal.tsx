@@ -31,6 +31,14 @@ const tabList = [
   },
 ]
 
+const builtinMethods: Record<string, JSFunction> = {
+  'utils.navigate': {
+    type: 'JSFunction',
+    value: '',
+    description: '跳转页面',
+  },
+}
+
 const defaultExtendParam = '{\n  "name": "test" \n}'
 
 export interface EventBindModalProps extends PropsWithChildren {
@@ -50,7 +58,7 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
 
   const currentMethods = useMemo(() => {
     if (tab === Tab.BUILTIN) {
-      return {}
+      return builtinMethods
     }
     return methods
   }, [tab, methods])
@@ -109,7 +117,7 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
                     ))}
                   </div>
                   <div className='flex flex-col w-[150px]'>
-                    {Object.keys(currentMethods).map(key => (
+                    {Object.entries(currentMethods).map(([key, value]) => (
                       <div
                         key={key}
                         className={cn(
@@ -118,7 +126,7 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
                         )}
                         onClick={() => setEvent(key)}
                       >
-                        {key}
+                        {value.description || key}
                       </div>
                     ))}
                   </div>

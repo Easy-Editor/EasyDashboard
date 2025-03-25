@@ -3,12 +3,10 @@ import { project } from '@/editor'
 import { savePageInfoToLocalStorage, savePageSchemaToLocalStorage, saveProjectSchemaToLocalStorage } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { TRANSFORM_STAGE } from '@easy-editor/core'
-import { useNavigate } from 'react-router'
+import { toast } from 'sonner'
 import { MainNav } from './Nav'
 
 export function AppHeader({ className }: { className?: string }) {
-  const navigate = useNavigate()
-
   const save = (kind: 'project' | 'page' = 'page') => {
     if (kind === 'project') {
       saveProjectSchemaToLocalStorage(project.export(TRANSFORM_STAGE.SAVE))
@@ -20,6 +18,7 @@ export function AppHeader({ className }: { className?: string }) {
       }
       savePageInfoToLocalStorage(pageInfo)
     }
+    toast.success('保存成功')
   }
 
   const preview = () => {
