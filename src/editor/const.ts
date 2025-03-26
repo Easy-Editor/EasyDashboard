@@ -21,10 +21,6 @@ export const defaultRootSchema: RootSchema = {
   children: [
     {
       componentName: 'Image',
-      condition: {
-        type: 'JSExpression',
-        value: 'this.state.isShow',
-      },
       $dashboard: {
         rect: {
           x: 600,
@@ -43,7 +39,7 @@ export const defaultRootSchema: RootSchema = {
     },
     isShow: {
       type: 'JSExpression',
-      value: 'false',
+      value: 'true',
       description: '是否显示',
     },
   },

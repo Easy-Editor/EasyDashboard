@@ -60,7 +60,21 @@ export const initProject = async () => {
           fileName: 'index',
           fileDesc: '首页',
           children: [
-            ...(defaultRootSchema.children || []),
+            {
+              componentName: 'Image',
+              condition: {
+                type: 'JSExpression',
+                value: 'this.state.isShow',
+              },
+              $dashboard: {
+                rect: {
+                  x: 600,
+                  y: 480,
+                  width: 740,
+                  height: 120,
+                },
+              },
+            },
             {
               componentName: 'Button',
               props: {
@@ -70,7 +84,7 @@ export const initProject = async () => {
                     {
                       type: 'componentEvent',
                       name: 'onClick',
-                      relatedEventName: 'testFunc',
+                      relatedEventName: 'toggleState',
                     },
                   ],
                   eventList: [
@@ -84,7 +98,7 @@ export const initProject = async () => {
                 onClick: {
                   type: 'JSFunction',
                   value:
-                    'function(){return this.testFunc.apply(this,Array.prototype.slice.call(arguments).concat([])) }',
+                    'function(){return this.toggleState.apply(this,Array.prototype.slice.call(arguments).concat([])) }',
                 },
               },
               $dashboard: {
