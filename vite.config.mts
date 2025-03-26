@@ -11,7 +11,14 @@ export default defineConfig({
       babel: {
         exclude: 'node_modules/**',
         babelrc: false,
-        presets: ['@babel/preset-typescript'],
+        presets: [
+          [
+            '@babel/preset-typescript',
+            {
+              allowDeclareFields: true,
+            },
+          ],
+        ],
         plugins: [
           [
             '@babel/plugin-proposal-decorators',

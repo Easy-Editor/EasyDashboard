@@ -21,6 +21,10 @@ export const defaultRootSchema: RootSchema = {
   children: [
     {
       componentName: 'Image',
+      condition: {
+        type: 'JSExpression',
+        value: 'this.state.isShow',
+      },
       $dashboard: {
         rect: {
           x: 600,
@@ -37,29 +41,22 @@ export const defaultRootSchema: RootSchema = {
       value: '"testState"',
       description: '文本状态',
     },
-    hide: {
+    isShow: {
       type: 'JSExpression',
       value: 'false',
-      description: '隐藏',
-    },
-    show: {
-      type: 'JSExpression',
-      value: 'true',
-      description: '显示',
+      description: '是否显示',
     },
   },
   lifeCycles: {
     componentDidMount: {
       type: 'JSFunction',
       value:
-        "function componentDidMount() {\n  console.log('did mount ===========', this);\n  console.log(this.state.text, this.testFunc() );\n}",
-      source: "function componentDidMount() {\n  console.log('did mount');\n}",
+        "function componentDidMount() {\n  console.log('did mount ===========', this);\n  setInterval(() => {\n  this.toggleState();\n  }, 1000);\n}",
       description: '页面挂载时触发',
     },
     componentWillUnmount: {
       type: 'JSFunction',
       value: "function componentWillUnmount() {\n  console.log('will unmount');\n}",
-      source: "function componentWillUnmount() {\n  console.log('will unmount');\n}",
       description: '页面卸载时触发',
     },
   },
@@ -67,8 +64,12 @@ export const defaultRootSchema: RootSchema = {
     testFunc: {
       type: 'JSFunction',
       value: "function testFunc(...params) {\n  console.log('test func', params, this);\n}",
-      source: "function testFunc(...params) {\n  console.log('test func', params, this);\n}",
       description: '测试方法',
+    },
+    toggleState: {
+      type: 'JSFunction',
+      value: 'function toggleState() {\n  this.setState({isShow: !this.state.isShow});\n}',
+      description: '切换状态',
     },
   },
 }
