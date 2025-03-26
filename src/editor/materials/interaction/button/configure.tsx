@@ -731,11 +731,16 @@ const configure: Configure = {
               },
               items: [
                 {
-                  name: 'visible',
                   title: '显隐',
                   setter: 'SwitchSetter',
                   extraProps: {
                     supportVariable: true,
+                    getValue(target) {
+                      return target.getNode().hasCondition()
+                    },
+                    setValue(target, value: boolean) {
+                      target.getNode().setExtraProp('condition', value)
+                    },
                   },
                 },
               ],

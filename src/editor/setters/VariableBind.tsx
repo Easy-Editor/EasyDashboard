@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import type { JSExpression, SettingField } from '@easy-editor/core'
 import { SquareCode } from 'lucide-react'
 import { observer } from 'mobx-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export enum Tab {
   BUILTIN = 'builtin',
@@ -39,6 +39,7 @@ export interface VariableBindProps {
 
 export const VariableBind = observer((props: VariableBindProps) => {
   const { field } = props
+  const originValue = field.getHotValue() as boolean | JSExpression
   const state = field.designer?.currentDocument?.rootNode?.getExtraPropValue('state') as Record<string, JSExpression>
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>(Tab.STATE)
@@ -56,38 +57,48 @@ export const VariableBind = observer((props: VariableBindProps) => {
     setValue(prev => prev + computed)
   }
 
+  const removeBind = () => {
+    field.clearValue()
+    setValue('')
+  }
+
   const handleConfirm = () => {
     if (!value) {
       return console.error('value is required')
     }
 
-    console.log(value, field)
-    // const param: any = {
-    //   kind: tab,
-    //   event,
-    //   method: currentState[event],
-    // }
-    // setOpen(false)
-    // field.setValue(value, true)
-    field.setValue({
-      type: 'JSExpression',
-      value,
-    } as JSExpression)
-    console.log('node', field.getNode().export())
+    field.setValue(
+      {
+        type: 'JSExpression',
+        value,
+      } as JSExpression,
+      true,
+    )
+    setOpen(false)
   }
 
-  // useEffect(() => {
-  //   if (method) {
-  //     setEvent(method)
-  //   }
-  // }, [method])
+  useEffect(() => {
+    if (originValue) {
+      setValue((originValue as JSExpression).value)
+    } else {
+      setValue('')
+    }
+  }, [originValue])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <SquareCode className='w-4 h-4 text-gray-500 cursor-pointer' onClick={() => setOpen(true)} />
+            <SquareCode
+              className={cn(
+                'w-4 h-4 cursor-pointer transition-colors rounded',
+                originValue
+                  ? 'text-primary bg-primary/10 hover:bg-primary/20'
+                  : 'text-muted-foreground hover:text-muted-foreground/80',
+              )}
+              onClick={() => setOpen(true)}
+            />
           </TooltipTrigger>
           <TooltipContent>
             <p>变量绑定</p>
@@ -137,19 +148,28 @@ export const VariableBind = observer((props: VariableBindProps) => {
               <div className='flex-1 flex flex-col gap-2'>
                 <div className='font-bold'>绑定</div>
                 <div className='relative w-full h-full'>
-                  <CodeEditor language='js' value={value} onChange={setValue} />
+                  <CodeEditor language='javascript' value={value} onChange={setValue} />
                 </div>
               </div>
             </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>
-            确定
-          </Button>
-          <Button variant='outline' onClick={() => setOpen(false)} className='h-8 text-xs px-4 py-[5px]'>
-            取消
-          </Button>
+          <div className='w-full flex' style={{ justifyContent: originValue ? 'space-between' : 'flex-end' }}>
+            {originValue && (
+              <Button type='button' variant='destructive' onClick={removeBind} className='h-8 text-xs px-4 py-[5px]'>
+                移除绑定
+              </Button>
+            )}
+            <div>
+              <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>
+                确定
+              </Button>
+              <Button variant='outline' onClick={() => setOpen(false)} className='h-8 text-xs px-4 py-[5px]'>
+                取消
+              </Button>
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

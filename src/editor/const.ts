@@ -37,6 +37,16 @@ export const defaultRootSchema: RootSchema = {
       value: '"testState"',
       description: '文本状态',
     },
+    hide: {
+      type: 'JSExpression',
+      value: 'false',
+      description: '隐藏',
+    },
+    show: {
+      type: 'JSExpression',
+      value: 'true',
+      description: '显示',
+    },
   },
   lifeCycles: {
     componentDidMount: {
