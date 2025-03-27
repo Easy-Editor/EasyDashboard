@@ -1,3 +1,3 @@
-import ExamplePlugin from './plugin-example'
+import HotKeyMoveNodePlugin from './plugin-hotkey-move-node'
 
-export default [ExamplePlugin()]
+export default [HotKeyMoveNodePlugin()]
