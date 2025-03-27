@@ -39,7 +39,7 @@ export const savePageInfoToLocalStorage = (info: Array<{ path: string; title: st
   localStorage.setItem(PAGE_INFO, JSON.stringify(info))
 }
 
-export const getPageInfoFromLocalStorage = () => {
+export const getPageInfoFromLocalStorage = (): Array<{ path: string; title: string }> => {
   const pageInfo = localStorage.getItem(PAGE_INFO)
   return pageInfo ? JSON.parse(pageInfo) : []
 }
