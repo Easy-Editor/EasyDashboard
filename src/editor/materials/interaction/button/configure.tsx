@@ -9,7 +9,7 @@ import {
   AlignVerticalJustifyEnd,
   AlignVerticalJustifyStart,
 } from 'lucide-react'
-import { generalBasicConfigure } from '../../configure'
+import { generalAdvancedConfigure, generalBasicConfigure } from '../../configure'
 import Button from './component'
 
 const configure: Configure = {
@@ -720,31 +720,7 @@ const configure: Configure = {
           key: 'advanced',
           title: '高级',
           items: [
-            {
-              type: 'group',
-              title: '高级设置',
-              setter: {
-                componentName: 'CollapseSetter',
-                props: {
-                  icon: false,
-                },
-              },
-              items: [
-                {
-                  title: '显隐',
-                  setter: 'SwitchSetter',
-                  extraProps: {
-                    supportVariable: true,
-                    getValue(target) {
-                      return target.getNode().hasCondition()
-                    },
-                    setValue(target, value: boolean) {
-                      target.getNode().setExtraProp('condition', value)
-                    },
-                  },
-                },
-              ],
-            },
+            ...generalAdvancedConfigure,
             {
               type: 'group',
               title: '事件设置',

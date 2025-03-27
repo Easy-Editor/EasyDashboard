@@ -1,6 +1,6 @@
 import type { UploadValue } from '@/editor/setters/basic/upload-setter'
 import type { Configure } from '@easy-editor/core'
-import { generalBasicConfigure } from '../../configure'
+import { generalAdvancedConfigure, generalBasicConfigure } from '../../configure'
 import Image from './component'
 
 const configure: Configure = {
@@ -51,7 +51,7 @@ const configure: Configure = {
           type: 'group',
           key: 'advanced',
           title: '高级',
-          items: [],
+          items: [...generalAdvancedConfigure],
         },
       ],
     },

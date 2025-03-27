@@ -39,7 +39,7 @@ export interface VariableBindProps {
 
 export const VariableBind = observer((props: VariableBindProps) => {
   const { field } = props
-  const originValue = field.getHotValue() as boolean | JSExpression
+  const originValue = field.getValue() as boolean | JSExpression
   const state = field.designer?.currentDocument?.rootNode?.getExtraPropValue('state') as Record<string, JSExpression>
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>(Tab.STATE)

@@ -48,3 +48,31 @@ export const generalBasicConfigure: FieldConfig[] = [
     ],
   },
 ]
+
+export const generalAdvancedConfigure: FieldConfig[] = [
+  {
+    type: 'group',
+    title: '高级设置',
+    setter: {
+      componentName: 'CollapseSetter',
+      props: {
+        icon: false,
+      },
+    },
+    items: [
+      {
+        title: '显隐',
+        setter: 'SwitchSetter',
+        extraProps: {
+          supportVariable: true,
+          getValue(target) {
+            return target.getNode().getExtraPropValue('condition')
+          },
+          setValue(target, value: boolean) {
+            target.getNode().setExtraProp('condition', value)
+          },
+        },
+      },
+    ],
+  },
+]
