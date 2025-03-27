@@ -15,6 +15,7 @@ function App() {
             <Routes>
               <Route path='/' element={<Editor />} />
               <Route path='/preview' element={<Preview />} />
+              <Route path='/test' element={<div>test</div>} />
 
               <Route path='*' element={<Navigate to='/' />} />
             </Routes>

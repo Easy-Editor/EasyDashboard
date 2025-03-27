@@ -5,7 +5,6 @@ import {
   type Project,
   type ProjectSchema,
   type RootSchema,
-  type Setter,
   type SetterManager,
   type Simulator,
   createEasyEditor,
@@ -14,10 +13,8 @@ import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import HotkeyPlugin from '@easy-editor/plugin-hotkey'
 import { defaultRootSchema } from './const'
 import { componentMetas, components } from './materials'
-import { formatMapFromESModule } from './utils'
-
-const plugins = (await import('./plugins')).default
-const setterMap = await import('./setters')
+import { plugins } from './plugins'
+import { setters } from './setters'
 
 export const editor = createEasyEditor({
   lifeCycles: {
@@ -31,7 +28,7 @@ export const editor = createEasyEditor({
   components,
   componentMetas,
   plugins: [DashboardPlugin(), HotkeyPlugin(), ...plugins],
-  setters: formatMapFromESModule<Setter>(setterMap),
+  setters,
   hotkeys: [
     {
       combos: ['ctrl+a'],

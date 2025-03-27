@@ -16,7 +16,10 @@ import SubTabSetter from './group/sub-tab-setter'
 import TabSetter from './group/tab-setter'
 import ToggleGroupSetter from './group/toggle-group-setter'
 
-export {
+/**
+ * 设置器
+ */
+export const setters = {
   AccordionSetter,
   CollapseSetter,
   ColorSetter,

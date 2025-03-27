@@ -36,7 +36,10 @@ import Sonner from './interaction/sonner/component'
 import ToggleGroup from './interaction/toggle-group/component'
 import Toggle from './interaction/toggle/component'
 
-export {
+/**
+ * 物料组件
+ */
+export const components = {
   AreaChart,
   BarChart,
   BarChartHorizontal,

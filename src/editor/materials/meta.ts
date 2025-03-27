@@ -36,7 +36,10 @@ import Sonner from './interaction/sonner/meta'
 import ToggleGroup from './interaction/toggle-group/meta'
 import Toggle from './interaction/toggle/meta'
 
-export {
+/**
+ * 物料元数据
+ */
+export const componentMetas = {
   AreaChart,
   BarChart,
   BarChartHorizontal,

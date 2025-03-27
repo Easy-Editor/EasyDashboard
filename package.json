@@ -9,6 +9,7 @@
     "lint": "biome check .",
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:test": "vite build --mode test",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
