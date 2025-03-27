@@ -61,13 +61,12 @@ EasyDashboard is a data visualization dashboard solution developed based on the 
 
 - Node.js >= 18.0.0
 - pnpm >= 9.12.2
-- React >= 18.0.0
 
 ### Local Development
 
 ```bash
 # Clone the project
-git clone <your-repository-url>
+git clone https://github.com/Easy-Editor/EasyDashboard
 
 # Navigate to the project directory
 cd EasyDashboard
@@ -89,9 +88,13 @@ pnpm build
 pnpm preview
 ```
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests to help improve this project.
+
 ## License
 
-MIT License © 2024
+[MIT](./LICENSE) License &copy; 2024-PRESENT [JinSo](https://github.com/JinSooo)
 
 ## Related Links
 
