@@ -33,7 +33,6 @@ export const editor = createEasyEditor({
     {
       combos: ['ctrl+a'],
       callback: e => {
-        e.preventDefault()
         console.log('ctrl+a', e)
       },
     },
