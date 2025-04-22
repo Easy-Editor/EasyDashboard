@@ -16,44 +16,25 @@ EasyDashboard is a data visualization dashboard solution developed based on the 
 - **Enhanced Interactivity**: Supports full-screen display, data filtering, and other advanced interactive features.
 - **Out-of-the-Box**: Provides complete example templates and component configurations.
 
-## Component Library
+## Showcase
 
-### Chart Components
-- **Basic Charts**
-  - AreaChart - Area Chart
-  - LineChart - Line Chart
-  - BarChart - Bar Chart
-  - PieChart - Pie Chart
-  - RadarChart - Radar Chart
-  - RadialChart - Radial Chart
-- **Advanced Charts**
-  - BarChartHorizontal - Horizontal Bar Chart
-  - BarChartStacked - Stacked Bar Chart
-  - PieChartStacked - Stacked Pie Chart
-  - PieChartDonut - Donut Pie Chart
-  - RadarChartLines - Multi-Line Radar Chart
-  - RadialChartText - Radial Chart with Text
-  - RadialChartStacked - Stacked Radial Chart
+- **Component Drag and Drop:** Quickly drag and drop components and data elements onto the design panel for easy layout.
 
-### Data Display
-- Table - Table
-- Progress - Progress Bar
-- Carousel - Carousel
+![gif_dnd.gif](.github/assets/gif_dnd.gif)
 
-### Interactive Components
-- Button - Button
-- Input - Input Field
-- Select - Selector
-- Combobox - Combo Box
-- Calendar - Calendar
-- CalendarButton - Calendar Button
-- Toggle - Toggle Switch
-- ToggleGroup - Toggle Group
-- Sonner - Notification
+- **Guidelines:** Automatically displayed guidelines ensure precise component alignment, enhancing design efficiency.
 
-### Basic Components
-- Text - Text
-- Image - Image
+![gif_guideline.gif](.github/assets/gif_guideline.gif)
+
+- **Multiple Pages:** Support for multiple page designs to create complete interactive data dashboards.
+
+![gif_multipage.gif](.github/assets/gif_multipage.gif)
+
+- **Visibility Control:** Implement dynamic visibility control of components for more flexible data presentation.
+
+![gif_js.gif](.github/assets/gif_js.gif)
+
+There are many more features waiting for you to discover and explore.
 
 ## Debug
 
