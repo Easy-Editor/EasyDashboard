@@ -1,9 +1,8 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { SidebarMenu, SidebarMenuItem, SidebarMenuSub } from '@/components/ui/sidebar'
 import { SidebarMenuExtra, SidebarMenuExtraItem } from '@/components/ui/sidebar-extra'
-import { designer, project } from '@/editor'
 import { cn } from '@/lib/utils'
-import type { Node, NodeSchema } from '@easy-editor/core'
+import { type Node, type NodeSchema, project } from '@easy-editor/core'
 import { ChevronRight, Eye, EyeOff, LockKeyhole, LockKeyholeOpen } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { type Key, useState } from 'react'
@@ -26,7 +25,7 @@ export const OutlineSidebar = observer(() => {
 })
 
 const OutlineTree = observer(({ node }: { node: Node<NodeSchema> }) => {
-  const selected = designer.selection.getTopNodes(true)
+  const selected = project.designer.selection.getTopNodes(true)
   const [isShowExtra, setIsShowExtra] = useState(false)
 
   const handleHide = () => {

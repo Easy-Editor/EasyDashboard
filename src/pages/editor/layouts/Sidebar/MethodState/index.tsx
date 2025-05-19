@@ -1,6 +1,6 @@
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { project } from '@/editor'
+import { project } from '@easy-editor/core'
 import { observer } from 'mobx-react'
 import { nanoid } from 'nanoid'
 import { LifeCycleList } from './LifeCycleList'

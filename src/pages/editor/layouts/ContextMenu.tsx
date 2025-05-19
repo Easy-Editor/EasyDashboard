@@ -9,8 +9,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { designer, project } from '@/editor'
-import { TRANSFORM_STAGE, insertChildren } from '@easy-editor/core'
+import { TRANSFORM_STAGE, insertChildren, project } from '@easy-editor/core'
 import {
   ArrowDown,
   ArrowUp,
@@ -57,7 +56,7 @@ const menuItems: MenuItem[] = [
         label: '置顶',
         icon: PanelTop,
         onClick: () => {
-          const selection = designer.selection
+          const selection = project.designer.selection
           if (!selection) {
             return
           }
@@ -78,7 +77,7 @@ const menuItems: MenuItem[] = [
         label: '置底',
         icon: PanelBottom,
         onClick: () => {
-          const selection = designer.selection
+          const selection = project.designer.selection
           if (!selection) {
             return
           }
@@ -99,7 +98,7 @@ const menuItems: MenuItem[] = [
         label: '上移一层',
         icon: ArrowUp,
         onClick: () => {
-          const selection = designer.selection
+          const selection = project.designer.selection
           if (!selection) {
             return
           }
@@ -120,7 +119,7 @@ const menuItems: MenuItem[] = [
         label: '下移一层',
         icon: ArrowDown,
         onClick: () => {
-          const selection = designer.selection
+          const selection = project.designer.selection
           if (!selection) {
             return
           }
@@ -160,7 +159,7 @@ const menuItems: MenuItem[] = [
         return
       }
 
-      const selected = designer.selection.getTopNodes(false)
+      const selected = project.designer.selection.getTopNodes(false)
       if (!selected || selected.length < 1) {
         return
       }
@@ -178,7 +177,7 @@ const menuItems: MenuItem[] = [
     shortcut: '⌘V',
     async onClick() {
       const doc = project.currentDocument
-      const selection = designer.selection
+      const selection = project.designer.selection
       if (!doc) {
         return
       }
@@ -204,7 +203,7 @@ const menuItems: MenuItem[] = [
     icon: ClipboardPen,
     onClick() {
       const doc = project.currentDocument
-      const selection = designer.selection
+      const selection = project.designer.selection
       if (!doc) {
         return
       }
@@ -260,7 +259,7 @@ const menuItems: MenuItem[] = [
     icon: Eye,
     shortcut: '⌘⇧H',
     onClick() {
-      const selection = designer.selection
+      const selection = project.designer.selection
       if (!selection) {
         return
       }
@@ -281,7 +280,7 @@ const menuItems: MenuItem[] = [
     icon: Eye,
     shortcut: '⌘⇧H',
     onClick() {
-      const selection = designer.selection
+      const selection = project.designer.selection
       if (!selection) {
         return
       }
@@ -304,7 +303,7 @@ const menuItems: MenuItem[] = [
     shortcut: '⌘⇧L',
     separator: true,
     onClick() {
-      const selection = designer.selection
+      const selection = project.designer.selection
       if (!selection) {
         return
       }
@@ -327,7 +326,7 @@ const menuItems: MenuItem[] = [
     shortcut: '⌘⇧L',
     separator: true,
     onClick() {
-      const selection = designer.selection
+      const selection = project.designer.selection
       if (!selection) {
         return
       }
@@ -349,7 +348,7 @@ const menuItems: MenuItem[] = [
     icon: Trash2,
     shortcut: 'Del',
     onClick() {
-      const selection = designer.selection
+      const selection = project.designer.selection
       if (!selection) {
         return
       }
@@ -392,7 +391,7 @@ export const RendererContextMenu = observer(({ children }: RendererContextMenuPr
     return children
   }
 
-  const selection = designer.selection
+  const selection = project.designer.selection
   const selected = selection.getTopNodes(false)
   const selectionType =
     selected.length === 0 ? SelectionType.NONE : selected.length === 1 ? SelectionType.SINGLE : SelectionType.MULTIPLE

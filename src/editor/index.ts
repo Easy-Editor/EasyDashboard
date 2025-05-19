@@ -1,55 +1,45 @@
 import { getPageInfoFromLocalStorage, getPageSchemaFromLocalStorage } from '@/lib/schema'
-import {
-  type ComponentMetaManager,
-  type Designer,
-  type Project,
-  type ProjectSchema,
-  type RootSchema,
-  type SetterManager,
-  type Simulator,
-  createEasyEditor,
-} from '@easy-editor/core'
+import { type ProjectSchema, type RootSchema, init, materials, plugins, project, setters } from '@easy-editor/core'
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import HotkeyPlugin from '@easy-editor/plugin-hotkey'
 import { defaultRootSchema } from './const'
-import { componentMetas, components } from './materials'
-import { plugins } from './plugins'
-import { setters } from './setters'
+import { componentMetaMap } from './materials'
+import { pluginList } from './plugins'
+import { setterMap } from './setters'
 
-export const editor = createEasyEditor({
-  lifeCycles: {
-    init: () => {
-      console.log('init')
-    },
-    destroy: () => {
-      console.log('destroy')
-    },
-  },
-  components,
-  componentMetas,
-  plugins: [DashboardPlugin(), HotkeyPlugin(), ...plugins],
-  setters,
-  hotkeys: [
-    {
-      combos: ['ctrl+a'],
-      callback: e => {
-        console.log('ctrl+a', e)
+import './overrides.css'
+
+plugins.registerPlugins([
+  DashboardPlugin({
+    group: {
+      meta: componentMetaMap.Group,
+      initSchema: {
+        componentName: 'Group',
+        title: '分组',
+        isGroup: true,
       },
     },
-  ],
+  }),
+  HotkeyPlugin(),
+  ...pluginList,
+])
+materials.buildComponentMetasMap(Object.values(componentMetaMap))
+setters.registerSetter(setterMap)
+
+await init({
+  designMode: 'design',
+  appHelper: {
+    utils: {
+      test: 'test',
+    },
+  },
 })
-console.log('🚀 ~ easyEditor:', editor)
 
-export const initProject = async () => {
-  const [designer, project, simulator] = await Promise.all([
-    editor.onceGot<Designer>('designer'),
-    editor.onceGot<Project>('project'),
-    editor.onceGot<Simulator>('simulator'),
-  ])
-
-  // 设置模拟器样式
+project.onSimulatorReady(simulator => {
   simulator.set('deviceStyle', { viewport: { width: 1920, height: 1080 } })
+})
 
+const initProjectSchema = async () => {
   const defaultSchema = {
     componentsTree: [
       {
@@ -226,26 +216,6 @@ export const initProject = async () => {
   } else {
     project.load(defaultSchema, true)
   }
-
-  return { designer, project, simulator }
 }
 
-// 导出初始化后的实例
-export const { designer, project, simulator } = await initProject()
-
-console.log('--------------------------------')
-console.log('designer', designer)
-console.log('project', project)
-console.log('simulator', simulator)
-
-const setterManager = await editor.onceGot<SetterManager>('setterManager')
-const componentMetaManager = await editor.onceGot<ComponentMetaManager>('componentMetaManager')
-
-console.log('--------------------------------')
-console.log('setters', setterManager.settersMap)
-console.log('components', simulator.components)
-console.log('componentMetas', componentMetaManager.componentMetasMap)
-
-console.log('--------------------------------')
-// simulator.setupEvents()
-// renderer.mount(simulator)
+initProjectSchema()

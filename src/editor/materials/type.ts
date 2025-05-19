@@ -1,4 +1,6 @@
 export enum MaterialGroup {
+  /** 内置 */
+  INNER = 'Inner',
   /** 基础 */
   BASIC = 'Basic',
   /** 图表 */

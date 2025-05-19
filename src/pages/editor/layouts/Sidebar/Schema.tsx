@@ -1,5 +1,5 @@
 import { CodeEditor } from '@/components/common/CodeEditor'
-import { project } from '@/editor'
+import { project } from '@easy-editor/core'
 import { observer } from 'mobx-react'
 
 export const SchemaSidebar = observer(() => {
