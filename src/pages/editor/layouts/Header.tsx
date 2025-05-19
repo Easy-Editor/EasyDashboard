@@ -1,8 +1,7 @@
 import { Button } from '@/components/ui/button'
-import { project } from '@/editor'
 import { savePageInfoToLocalStorage, savePageSchemaToLocalStorage, saveProjectSchemaToLocalStorage } from '@/lib/schema'
 import { cn } from '@/lib/utils'
-import { TRANSFORM_STAGE } from '@easy-editor/core'
+import { TRANSFORM_STAGE, project } from '@easy-editor/core'
 import { toast } from 'sonner'
 import { MainNav } from './Nav'
 

@@ -19,7 +19,7 @@ import ToggleGroupSetter from './group/toggle-group-setter'
 /**
  * 设置器
  */
-export const setters = {
+export const setterMap = {
   AccordionSetter,
   CollapseSetter,
   ColorSetter,

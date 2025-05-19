@@ -1,7 +1,7 @@
 import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar'
-import { editor } from '@/editor'
 import { customFieldItem } from '@/editor/setters'
-import { SettingRender } from '@easy-editor/react-renderer'
+import { project } from '@easy-editor/core'
+import { SettingRenderer } from '@easy-editor/react-renderer'
 import { observer } from 'mobx-react'
 
 export const ConfigureSidebar = observer(({ ...props }: React.ComponentProps<typeof Sidebar>) => {
@@ -13,7 +13,7 @@ export const ConfigureSidebar = observer(({ ...props }: React.ComponentProps<typ
         </div>
       </SidebarHeader>
       <SidebarContent className='p-2'>
-        <SettingRender editor={editor} customFieldItem={customFieldItem} />
+        <SettingRenderer designer={project.designer} customFieldItem={customFieldItem} />
       </SidebarContent>
     </Sidebar>
   )

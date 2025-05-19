@@ -1,7 +1,10 @@
 import Root from './root/component'
 
-import Image from './basic/image/component'
+// Inner
+import Group from './inner/group/component'
+
 // Basic
+import Image from './basic/image/component'
 import Text from './basic/text/component'
 
 // Chart
@@ -69,4 +72,5 @@ export const components = {
   Text,
   Toggle,
   ToggleGroup,
+  Group,
 }

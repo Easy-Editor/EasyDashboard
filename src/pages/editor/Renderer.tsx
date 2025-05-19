@@ -1,4 +1,4 @@
-import { project, simulator } from '@/editor'
+import { project } from '@easy-editor/core'
 import { SimulatorRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
 import { RendererContextMenu } from './layouts/ContextMenu'
@@ -69,7 +69,7 @@ const Renderer = observer(() => {
 
   return (
     <RendererContextMenu>
-      <SimulatorRenderer host={simulator} />
+      <SimulatorRenderer designer={project.designer} />
     </RendererContextMenu>
   )
 })

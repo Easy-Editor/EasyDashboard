@@ -1,8 +1,7 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Card, CardContent } from '@/components/ui/card'
-import { simulator } from '@/editor'
 import { cn } from '@/lib/utils'
-import type { Snippet as ISnippet } from '@easy-editor/core'
+import { type Snippet as ISnippet, project } from '@easy-editor/core'
 import React, { useEffect } from 'react'
 import './const'
 import { snippets } from './const'
@@ -11,9 +10,9 @@ const Snippet = ({ snippet }: { snippet: ISnippet }) => {
   const ref = React.useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const unlink = simulator.linkSnippet(ref.current!, snippet)
+    const unlink = project.simulator?.linkSnippet(ref.current!, snippet)
     return () => {
-      unlink()
+      unlink?.()
     }
   }, [snippet])
 

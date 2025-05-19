@@ -1,9 +1,8 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Card, CardContent } from '@/components/ui/card'
-import { designer, simulator } from '@/editor'
 import type { MaterialGroup } from '@/editor/materials/type'
 import { cn } from '@/lib/utils'
-import type { ComponentMeta, Snippet as ISnippet } from '@easy-editor/core'
+import { type ComponentMeta, type Snippet as ISnippet, project } from '@easy-editor/core'
 import { observer } from 'mobx-react'
 import React, { useEffect } from 'react'
 
@@ -11,9 +10,9 @@ const Snippet = ({ snippet }: { snippet: ISnippet }) => {
   const ref = React.useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const unlink = simulator.linkSnippet(ref.current!, snippet)
+    const unlink = project.simulator?.linkSnippet(ref.current!, snippet)
     return () => {
-      unlink()
+      unlink?.()
     }
   }, [snippet])
 
@@ -35,7 +34,7 @@ const Snippet = ({ snippet }: { snippet: ISnippet }) => {
 }
 
 export const ComponentSidebar = observer(() => {
-  const componentMetasMap = designer.componentMetaManager.getComponentMetasMap()
+  const componentMetasMap = project.designer.materials.getComponentMetasMap()
   const componentGroupMap = new Map<MaterialGroup, ComponentMeta[]>()
   componentMetasMap.forEach(meta => {
     const metadata = meta.getMetadata()

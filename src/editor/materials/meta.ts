@@ -1,7 +1,10 @@
 import Root from './root/meta'
 
-import Image from './basic/image/meta'
+// Inner
+import Group from './inner/group/meta'
+
 // Basic
+import Image from './basic/image/meta'
 import Text from './basic/text/meta'
 
 // Chart
@@ -39,7 +42,7 @@ import Toggle from './interaction/toggle/meta'
 /**
  * 物料元数据
  */
-export const componentMetas = {
+export const componentMetaMap = {
   AreaChart,
   BarChart,
   BarChartHorizontal,
@@ -69,4 +72,5 @@ export const componentMetas = {
   Text,
   Toggle,
   ToggleGroup,
+  Group,
 }

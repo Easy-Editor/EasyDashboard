@@ -31,7 +31,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               }
             />
             <SidebarInset>
-              <div className='flex flex-1 flex-col gap-4 p-4'>{children}</div>
+              <div className='flex flex-1 flex-col gap-4'>{children}</div>
             </SidebarInset>
             <ConfigureSidebar
               style={
