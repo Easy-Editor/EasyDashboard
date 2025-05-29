@@ -1,6 +1,7 @@
 import { getPageInfoFromLocalStorage, getPageSchemaFromLocalStorage } from '@/lib/schema'
 import { type ProjectSchema, type RootSchema, init, materials, plugins, project, setters } from '@easy-editor/core'
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
+import DataSourcePlugin from '@easy-editor/plugin-datasource'
 import HotkeyPlugin from '@easy-editor/plugin-hotkey'
 import { defaultRootSchema } from './const'
 import { componentMetaMap } from './materials'
@@ -21,6 +22,7 @@ plugins.registerPlugins([
     },
   }),
   HotkeyPlugin(),
+  DataSourcePlugin(),
   ...pluginList,
 ])
 materials.buildComponentMetasMap(Object.values(componentMetaMap))

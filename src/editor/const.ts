@@ -379,17 +379,14 @@ export const _defaultRootSchema: RootSchema = {
   dataSource: {
     list: [
       {
+        id: 'info',
         type: 'fetch',
         isInit: true,
         options: {
           params: {},
           method: 'GET',
-          isCors: true,
-          timeout: 5000,
-          headers: {},
           uri: 'mock/info.json',
         },
-        id: 'info',
         shouldFetch: {
           type: 'JSFunction',
           value: "function() { \n  console.log('should fetch.....');\n  return true; \n}",

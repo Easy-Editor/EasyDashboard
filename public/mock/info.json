@@ -1,0 +1,11 @@
+{
+  "data": {
+    "code": 200,
+    "message": "success",
+    "result": {
+      "title": "Test Data Source",
+      "description": "This is a test data source for the EasyDashboard",
+      "timestamp": "2024-01-01T00:00:00Z"
+    }
+  }
+}
