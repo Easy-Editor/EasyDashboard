@@ -12,10 +12,11 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Code, CodeXml, Component, File, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
+import { Code, CodeXml, Component, Database, File, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
 import * as React from 'react'
 import { useEffect } from 'react'
 import { ComponentSidebar } from './Components'
+import { DataSourceSidebar } from './DataSource'
 import { MaterialsSidebar } from './Materials'
 import { MethodStateSidebar } from './MethodState'
 import { OutlineSidebar } from './Outline'
@@ -47,6 +48,12 @@ const data = {
       title: '方法状态',
       icon: Code,
       component: <MethodStateSidebar />,
+    },
+    {
+      key: 'data-source',
+      title: '数据源',
+      icon: Database,
+      component: <DataSourceSidebar />,
     },
     {
       key: 'materials',
