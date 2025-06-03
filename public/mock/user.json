@@ -1,0 +1,13 @@
+{
+  "data": {
+    "code": 200,
+    "message": "success",
+    "result": {
+      "id": 1,
+      "name": "张三",
+      "email": "zhangsan@example.com",
+      "role": "admin",
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  }
+}
