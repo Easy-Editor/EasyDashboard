@@ -1,5 +1,5 @@
-import { getPageInfoFromLocalStorage, getPageSchemaFromLocalStorage } from '@/lib/schema'
-import { type ProjectSchema, type RootSchema, init, materials, plugins, project, setters } from '@easy-editor/core'
+import { getProjectSchemaFromLocalStorage } from '@/lib/schema'
+import { init, materials, plugins, project, setters } from '@easy-editor/core'
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import DataSourcePlugin from '@easy-editor/plugin-datasource'
 import HotkeyPlugin from '@easy-editor/plugin-hotkey'
@@ -43,24 +43,9 @@ project.onSimulatorReady(simulator => {
 
 const initProjectSchema = async () => {
   // 从本地获取
-  const pageInfo = getPageInfoFromLocalStorage()
-  if (pageInfo && pageInfo.length > 0) {
-    let isLoad = true
-    const projectSchema = {
-      componentsTree: pageInfo.map(item => {
-        const schema = getPageSchemaFromLocalStorage(item.path)
-        if (!schema) {
-          isLoad = false
-        }
-        return (schema as ProjectSchema<RootSchema>).componentsTree[0]
-      }),
-      version: '1.0.0',
-    }
-    if (isLoad) {
-      project.load(projectSchema, true)
-    } else {
-      project.load(defaultProjectSchema, true)
-    }
+  const projectSchema = getProjectSchemaFromLocalStorage()
+  if (projectSchema) {
+    project.load(projectSchema, true)
   } else {
     project.load(defaultProjectSchema, true)
   }
