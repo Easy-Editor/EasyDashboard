@@ -21,7 +21,6 @@ export function AppHeader({ className }: { className?: string }) {
   }
 
   const preview = () => {
-    // navigate('/preview')
     save('page')
     window.open('/preview', '_blank')
   }
@@ -42,7 +41,7 @@ export function AppHeader({ className }: { className?: string }) {
               <Button variant='outline' onClick={preview}>
                 预览
               </Button>
-              <Button variant='outline' onClick={() => save('page')}>
+              <Button variant='outline' onClick={() => save('project')}>
                 保存
               </Button>
               {/* <Button variant='outline' onClick={() => save('project')}>
