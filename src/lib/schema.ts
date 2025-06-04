@@ -1,4 +1,4 @@
-import { defaultRootSchema } from '@/editor/const'
+import { defaultProjectSchema } from '@/editor/const'
 import type { ProjectSchema } from '@easy-editor/core'
 
 const PROJECT_SCHEMA = 'projectSchema'
@@ -19,7 +19,7 @@ const generateProjectSchema = (pageSchema: any): ProjectSchema => {
 
 export const getProjectSchemaFromLocalStorage = () => {
   const projectSchema = localStorage.getItem(PROJECT_SCHEMA)
-  return projectSchema ? JSON.parse(projectSchema) : defaultRootSchema
+  return projectSchema ? JSON.parse(projectSchema) : defaultProjectSchema
 }
 
 export const saveProjectSchemaToLocalStorage = (schema: any) => {

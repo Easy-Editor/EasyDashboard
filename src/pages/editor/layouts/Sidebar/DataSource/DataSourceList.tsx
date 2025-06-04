@@ -1,17 +1,24 @@
 import { DataSourceEditorModal, type DataSourceEditorModalProps } from '@/components/common/DataSourceEditorModal'
-import type { Node, RootSchema } from '@easy-editor/core'
-import type { InterpretDataSource, InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
+import { type DataSourceItem, project } from '@easy-editor/core'
+import type { InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { genId } from '.'
 import { CardItem } from './CardItem'
 
-export const DataSourceList = ({ rootNode }: { rootNode: Node<RootSchema> }) => {
-  const dataSource = rootNode.getExtraPropValue('dataSource') as InterpretDataSource
+export const DataSourceList = () => {
+  const dataSource = project.dataSource
   const dataSourceList = dataSource?.list || []
   const [open, setOpen] = useState(false)
-  const [currentDataSource, setCurrentDataSource] = useState<InterpretDataSourceConfig>()
+  const [currentDataSource, setCurrentDataSource] = useState<DataSourceItem | InterpretDataSourceConfig>()
+
+  const updateDataSourceList = (list: (DataSourceItem | InterpretDataSourceConfig)[]) => {
+    project.set('dataSource', {
+      ...dataSourceList,
+      list,
+    })
+  }
 
   const handleAdd = () => {
     setCurrentDataSource(undefined)
@@ -29,7 +36,7 @@ export const DataSourceList = ({ rootNode }: { rootNode: Node<RootSchema> }) => 
     if (isEdit) {
       // Update existing data source
       const updatedList = dataSourceList.map(item => (item.id === currentDataSource.id ? newDataSource : item))
-      rootNode.setExtraPropValue('dataSource.list', updatedList)
+      updateDataSourceList(updatedList)
     } else {
       // Check if ID already exists
       const existingDataSource = dataSourceList.find(item => item.id === newDataSource.id)
@@ -40,7 +47,7 @@ export const DataSourceList = ({ rootNode }: { rootNode: Node<RootSchema> }) => 
 
       // Add new data source
       const updatedList = [...dataSourceList, newDataSource]
-      rootNode.setExtraPropValue('dataSource.list', updatedList)
+      updateDataSourceList(updatedList)
     }
 
     setCurrentDataSource(undefined)
@@ -49,7 +56,7 @@ export const DataSourceList = ({ rootNode }: { rootNode: Node<RootSchema> }) => 
 
   const handleDelete = (id: string) => {
     const updatedList = dataSourceList.filter(item => item.id !== id)
-    rootNode.setExtraPropValue('dataSource.list', updatedList)
+    updateDataSourceList(updatedList)
   }
 
   const handleCopy = (id: string) => {
@@ -65,8 +72,7 @@ export const DataSourceList = ({ rootNode }: { rootNode: Node<RootSchema> }) => 
     // Insert after the original
     const index = dataSourceList.findIndex(item => item.id === id)
     const updatedList = [...dataSourceList.slice(0, index + 1), copiedDataSource, ...dataSourceList.slice(index + 1)]
-
-    rootNode.setExtraPropValue('dataSource.list', updatedList)
+    updateDataSourceList(updatedList)
   }
 
   return (
