@@ -1,14 +1,15 @@
 import { DataSourceEditorModal, type DataSourceEditorModalProps } from '@/components/common/DataSourceEditorModal'
-import { type DataSourceItem, project } from '@easy-editor/core'
+import { type DataSource, type DataSourceItem, type Node, project } from '@easy-editor/core'
 import type { InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
 import { Plus } from 'lucide-react'
+import { observer } from 'mobx-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { genId } from '.'
 import { CardItem } from './CardItem'
 
-export const DataSourceList = () => {
-  const dataSource = project.dataSource
+export const DataSourceList: React.FC<{ rootNode: Node }> = observer(({ rootNode }) => {
+  const dataSource = rootNode.getExtraPropValue('dataSource') as DataSource
   const dataSourceList = dataSource?.list || []
   const [open, setOpen] = useState(false)
   const [currentDataSource, setCurrentDataSource] = useState<DataSourceItem | InterpretDataSourceConfig>()
@@ -103,4 +104,4 @@ export const DataSourceList = () => {
       </div>
     </DataSourceEditorModal>
   )
-}
+})
