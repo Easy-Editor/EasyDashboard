@@ -239,6 +239,54 @@ export const defaultProjectSchema: ProjectSchema = {
           },
         },
       ],
+      dataSource: {
+        list: [
+          {
+            id: 'info',
+            type: 'fetch',
+            isInit: true,
+            options: {
+              params: {},
+              method: 'GET',
+              uri: `${window.location.origin}/mock/info.json`,
+            },
+            shouldFetch: {
+              type: 'JSFunction',
+              value: "function shouldFetch(options) { \n  console.log('should fetch.....');\n  return true; \n}",
+            },
+            dataHandler: {
+              type: 'JSExpression',
+              value: `function dataHandler(response) {
+  console.log('dataHandler', response);
+  return response.data.result;
+}`,
+            },
+          },
+          {
+            id: 'userApi',
+            type: 'fetch',
+            options: {
+              method: 'POST',
+              uri: `${window.location.origin}/mock/user.json`,
+              isSync: true,
+              timeout: 5000,
+              isCors: true,
+              params: {
+                page: '1',
+                size: '10',
+              },
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer token',
+              },
+              body: {
+                name: '张三',
+                email: 'zhangsan@example.com',
+              },
+            },
+          },
+        ],
+      },
     },
     {
       ...defaultRootSchema,
@@ -295,54 +343,4 @@ export const defaultProjectSchema: ProjectSchema = {
       ],
     },
   ],
-  dataSource: {
-    list: [
-      {
-        id: 'info',
-        type: 'fetch',
-        isInit: true,
-        options: {
-          params: {},
-          method: 'GET',
-          uri: `${window.location.origin}/mock/info.json`,
-        },
-        shouldFetch: {
-          type: 'JSFunction',
-          value: "function shouldFetch(options) { \n  console.log('should fetch.....');\n  return true; \n}",
-        },
-      },
-      {
-        id: 'userApi',
-        type: 'fetch',
-        options: {
-          method: 'POST',
-          uri: `${window.location.origin}/mock/user.json`,
-          isSync: true,
-          timeout: 5000,
-          isCors: true,
-          params: {
-            page: '1',
-            size: '10',
-          },
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer token',
-          },
-          body: {
-            name: '张三',
-            email: 'zhangsan@example.com',
-          },
-        },
-        dataHandler: {
-          type: 'JSExpression',
-          value: `function dataHandler(response) {
-  if (response.data.code !== 200){
-    throw new Error(response.data.message);
-  }
-  return response.data.result;
-}`,
-        },
-      },
-    ],
-  },
 }
