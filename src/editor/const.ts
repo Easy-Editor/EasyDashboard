@@ -304,11 +304,11 @@ export const defaultProjectSchema: ProjectSchema = {
         options: {
           params: {},
           method: 'GET',
-          uri: 'mock/info.json',
+          uri: `${window.location.origin}/mock/info.json`,
         },
         shouldFetch: {
           type: 'JSFunction',
-          value: "function() { \n  console.log('should fetch.....');\n  return true; \n}",
+          value: "function shouldFetch(options) { \n  console.log('should fetch.....');\n  return true; \n}",
         },
       },
       {
@@ -335,7 +335,7 @@ export const defaultProjectSchema: ProjectSchema = {
         },
         dataHandler: {
           type: 'JSExpression',
-          value: `function(response) {
+          value: `function dataHandler(response) {
   if (response.data.code !== 200){
     throw new Error(response.data.message);
   }
