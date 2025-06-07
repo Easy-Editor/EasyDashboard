@@ -1,5 +1,6 @@
 import { components } from '@/editor/materials'
 import { getPageInfoFromLocalStorage, getPageSchemaFromLocalStorage } from '@/lib/schema'
+import { createDataSourceEngine } from '@easy-editor/plugin-datasource'
 import { Renderer } from '@easy-editor/react-renderer-dashboard'
 import { useEffect, useRef, useState } from 'react'
 
@@ -40,6 +41,9 @@ const Preview = () => {
               navigate: (e: Event, path: string, param?: object & { replace?: boolean }) => {
                 navigate(path)
               },
+            },
+            dataSourceEngine: {
+              createDataSourceEngine,
             },
           }}
         />
