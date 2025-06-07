@@ -15,8 +15,8 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2(@easy-editor/core@1.0.2(mobx@6.13.6))(mobx@6.13.6)
       '@easy-editor/plugin-datasource':
-        specifier: ^1.0.2
-        version: 1.0.2(@easy-editor/core@1.0.2(mobx@6.13.6))(mobx@6.13.6)(rax@1.2.3)
+        specifier: ^1.0.4
+        version: 1.0.4(@easy-editor/core@1.0.2(mobx@6.13.6))(mobx@6.13.6)(rax@1.2.3)
       '@easy-editor/plugin-hotkey':
         specifier: ^1.0.2
         version: 1.0.2(@easy-editor/core@1.0.2(mobx@6.13.6))
@@ -561,8 +561,8 @@ packages:
       '@easy-editor/core': ^1.0.2
       mobx: ^6.13.5
 
-  '@easy-editor/plugin-datasource@1.0.2':
-    resolution: {integrity: sha512-nSAwzvLU4YXVFG1DH/xxpCQUgWn1JXnKHIr1HBGX5B3rXfSxvt9IqGu0XcIWwwQ4Kr7nSkM1tE9OKpLBEVA/yg==}
+  '@easy-editor/plugin-datasource@1.0.4':
+    resolution: {integrity: sha512-k2OvFquDtPhqXIgV48hv/g6sSkZpmD4UJEwxm2hHPQKLkYkyuMurucMR01Q47670YRt6kbnCt/HrSGEKP95VUw==}
     peerDependencies:
       '@easy-editor/core': ^1.0.2
       mobx: ^6.13.5
@@ -3925,7 +3925,7 @@ snapshots:
       '@easy-editor/core': 1.0.2(mobx@6.13.6)
       mobx: 6.13.6
 
-  '@easy-editor/plugin-datasource@1.0.2(@easy-editor/core@1.0.2(mobx@6.13.6))(mobx@6.13.6)(rax@1.2.3)':
+  '@easy-editor/plugin-datasource@1.0.4(@easy-editor/core@1.0.2(mobx@6.13.6))(mobx@6.13.6)(rax@1.2.3)':
     dependencies:
       '@easy-editor/core': 1.0.2(mobx@6.13.6)
       lodash-es: 4.17.21
