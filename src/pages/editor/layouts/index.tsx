@@ -1,5 +1,6 @@
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { Toaster } from '@/components/ui/sonner'
+import { AIChat } from './AIChat'
 import { ConfigureSidebar } from './Configure'
 import { AppHeader } from './Header'
 import { AppSidebar } from './Sidebar'
@@ -45,6 +46,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
         <Toaster />
       </div>
+      <AIChat />
     </div>
   )
 }
