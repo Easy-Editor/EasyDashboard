@@ -5,16 +5,18 @@ interface RootProps {
   children?: React.ReactNode
   backgroundColor?: string
   backgroundImage?: string
+  style?: React.CSSProperties
 }
 
 const Root = (props: RootProps) => {
-  const { ref, backgroundColor, children, backgroundImage } = props
+  const { ref, backgroundColor, children, backgroundImage, style } = props
 
   return (
     <div
       ref={ref}
       className='w-full h-full'
       style={{
+        ...style,
         background: backgroundImage ? `url(${backgroundImage}) center center / cover no-repeat` : backgroundColor,
       }}
     >

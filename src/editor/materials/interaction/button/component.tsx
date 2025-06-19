@@ -37,6 +37,7 @@ interface ButtonProps {
     name?: string
     size?: number
   }
+  style?: React.CSSProperties
 }
 
 const Button = (props: ButtonProps) => {
@@ -55,6 +56,7 @@ const Button = (props: ButtonProps) => {
     background,
     border,
     icon,
+    style,
   } = props
   const {
     fontFamily = 'Arial',
@@ -74,6 +76,7 @@ const Button = (props: ButtonProps) => {
       ref={ref}
       className={cn('w-full h-full flex writing-mode', className)}
       style={{
+        ...style,
         borderRadius: radius,
         writingMode: textDirection === 'horizontal' ? 'horizontal-tb' : 'vertical-lr',
         justifyContent: horizontalAlign,
