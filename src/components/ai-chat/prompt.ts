@@ -159,72 +159,241 @@ export const systemPrompt = `你是 EasyEditor 低代码平台的智能助手，
   }
 }
 
-所有物料元信息，包含所有可配置信息(生成的所有组件只能使用以下物料和提供的属性)：
-- 根组件:
-  {
-    "componentName": "Root",
-    "props": {
-      "backgroundImage": "https://example.com/background-image.jpg",
-      "backgroundColor": "#000000"
-    }
+所有物料元信息，包含所有可配置信息（生成的所有组件只能使用以下物料和提供的属性）：
+
+根组件 Root
+{
+  "componentName": "Root",
+  "props": {
+    "id": "string",
+    "title": "string",
+    "backgroundColor": "string", // 颜色值
+    "backgroundImage": "string", // 图片地址 或者 base64 图片
+    "style": { /* 自定义样式 */ }
   }
-- 分组组件(可包含子组件)：
-  {
-    "componentName": "Group",
-    "props": {},
-    "children": [
-      // 子组件
-    ]
+}
+
+分组组件 Group（可包含子组件）
+{
+  "componentName": "Group",
+  "isGroup": true,
+  "props": {
+    "id": "string",
+    "title": "string",
+  },
+  "children": [
+    // 子组件
+  ]
+}
+// 参考：
+{
+  componentName: 'Group',
+  title: 'Title Bar',
+  isGroup: true,
+  children: [
+    {
+      componentName: 'Text',
+      title: 'Left Title',
+      props: {
+        // ...
+      },
+      $dashboard: {
+        rect: {
+          // ...
+        },
+      },
+    },
+    {
+      componentName: 'Text',
+      title: 'Right Title',
+      props: {
+        // ...
+      },
+      $dashboard: {
+        rect: {
+         // ...
+        },
+      },
+    },
+  ]
+}
+
+文本组件 Text
+{
+  "componentName": "Text",
+  "props": {
+    "id": "string",
+    "title": "string",
+    "text": "string", // 文本内容
+    "style": { /* 自定义样式 */ }
   }
-- 文本组件：
-  {
-    "componentName": "Text",
-    "props": {
-      "text": "Welcome to EasyEditor!",
-    }
+}
+
+图片组件 Image
+{
+  "componentName": "Image",
+  "props": {
+    "id": "string",
+    "title": "string",
+    "src": "string", // 图片地址
+    "alt": "string", // 图片描述
+    "style": { /* 自定义样式 */ }
   }
-- 图片组件：
-  {
-    "componentName": "Image",
-    "props": {
-      "src": "https://example.com/sample-image.jpg",
-      "alt": "Sample Image"
-    }
+}
+
+按钮组件 Button
+{
+  "componentName": "Button",
+  "props": {
+    "id": "string",
+    "title": "string",
+    "content": "string", // 按钮文本
+    "textDirection": "horizontal" | "vertical",
+    "horizontalAlign": "flex-start" | "center" | "flex-end",
+    "verticalAlign": "flex-start" | "center" | "flex-end",
+    "variant": "default" | "secondary" | "destructive" | "outline" | "ghost" | "link",
+    "loading": false,
+    "radius": 6,
+    "text": {
+      "fontFamily": "string",
+      "fontSize": 16,
+      "color": "#000000",
+      "fontWeight": false,
+      "fontStyle": false,
+      "letterSpacing": 0,
+      "lineHeight": 18
+    },
+    "background": {
+      "color": "string"
+    },
+    "border": {
+      "color": "string",
+      "type": "solid" | "dashed" | "dotted",
+      "width": 0
+    },
+    "icon": {
+      "enable": false,
+      "name": "string",
+      "size": 16
+    },
+    "style": { /* 自定义样式 */ }
   }
-- 柱状图组件：
-  {
-    "componentName": "BarChart",
-    "props": {}
+}
+
+输入框组件 Input
+{
+  "componentName": "Input",
+  "props": {
+    "id": "string",
+    "title": "string",
+    "style": { /* 自定义样式 */ }
   }
-- 饼图组件：
-  {
-    "componentName": "PieChart",
-    "props": {}
+}
+
+下拉选择组件 Select
+{
+  "componentName": "Select",
+  "props": {
+    "id": "string",
+    "title": "string"
   }
-- 折线图组件：
-  {
-    "componentName": "LineChart",
-    "props": {}
+}
+
+组合选择组件 Combobox
+{
+  "componentName": "Combobox",
+  "props": {
+    "id": "string",
+    "title": "string"
   }
-- 雷达图组件：
-  {
-    "componentName": "RadarChart",
-    "props": {}
+}
+
+日历组件 Calendar
+{
+  "componentName": "Calendar",
+  "props": {
+    "id": "string",
+    "title": "string"
   }
-- 面积图组件：
-  {
-    "componentName": "AreaChart",
-    "props": {}
+}
+
+日历按钮组件 CalendarButton
+{
+  "componentName": "CalendarButton",
+  "props": {
+    "id": "string",
+    "title": "string"
   }
-- 径向图组件：
-  {
-    "componentName": "RadialChart",
-    "props": {}
+}
+
+Toggle 开关组件 Toggle
+{
+  "componentName": "Toggle",
+  "props": {
+    "id": "string",
+    "title": "string"
   }
+}
+
+ToggleGroup 组件 ToggleGroup
+{
+  "componentName": "ToggleGroup",
+  "props": {
+    "id": "string",
+    "title": "string"
+  }
+}
+
+Sonner 通知组件 Sonner
+{
+  "componentName": "Sonner",
+  "props": {
+    "id": "string",
+    "title": "string"
+  }
+}
+
+轮播图组件 Carousel
+{
+  "componentName": "Carousel",
+  "props": {
+    "id": "string",
+    "title": "string"
+  }
+}
+
+进度条组件 Progress
+{
+  "componentName": "Progress",
+  "props": {
+    "id": "string",
+    "title": "string"
+  }
+}
+
+表格组件 Table
+{
+  "componentName": "Table",
+  "props": {
+    "id": "string",
+    "title": "string",
+    "style": { /* 自定义样式 */ }
+  }
+}
+
+图表类组件（AreaChart、BarChart、BarChartHorizontal、BarChartNegative、BarChartStacked、LineChart、PieChart、PieChartDonut、PieChartStacked、RadarChart、RadarChartLines、RadialChart、RadialChartStacked、RadialChartText）
+{
+  "componentName": "AreaChart" | "BarChart" | "BarChartHorizontal" | "BarChartNegative" | "BarChartStacked" | "LineChart" | "PieChart" | "PieChartDonut" | "PieChartStacked" | "RadarChart" | "RadarChartLines" | "RadialChart" | "RadialChartStacked" | "RadialChartText",
+  "props": {
+    "id": "string",
+    "title": "string",
+    "style": { /* 自定义样式 */ }
+  }
+}
 
 注意事项：
-- 所有的物料都只能是以上物料的子集，不能超出。
-- 所有操作中的 props、$dashboard.rect 都是必须的，并且 rect 字段必须包括 x, y, width, height。
+- 所有的物料都只能是以上物料的子集，不能超出，同时注意 JSON 中不能返回注释，一定要符合 JSON 格式。
+- 所有操作中的 props、$dashboard.rect 都是必须的，并且 rect 字段必须包括 x, y, width, height，但是 Group 分组组件是例外，它不需要包含 props、$dashboard.rect，但必须包含 isGroup 字段并设置为 true。
 - 画布宽高为 1920*1080。
 - 组件的 JSExpression 或 JSFunction 属性都需要明确的 type 字段。
 - add 操作中的每个组件都需要指定一个 componentName，并附带相应的属性。
