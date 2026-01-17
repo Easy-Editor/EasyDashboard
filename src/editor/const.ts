@@ -151,94 +151,95 @@ export const defaultProjectSchema: ProjectSchema = {
       ...defaultRootSchema,
       fileName: 'home',
       fileDesc: '首页',
-      children: [
-        {
-          componentName: 'Image',
-          condition: {
-            type: 'JSExpression',
-            value: 'this.state.isShow',
-          },
-          $dashboard: {
-            rect: {
-              x: 600,
-              y: 480,
-              width: 740,
-              height: 120,
-            },
-          },
-        },
-        {
-          componentName: 'Button',
-          props: {
-            content: 'Button in Root',
-            __events: {
-              eventDataList: [
-                {
-                  type: 'componentEvent',
-                  name: 'onClick',
-                  relatedEventName: 'toggleState',
-                },
-              ],
-              eventList: [
-                {
-                  name: 'onClick',
-                  description: '鼠标点击',
-                  disabled: true,
-                },
-              ],
-            },
-            onClick: {
-              type: 'JSFunction',
-              value:
-                'function(){return this.toggleState.apply(this,Array.prototype.slice.call(arguments).concat([])) }',
-            },
-          },
-          $dashboard: {
-            rect: {
-              x: 100,
-              y: 100,
-              width: 200,
-              height: 50,
-            },
-          },
-        },
-        {
-          componentName: 'Button',
-          props: {
-            content: 'Next Page',
-            __events: {
-              eventDataList: [
-                {
-                  type: 'builtin',
-                  name: 'onClick',
-                  relatedEventName: 'utils.navigate',
-                  paramStr: '"test"',
-                },
-              ],
-              eventList: [
-                {
-                  name: 'onClick',
-                  description: '鼠标点击',
-                  disabled: true,
-                },
-              ],
-            },
-            onClick: {
-              type: 'JSFunction',
-              value:
-                'function(){return this.utils.navigate.apply(this,Array.prototype.slice.call(arguments).concat(["test"])) }',
-            },
-          },
-          $dashboard: {
-            rect: {
-              x: 1700,
-              y: 1000,
-              width: 200,
-              height: 50,
-            },
-          },
-        },
-      ],
+      // children: [
+      //   {
+      //     componentName: 'Image',
+      //     condition: {
+      //       type: 'JSExpression',
+      //       value: 'this.state.isShow',
+      //     },
+      //     $dashboard: {
+      //       rect: {
+      //         x: 600,
+      //         y: 480,
+      //         width: 740,
+      //         height: 120,
+      //       },
+      //     },
+      //   },
+      //   {
+      //     componentName: 'Button',
+      //     props: {
+      //       content: 'Button in Root',
+      //       __events: {
+      //         eventDataList: [
+      //           {
+      //             type: 'componentEvent',
+      //             name: 'onClick',
+      //             relatedEventName: 'toggleState',
+      //           },
+      //         ],
+      //         eventList: [
+      //           {
+      //             name: 'onClick',
+      //             description: '鼠标点击',
+      //             disabled: true,
+      //           },
+      //         ],
+      //       },
+      //       onClick: {
+      //         type: 'JSFunction',
+      //         value:
+      //           'function(){return this.toggleState.apply(this,Array.prototype.slice.call(arguments).concat([])) }',
+      //       },
+      //     },
+      //     $dashboard: {
+      //       rect: {
+      //         x: 100,
+      //         y: 100,
+      //         width: 200,
+      //         height: 50,
+      //       },
+      //     },
+      //   },
+      //   {
+      //     componentName: 'Button',
+      //     props: {
+      //       content: 'Next Page',
+      //       __events: {
+      //         eventDataList: [
+      //           {
+      //             type: 'builtin',
+      //             name: 'onClick',
+      //             relatedEventName: 'utils.navigate',
+      //             paramStr: '"test"',
+      //           },
+      //         ],
+      //         eventList: [
+      //           {
+      //             name: 'onClick',
+      //             description: '鼠标点击',
+      //             disabled: true,
+      //           },
+      //         ],
+      //       },
+      //       onClick: {
+      //         type: 'JSFunction',
+      //         value:
+      //           'function(){return this.utils.navigate.apply(this,Array.prototype.slice.call(arguments).concat(["test"])) }',
+      //       },
+      //     },
+      //     $dashboard: {
+      //       rect: {
+      //         x: 1700,
+      //         y: 1000,
+      //         width: 200,
+      //         height: 50,
+      //       },
+      //     },
+      //   },
+      // ],
+      children: [],
       dataSource: {
         list: [
           {
