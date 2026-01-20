@@ -28,8 +28,6 @@ plugins.registerPlugins([
 materials.buildComponentMetasMap(Object.values(componentMetaMap))
 // setters.registerSetter(setterMap)
 
-await loadAllRemoteResources()
-
 await init({
   designMode: 'design',
   appHelper: {
@@ -54,3 +52,12 @@ const initProjectSchema = async () => {
 }
 
 initProjectSchema()
+
+// 异步加载远程资源
+loadAllRemoteResources()
+  .then(result => {
+    console.log('[Remote] Resources loaded:', result)
+  })
+  .catch(error => {
+    console.error('[Remote] Failed to load resources:', error)
+  })

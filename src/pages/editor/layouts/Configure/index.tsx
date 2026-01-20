@@ -1,10 +1,14 @@
 import { Sidebar, SidebarContent, SidebarHeader } from '@/components/ui/sidebar'
+import { setterManager } from '@/editor/remote'
 import { customFieldItem } from '@/editor/setters'
 import { project } from '@easy-editor/core'
 import { SettingRenderer } from '@easy-editor/react-renderer'
 import { observer } from 'mobx-react'
+import { ConfigureSkeleton } from './ConfigureSkeleton'
 
 export const ConfigureSidebar = observer(({ ...props }: React.ComponentProps<typeof Sidebar>) => {
+  const isLoading = setterManager.isLoading
+
   return (
     <Sidebar collapsible='none' className='sticky hidden lg:flex top-0 h-svh border-l' {...props}>
       <SidebarHeader className='border-b p-3 shadow-sm bg-background'>
@@ -13,7 +17,11 @@ export const ConfigureSidebar = observer(({ ...props }: React.ComponentProps<typ
         </div>
       </SidebarHeader>
       <SidebarContent className='p-3 bg-surface'>
-        <SettingRenderer designer={project.designer} customFieldItem={customFieldItem} />
+        {isLoading ? (
+          <ConfigureSkeleton />
+        ) : (
+          <SettingRenderer designer={project.designer} customFieldItem={customFieldItem} />
+        )}
       </SidebarContent>
     </Sidebar>
   )

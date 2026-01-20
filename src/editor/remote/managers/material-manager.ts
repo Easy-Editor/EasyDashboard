@@ -35,6 +35,9 @@ class MaterialManagerClass {
   /** 已加载的远程物料包 */
   @observable.shallow private accessor remoteMaterialPackages = new Map<string, CachedMaterialPackage>()
 
+  /** 是否正在加载 */
+  @observable accessor isLoading = false
+
   /**
    * 获取已加载的远程物料数量
    */
@@ -115,17 +118,23 @@ class MaterialManagerClass {
     succeeded: number
     failed: number
   }> {
-    const results = await Promise.allSettled(configs.map(config => this.loadMeta(config)))
+    this.isLoading = true
 
-    const succeeded = results.filter(r => r.status === 'fulfilled').length
-    const failed = results.filter(r => r.status === 'rejected').length
+    try {
+      const results = await Promise.allSettled(configs.map(config => this.loadMeta(config)))
 
-    console.log(`[MaterialManager] Batch meta load: ${succeeded} success, ${failed} failed`)
+      const succeeded = results.filter(r => r.status === 'fulfilled').length
+      const failed = results.filter(r => r.status === 'rejected').length
 
-    return {
-      total: configs.length,
-      succeeded,
-      failed,
+      console.log(`[MaterialManager] Batch meta load: ${succeeded} success, ${failed} failed`)
+
+      return {
+        total: configs.length,
+        succeeded,
+        failed,
+      }
+    } finally {
+      this.isLoading = false
     }
   }
 

@@ -5,7 +5,7 @@
 
 import { setters } from '@easy-editor/core'
 import { action, computed, observable, runInAction } from 'mobx'
-import { type LoadedSetters, setterLoader } from '../loaders'
+import { setterLoader } from '../loaders'
 
 /** 远程设置器配置 */
 export interface RemoteSetterConfig {
@@ -33,6 +33,9 @@ interface CachedSetterPackage {
 class SetterManagerClass {
   /** 已加载的远程设置器包 */
   @observable.shallow private accessor remoteSetterPackages = new Map<string, CachedSetterPackage>()
+
+  /** 是否正在加载 */
+  @observable accessor isLoading = false
 
   /**
    * 获取已加载的远程设置器数量
@@ -109,17 +112,23 @@ class SetterManagerClass {
     succeeded: number
     failed: number
   }> {
-    const results = await Promise.allSettled(configs.map(config => this.load(config)))
+    this.isLoading = true
 
-    const succeeded = results.filter(r => r.status === 'fulfilled').length
-    const failed = results.filter(r => r.status === 'rejected').length
+    try {
+      const results = await Promise.allSettled(configs.map(config => this.load(config)))
 
-    console.log(`[SetterManager] Batch complete: ${succeeded} success, ${failed} failed`)
+      const succeeded = results.filter(r => r.status === 'fulfilled').length
+      const failed = results.filter(r => r.status === 'rejected').length
 
-    return {
-      total: configs.length,
-      succeeded,
-      failed,
+      console.log(`[SetterManager] Batch complete: ${succeeded} success, ${failed} failed`)
+
+      return {
+        total: configs.length,
+        succeeded,
+        failed,
+      }
+    } finally {
+      this.isLoading = false
     }
   }
 
