@@ -44,14 +44,17 @@ class MaterialManagerClass {
   }
 
   /**
-   * 获取已加载的远程组件映射（componentName -> Component）
+   * 获取已加载的远程组件映射（versionedComponentName -> Component）
+   * 注意: componentName 已经是版本化的格式 (如 "AreaChart@1.0.0")
    */
   @computed
   get remoteComponentsMap(): Record<string, Component> {
     const componentsMap: Record<string, Component> = {}
 
-    for (const data of this.remoteMaterialPackages.values()) {
+    for (const [_, data] of this.remoteMaterialPackages.entries()) {
       const { component, meta } = data
+
+      // 使用 meta 中的 componentName(应该已经是版本化的)
       const componentName = meta?.componentName
 
       if (componentName && component) {
@@ -81,15 +84,17 @@ class MaterialManagerClass {
         globalName,
       })
 
-      // 2. 注册到物料系统
-      materials.buildComponentMetasMap([meta])
+      // 2. 使用版本化的 componentName 注册到物料系统
+      const versionedComponentName = `${meta.componentName}@${version}`
+      materials.buildComponentMetasMap([{ ...meta, componentName: versionedComponentName }])
 
-      // 3. 缓存
+      // 3. 缓存（使用版本化的 key 和 componentName）
+      const cacheKey = `${packageName}@${version}`
       runInAction(() => {
-        this.remoteMaterialPackages.set(packageName, {
+        this.remoteMaterialPackages.set(cacheKey, {
           version,
           globalName,
-          meta,
+          meta: { ...meta, componentName: versionedComponentName },
           hasComponent: false,
         })
       })
@@ -145,23 +150,29 @@ class MaterialManagerClass {
 
       // 2. 使用 runInAction 确保 MobX 响应式正确触发
       runInAction(() => {
-        // 注册到物料系统（元数据）
-        materials.buildComponentMetasMap([loaded.meta])
+        // 使用版本化的 componentName 注册到物料系统
+        const versionedComponentName = `${loaded.meta.componentName}@${version}`
 
-        // 注册组件到 materials.registry（关键：让 renderer 能找到组件）
-        materials.createComponentMeta(loaded.meta, {
-          component: loaded.component,
-          source: MaterialSource.REMOTE,
-        })
+        materials.buildComponentMetasMap([{ ...loaded.meta, componentName: versionedComponentName }])
+
+        // 注册组件时使用版本化的 componentName
+        materials.createComponentMeta(
+          { ...loaded.meta, componentName: versionedComponentName },
+          {
+            component: loaded.component,
+            source: MaterialSource.REMOTE,
+          },
+        )
 
         // 强制刷新 componentMetasMap
         materials.refreshComponentMetasMap()
 
-        // 缓存（包含 component）
-        this.remoteMaterialPackages.set(packageName, {
+        // 缓存（使用版本化的 key 和 componentName）
+        const cacheKey = `${packageName}@${version}`
+        this.remoteMaterialPackages.set(cacheKey, {
           version,
           globalName,
-          meta: loaded.meta,
+          meta: { ...loaded.meta, componentName: versionedComponentName },
           component: loaded.component,
           hasComponent: true,
         })
@@ -178,10 +189,28 @@ class MaterialManagerClass {
 
   /**
    * 为已加载元数据的物料添加组件代码
+   * @param packageName 包名
+   * @param version 版本号（可选，如果不提供则尝试查找已加载的版本）
    */
   @action
-  async addComponent(packageName: string): Promise<void> {
-    const cached = this.remoteMaterialPackages.get(packageName)
+  async addComponent(packageName: string, version?: string): Promise<void> {
+    // 如果提供了版本，使用版本化的 key
+    const cacheKey = version ? `${packageName}@${version}` : packageName
+
+    // 尝试使用版本化的 key 查找
+    let cached = this.remoteMaterialPackages.get(cacheKey)
+
+    // 如果没找到且没有提供版本，尝试查找任意版本
+    if (!cached && !version) {
+      // 查找所有匹配的包名
+      for (const [key, value] of this.remoteMaterialPackages.entries()) {
+        if (key.startsWith(`${packageName}@`)) {
+          cached = value
+          break
+        }
+      }
+    }
+
     if (!cached) {
       throw new Error(`Material ${packageName} not found in cache`)
     }
@@ -199,18 +228,29 @@ class MaterialManagerClass {
 
       // 使用 runInAction 确保 MobX 响应式正确触发
       runInAction(() => {
-        // 将组件注册到 materials.registry，统一入口
-        materials.createComponentMeta(cached.meta, {
-          component,
-          source: MaterialSource.REMOTE,
-        })
+        // 使用缓存中的 componentName(应该已经是版本化的)
+        // 如果 cached.meta.componentName 已经包含版本号,直接使用
+        // 否则,添加版本号
+        const finalComponentName = cached.meta.componentName.includes('@')
+          ? cached.meta.componentName
+          : `${cached.meta.componentName}@${cached.version}`
+
+        materials.createComponentMeta(
+          { ...cached.meta, componentName: finalComponentName },
+          {
+            component,
+            source: MaterialSource.REMOTE,
+          },
+        )
 
         // 强制刷新 componentMetasMap
         materials.refreshComponentMetasMap()
 
-        // 更新缓存
-        this.remoteMaterialPackages.set(packageName, {
+        // 更新缓存（使用版本化的 key 和 componentName）
+        const finalCacheKey = `${packageName}@${cached.version}`
+        this.remoteMaterialPackages.set(finalCacheKey, {
           ...cached,
+          meta: { ...cached.meta, componentName: finalComponentName },
           component,
           hasComponent: true,
         })
@@ -218,9 +258,63 @@ class MaterialManagerClass {
 
       console.log('[MaterialManager] componentsMap after registration:', materials.componentsMap)
 
-      console.log(`[MaterialManager] Component registered to materials: ${packageName}`)
+      console.log(`[MaterialManager] Component registered to materials: ${packageName}@${cached.version}`)
     } catch (error) {
       console.error(`[MaterialManager] Failed to add component: ${packageName}`, error)
+      throw error
+    }
+  }
+
+  /**
+   * 加载指定版本的组件（用于版本更新）
+   * @param packageName 包名
+   * @param version 目标版本
+   */
+  @action
+  async loadComponentVersion(packageName: string, version: string): Promise<void> {
+    const cacheKey = `${packageName}@${version}`
+    const cached = this.remoteMaterialPackages.get(cacheKey)
+
+    if (cached?.hasComponent) {
+      return // 已加载
+    }
+
+    try {
+      // 加载完整物料（元数据 + 组件）
+      const loaded = await materialLoader.loadMaterial({
+        package: packageName,
+        version,
+        globalName: cached?.globalName || '', // 如果缓存中没有，materialLoader 会自动解析
+      })
+
+      // 使用 runInAction 确保 MobX 响应式正确触发
+      runInAction(() => {
+        // 注册组件时使用版本化的 key
+        const versionedComponentName = `${loaded.meta.componentName}@${version}`
+        materials.createComponentMeta(
+          { ...loaded.meta, componentName: versionedComponentName },
+          {
+            component: loaded.component,
+            source: MaterialSource.REMOTE,
+          },
+        )
+
+        // 强制刷新 componentMetasMap
+        materials.refreshComponentMetasMap()
+
+        // 缓存
+        this.remoteMaterialPackages.set(cacheKey, {
+          version,
+          globalName: loaded.meta.npm?.globalName || '',
+          meta: loaded.meta,
+          component: loaded.component,
+          hasComponent: true,
+        })
+      })
+
+      console.log(`[MaterialManager] Component version loaded: ${packageName}@${version}`)
+    } catch (error) {
+      console.error(`[MaterialManager] Failed to load component version: ${packageName}@${version}`, error)
       throw error
     }
   }
@@ -254,17 +348,24 @@ class MaterialManagerClass {
    * 获取已加载的远程物料包列表
    */
   getLoadedPackages(): Array<{
-    name: string
-    version: string
-    componentName: string
+    packageName: string // 包名(如 @easy-materials/dashboard)
+    version: string // 版本号
+    componentName: string // 组件名(已版本化,如 AreaChart@1.0.0)
     hasComponent: boolean
   }> {
-    return Array.from(this.remoteMaterialPackages.entries()).map(([name, data]) => ({
-      name,
-      version: data.version,
-      componentName: data.meta.componentName,
-      hasComponent: data.hasComponent,
-    }))
+    return Array.from(this.remoteMaterialPackages.entries()).map(([cacheKey, data]) => {
+      // cacheKey 格式: @easy-materials/dashboard@1.0.0
+      // 需要提取 packageName (去掉最后的 @version)
+      const lastAtIndex = cacheKey.lastIndexOf('@')
+      const packageName = lastAtIndex !== -1 ? cacheKey.substring(0, lastAtIndex) : cacheKey
+
+      return {
+        packageName,
+        version: data.version,
+        componentName: data.meta.componentName, // 已版本化
+        hasComponent: data.hasComponent,
+      }
+    })
   }
 
   /**
@@ -284,23 +385,107 @@ class MaterialManagerClass {
 
   /**
    * 检查物料是否已加载
+   * @param packageName 包名
+   * @param version 版本号（可选）
    */
-  isLoaded(packageName: string): boolean {
-    return this.remoteMaterialPackages.has(packageName)
+  isLoaded(packageName: string, version?: string): boolean {
+    if (version) {
+      return this.remoteMaterialPackages.has(`${packageName}@${version}`)
+    }
+
+    // 如果没有提供版本，检查是否有任意版本
+    for (const key of this.remoteMaterialPackages.keys()) {
+      if (key.startsWith(`${packageName}@`)) {
+        return true
+      }
+    }
+    return false
   }
 
   /**
    * 检查物料组件是否已加载
+   * @param packageName 包名
+   * @param version 版本号（可选）
    */
-  hasComponent(packageName: string): boolean {
-    return this.remoteMaterialPackages.get(packageName)?.hasComponent ?? false
+  hasComponent(packageName: string, version?: string): boolean {
+    if (version) {
+      return this.remoteMaterialPackages.get(`${packageName}@${version}`)?.hasComponent ?? false
+    }
+
+    // 如果没有提供版本，检查任意版本
+    for (const [key, value] of this.remoteMaterialPackages.entries()) {
+      if (key.startsWith(`${packageName}@`)) {
+        return value.hasComponent
+      }
+    }
+    return false
   }
 
   /**
    * 获取物料信息
+   * @param packageName 包名
+   * @param version 版本号（可选）
    */
-  getPackageInfo(packageName: string): CachedMaterialPackage | undefined {
-    return this.remoteMaterialPackages.get(packageName)
+  getPackageInfo(packageName: string, version?: string): CachedMaterialPackage | undefined {
+    if (version) {
+      return this.remoteMaterialPackages.get(`${packageName}@${version}`)
+    }
+
+    // 如果没有提供版本，返回任意版本
+    for (const [key, value] of this.remoteMaterialPackages.entries()) {
+      if (key.startsWith(`${packageName}@`)) {
+        return value
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * 从版本化的 componentName 中提取原始名称和版本
+   * @param versionedName 版本化名称(如 "AreaChart@1.0.0")
+   * @returns { name: string, version: string } 或 null
+   */
+  private parseVersionedName(versionedName: string): { name: string; version: string } | null {
+    const lastAtIndex = versionedName.lastIndexOf('@')
+    if (lastAtIndex === -1) {
+      return null
+    }
+
+    return {
+      name: versionedName.substring(0, lastAtIndex),
+      version: versionedName.substring(lastAtIndex + 1),
+    }
+  }
+
+  /**
+   * 构建版本化的 componentName
+   * @param componentName 原始组件名
+   * @param version 版本号
+   * @returns 版本化名称
+   */
+  private buildVersionedName(componentName: string, version: string): string {
+    return `${componentName}@${version}`
+  }
+
+  /**
+   * 获取组件的所有版本
+   * @param componentName 原始组件名(不含版本)
+   * @returns 版本号数组(已排序)
+   */
+  getComponentVersions(componentName: string): string[] {
+    const versions: string[] = []
+
+    for (const [_, data] of this.remoteMaterialPackages.entries()) {
+      const metaComponentName = data.meta.componentName
+
+      // 检查是否匹配
+      if (metaComponentName.startsWith(`${componentName}@`)) {
+        versions.push(data.version)
+      }
+    }
+
+    // 按版本号排序(简单字符串排序,实际应使用 semver)
+    return versions.sort()
   }
 }
 
