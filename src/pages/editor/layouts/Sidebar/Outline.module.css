@@ -1,0 +1,183 @@
+/* ===== CSS Variables ===== */
+.outlineTree {
+  margin-top: 8px;
+  --outline-indent-size: 16px;
+  --outline-node-height: 28px;
+  --outline-node-gap: 1px;
+  --outline-icon-size: 14px;
+  --outline-transition-fast: 150ms;
+  --outline-transition-normal: 200ms;
+}
+
+/* ===== Base Styles ===== */
+.treeNode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--outline-node-height);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0, 0, 0.2, 1);
+  position: relative;
+  user-select: none;
+}
+
+.nodeContent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.nodeName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity var(--outline-transition-fast);
+}
+
+.nodeIcon {
+  width: var(--outline-icon-size);
+  height: var(--outline-icon-size);
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity var(--outline-transition-fast);
+}
+
+.chevronIcon {
+  width: var(--outline-icon-size);
+  height: var(--outline-icon-size);
+  flex-shrink: 0;
+  transition: transform var(--outline-transition-normal) cubic-bezier(0.4, 0, 0.2, 1);
+  color: hsl(var(--sidebar-accent-foreground));
+}
+
+.actionButton {
+  width: 20px;
+  height: 20px;
+  border-radius: 0.25rem;
+  opacity: 0;
+  transition: all var(--outline-transition-fast);
+}
+
+.actionButtonVisible {
+  opacity: 1;
+}
+
+/* ===== Hover State ===== */
+.treeNode:hover {
+  background: hsl(var(--sidebar-accent) / 0.6);
+  color: hsl(var(--sidebar-accent-foreground));
+  transform: translateX(2px);
+  box-shadow: 0 1px 2px -1px rgb(0 0 0 / 0.05);
+}
+
+.treeNode:hover .nodeIcon {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.treeNode:hover .actionButton {
+  opacity: 1;
+}
+
+/* ===== Selected State ===== */
+.treeNode[data-selected="true"] {
+  background: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-primary));
+  font-weight: 500;
+  box-shadow: inset 2px 0 0 hsl(var(--sidebar-primary));
+}
+
+.treeNode[data-selected="true"] .nodeIcon {
+  opacity: 1;
+  color: hsl(var(--sidebar-primary));
+}
+
+.treeNode[data-selected="true"] .nodeName {
+  color: hsl(var(--sidebar-primary));
+}
+
+/* ===== Focus State ===== */
+.treeNode:focus-visible {
+  outline: 2px solid hsl(var(--sidebar-ring));
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 4px hsl(var(--sidebar-ring) / 0.1);
+}
+
+/* ===== Hidden State ===== */
+.treeNode[data-hidden="true"] .nodeName {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+/* ===== Locked State ===== */
+.treeNode[data-locked="true"] .nodeName {
+  font-style: italic;
+}
+
+/* ===== Button Interactions ===== */
+.actionButton:hover {
+  background: hsl(var(--sidebar-accent));
+  opacity: 1 !important;
+  transform: scale(1.05);
+}
+
+.actionButton:active {
+  transform: scale(0.95);
+}
+
+.actionButton[data-active="true"] {
+  opacity: 1;
+}
+
+/* ===== Collapsible Styles ===== */
+.collapsible[data-state="open"] .chevronIcon {
+  transform: rotate(90deg);
+}
+
+/* ===== Menu Sub Styles ===== */
+.menuSub {
+  margin-right: 0;
+  padding-right: 0;
+  gap: var(--outline-node-gap);
+}
+
+/* ===== Animations ===== */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .treeNode {
+    min-height: 36px;
+  }
+
+  .nodeIcon,
+  .chevronIcon {
+    width: 18px;
+    height: 18px;
+  }
+}

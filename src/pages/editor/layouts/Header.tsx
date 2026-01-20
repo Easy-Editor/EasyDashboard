@@ -28,27 +28,23 @@ export function AppHeader({ className }: { className?: string }) {
   return (
     <header
       className={cn(
-        'w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
+        'h-[52px] w-full',
+        'bg-background/80 backdrop-blur-xl',
+        'border-b border-border/60',
+        'sticky top-0 z-50',
+        'transition-all duration-200',
         className,
       )}
     >
-      <div className='border-border/70 dark:border-border w-full border-dashed'>
-        <div className='flex h-14 items-center px-4'>
-          <MainNav />
-          <div className='flex flex-1 items-center justify-between gap-2 md:justify-end'>
-            <div className='w-full flex-1 md:w-auto md:flex-none' />
-            <div className='flex items-center gap-2'>
-              <Button variant='outline' onClick={preview}>
-                预览
-              </Button>
-              <Button variant='outline' onClick={() => save('project')}>
-                保存
-              </Button>
-              {/* <Button variant='outline' onClick={() => save('project')}>
-                保存项目
-              </Button> */}
-            </div>
-          </div>
+      <div className='w-full h-full px-4 flex items-center justify-between'>
+        <MainNav />
+        <div className='flex items-center gap-2'>
+          <Button variant='ghost' size='sm' className='h-8 gap-2' onClick={preview}>
+            预览
+          </Button>
+          <Button size='sm' className='h-8 gap-2' onClick={() => save('project')}>
+            保存
+          </Button>
         </div>
       </div>
     </header>

@@ -1,10 +1,10 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Card, CardContent } from '@/components/ui/card'
 import {
-  MaterialCategoryLabel,
-  MaterialGroupLabel,
   type MaterialCategory,
+  MaterialCategoryLabel,
   type MaterialGroup,
+  MaterialGroupLabel,
 } from '@/editor/materials/type'
 import { cn } from '@/lib/utils'
 import { type ComponentMeta, type Snippet as ISnippet, project } from '@easy-editor/core'
@@ -55,22 +55,32 @@ const Snippet = ({ snippet }: SnippetProps) => {
       aria-label={`Drag ${snippet.title} to canvas`}
       tabIndex={0}
       className={cn(
-        'group cursor-move select-none aspect-square transition-all duration-300 ease-out',
-        isDragging ? 'opacity-50 scale-95' : 'hover:shadow-lg hover:border-primary/50',
+        'group relative overflow-hidden cursor-move select-none aspect-square',
+        'border border-border/60 bg-surface hover:bg-surface-hover',
+        'transition-all duration-300 ease-out',
+        'hover:shadow-lg hover:scale-[1.02] hover:border-border-strong',
+        'active:scale-[0.98]',
+        isDragging && 'opacity-40 scale-95',
       )}
     >
-      <CardContent className='flex flex-col items-center justify-between w-full h-full p-3 gap-2'>
+      <CardContent className='relative flex flex-col items-center justify-between w-full h-full p-3 gap-2'>
         {snippet.screenshot && (
-          <div className='flex-1 w-full rounded-md overflow-hidden bg-muted/30'>
+          <div className='flex-1 w-full rounded-md overflow-hidden bg-muted/20 border border-border/40'>
             <img
               src={snippet.screenshot}
               alt={`Preview of ${snippet.title}`}
-              className='w-full h-full object-contain'
+              className='w-full h-full object-contain transition-transform duration-300 group-hover:scale-105'
               loading='lazy'
             />
           </div>
         )}
-        <span className='w-full text-xs font-medium text-center line-clamp-2 group-hover:text-primary transition-colors'>
+        <span
+          className={cn(
+            'w-full text-xs font-medium text-center line-clamp-2',
+            'text-muted-foreground group-hover:text-foreground',
+            'transition-colors duration-200',
+          )}
+        >
           {snippet.title}
         </span>
       </CardContent>
@@ -113,29 +123,39 @@ const DebugSnippet = ({ snippet, componentMeta }: SnippetProps) => {
       aria-label={`Drag ${snippet.title} to canvas (Debug mode)`}
       tabIndex={0}
       className={cn(
-        'group cursor-move select-none aspect-square transition-all duration-300 ease-out border-green-500/30 border-2 relative overflow-hidden',
-        isDragging ? 'opacity-50 scale-95' : 'hover:shadow-lg hover:border-green-500/70',
+        'group relative overflow-hidden cursor-move select-none aspect-square',
+        'border-2 border-green-500/30 bg-surface hover:bg-surface-hover',
+        'transition-all duration-300 ease-out',
+        'hover:shadow-lg hover:scale-[1.02] hover:border-green-500/70',
+        'active:scale-[0.98]',
+        isDragging && 'opacity-40 scale-95',
       )}
     >
-      {/* 调试标记 - 改进版 */}
+      {/* 调试标记 */}
       <div className='absolute top-2 right-2 flex items-center gap-1 bg-green-500 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-md shadow-sm z-10'>
         <span className='h-1.5 w-1.5 rounded-full bg-white animate-pulse' />
         DEV
       </div>
       {/* 背景装饰 */}
       <div className='absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent pointer-events-none' />
-      <CardContent className='flex flex-col items-center justify-between w-full h-full p-3 gap-2'>
+      <CardContent className='relative flex flex-col items-center justify-between w-full h-full p-3 gap-2'>
         {snippet.screenshot && (
-          <div className='flex-1 w-full rounded-md overflow-hidden bg-muted/30'>
+          <div className='flex-1 w-full rounded-md overflow-hidden bg-muted/20 border border-border/40'>
             <img
               src={snippet.screenshot}
               alt={`Preview of ${snippet.title}`}
-              className='w-full h-full object-contain'
+              className='w-full h-full object-contain transition-transform duration-300 group-hover:scale-105'
               loading='lazy'
             />
           </div>
         )}
-        <span className='w-full text-xs font-medium text-center line-clamp-2 group-hover:text-primary transition-colors'>
+        <span
+          className={cn(
+            'w-full text-xs font-medium text-center line-clamp-2',
+            'text-muted-foreground group-hover:text-foreground',
+            'transition-colors duration-200',
+          )}
+        >
           {snippet.title}
         </span>
       </CardContent>
@@ -194,7 +214,7 @@ export const ComponentSidebar = observer(() => {
           {/* 调试中的物料组（如果有） */}
           {debugCategoryMap.size > 0 && (
             <AccordionItem value={DEBUG_GROUP}>
-              <AccordionTrigger className='text-green-600 hover:text-green-700 py-3'>
+              <AccordionTrigger className='text-green-600 hover:text-green-700 py-3 hover:bg-accent/30 rounded-md transition-all duration-200'>
                 <span className='flex items-center gap-2'>
                   <span className='relative flex h-3 w-3'>
                     <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75' />
@@ -208,7 +228,7 @@ export const ComponentSidebar = observer(() => {
                 <Accordion type='single' collapsible className='pl-2'>
                   {Array.from(debugCategoryMap.entries()).map(([category, components]) => (
                     <AccordionItem key={category} value={category}>
-                      <AccordionTrigger className='py-2 text-sm'>
+                      <AccordionTrigger className='py-2 text-sm hover:bg-accent/30 rounded-md transition-all duration-200'>
                         {MaterialCategoryLabel[category as MaterialCategory] || category}
                       </AccordionTrigger>
                       <AccordionContent>
@@ -241,10 +261,10 @@ export const ComponentSidebar = observer(() => {
 
               return (
                 <AccordionItem key={group} value={group}>
-                  <AccordionTrigger className='py-3 font-medium'>
+                  <AccordionTrigger className='py-2.5 px-3 text-sm font-medium hover:bg-accent/50 rounded-md transition-all duration-200 data-[state=open]:bg-accent/30'>
                     {MaterialGroupLabel[group as MaterialGroup] || group}
                   </AccordionTrigger>
-                  <AccordionContent className='transition-all data-[state=closed]:animate-[accordion-up_300ms_ease-out] data-[state=open]:animate-[accordion-down_400ms_ease-out]'>
+                  <AccordionContent className='pt-2 pb-3 px-2 transition-all data-[state=closed]:animate-[accordion-up_300ms_ease-out] data-[state=open]:animate-[accordion-down_400ms_ease-out]'>
                     {hasMultipleCategories ? (
                       /* 有多个二级分类时，显示嵌套结构 */
                       <Accordion type='single' collapsible className='pl-2 border-l border-border/50'>
@@ -252,14 +272,14 @@ export const ComponentSidebar = observer(() => {
                           .sort((a, b) => a[0].localeCompare(b[0]))
                           .map(([category, components]) => (
                             <AccordionItem key={category} value={category}>
-                              <AccordionTrigger className='py-2 text-sm font-normal'>
+                              <AccordionTrigger className='py-2 text-sm font-normal hover:bg-accent/30 rounded-md transition-all duration-200'>
                                 {MaterialCategoryLabel[category as MaterialCategory] || category}
                               </AccordionTrigger>
                               <AccordionContent>
                                 <div className='grid grid-cols-2 gap-2 p-2'>
                                   {components.map(component => {
                                     const metadata = component.getMetadata()
-                                    const isRemoteMaterial = metadata.devMode === 'proCode'
+                                    const isRemoteMaterial = component.isRemoteMaterial()
 
                                     return metadata.snippets?.map(snippet =>
                                       isRemoteMaterial ? (
@@ -283,7 +303,7 @@ export const ComponentSidebar = observer(() => {
                       <div className='grid grid-cols-2 gap-2 p-2'>
                         {Array.from(categoryMap.values())[0]?.map(component => {
                           const metadata = component.getMetadata()
-                          const isRemoteMaterial = metadata.devMode === 'proCode'
+                          const isRemoteMaterial = component.isRemoteMaterial()
 
                           return metadata.snippets?.map(snippet =>
                             isRemoteMaterial ? (

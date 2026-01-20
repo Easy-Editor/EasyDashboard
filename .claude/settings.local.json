@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "mcp__filesystem__directory_tree",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_take_screenshot",
+      "Skill(web-design-guidelines)",
+      "mcp__filesystem__read_multiple_files",
+      "mcp__filesystem__read_text_file",
+      "Skill(frontend-design)",
+      "mcp__filesystem__list_directory",
+      "mcp__filesystem__write_file",
+      "Bash(timeout:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm dev:*)",
+      "WebSearch",
+      "Bash(dir:*)",
+      "Bash(pnpm format:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm build:prod:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ],
+  "enabledPlugins": {}
+}

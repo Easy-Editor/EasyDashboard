@@ -12,7 +12,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Code, CodeXml, Component, Database, File, ListTree, Pin, PinOff, Wand, X } from 'lucide-react'
+import { Code, CodeXml, Component, Database, File, ListTree, Wand, X } from 'lucide-react'
 import * as React from 'react'
 import { useEffect } from 'react'
 import { ComponentSidebar } from './Components'
@@ -74,7 +74,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [activeItem, setActiveItem] = React.useState(data.navTop[0])
-  const { open, setOpen, fixed, toggleFixedSidebar } = useSidebar()
+  const { open, setOpen } = useSidebar()
 
   useEffect(() => {
     setOpen(true)
@@ -111,9 +111,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           setOpen(item.key === activeItem?.key ? !open : true)
                         }}
                         isActive={activeItem?.key === item.key}
-                        className='px-2.5 md:px-2'
+                        data-active={activeItem?.key === item.key}
+                        className='px-2.5 md:px-2 transition-all duration-200 [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95'
                       >
-                        <item.icon />
+                        <item.icon className='transition-all duration-200 [transition-timing-function:var(--ease-out)] group-hover:scale-110' />
                         <span>{item.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -132,9 +133,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           setOpen(item.key === activeItem.key ? !open : true)
                         }}
                         isActive={activeItem?.key === item.key}
-                        className='px-2.5 md:px-2'
+                        data-active={activeItem?.key === item.key}
+                        className='px-2.5 md:px-2 transition-all duration-200 [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95'
                       >
-                        <item.icon />
+                        <item.icon className='transition-all duration-200 [transition-timing-function:var(--ease-out)] group-hover:scale-110' />
                         <span>{item.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -148,32 +150,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </Sidebar>
 
       <Sidebar collapsible='none' className='hidden flex-1 md:flex'>
-        <SidebarHeader className='gap-3.5 border-b p-2'>
-          <div className='flex w-full items-center justify-between'>
-            <div className='text-base font-medium text-foreground'>{activeItem?.title}</div>
-            <div className='flex items-center gap-2 text-sm'>
-              {activeItem?.key !== 'schema' && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant='ghost' size='icon' onClick={toggleFixedSidebar}>
-                      {fixed ? <Pin /> : <PinOff />}
-                      <span className='sr-only'>{fixed ? '取消固定' : '固定'}</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{fixed ? '取消固定' : '固定'}</TooltipContent>
-                </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant='ghost' size='icon' onClick={() => setOpen(false)}>
-                    <X />
-                    <span className='sr-only'>关闭</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>关闭</TooltipContent>
-              </Tooltip>
-            </div>
+        <SidebarHeader className='h-12 px-4 border-b border-border/60 flex items-center justify-between'>
+          <div className='flex items-center gap-2'>
+            <div className='w-1 h-4 bg-foreground rounded-full' />
+            <h2 className='text-sm font-semibold'>{activeItem?.title}</h2>
           </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant='ghost'
+                size='icon'
+                onClick={() => setOpen(false)}
+                className='h-7 w-7 transition-all duration-200 [transition-timing-function:var(--ease-out)]'
+              >
+                <X className='w-4 h-4' />
+                <span className='sr-only'>关闭</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>关闭</TooltipContent>
+          </Tooltip>
         </SidebarHeader>
         <SidebarContent>{activeItem?.component}</SidebarContent>
       </Sidebar>
