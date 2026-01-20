@@ -13,8 +13,8 @@ import {
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Code, CodeXml, Component, Database, File, ListTree, Wand, X } from 'lucide-react'
-import * as React from 'react'
-import { useEffect } from 'react'
+import type * as React from 'react'
+import { useEffect, useState } from 'react'
 import { ComponentSidebar } from './Components'
 import { DataSourceSidebar } from './DataSource'
 import { MaterialsSidebar } from './Materials'
@@ -73,7 +73,7 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [activeItem, setActiveItem] = React.useState(data.navTop[0])
+  const [activeItem, setActiveItem] = useState(data.navTop[2])
   const { open, setOpen } = useSidebar()
 
   useEffect(() => {
