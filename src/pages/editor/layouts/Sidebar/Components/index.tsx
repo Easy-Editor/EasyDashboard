@@ -15,6 +15,22 @@ import { MaterialsSkeleton } from './MaterialsSkeleton'
 import { RemoteSnippet } from './RemoteSnippet'
 import { Snippet } from './Snippet'
 
+// 版本比较函数
+function compareVersions(v1: string, v2: string): number {
+  const parts1 = v1.split('.').map(Number)
+  const parts2 = v2.split('.').map(Number)
+
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const part1 = parts1[i] || 0
+    const part2 = parts2[i] || 0
+
+    if (part1 > part2) return 1
+    if (part1 < part2) return -1
+  }
+
+  return 0
+}
+
 export const ComponentSidebar = observer(() => {
   const componentMetasMap = project.designer.materials.getComponentMetasMap()
 
@@ -22,7 +38,33 @@ export const ComponentSidebar = observer(() => {
   const groupCategoryMap = React.useMemo(() => {
     const map = new Map<MaterialGroup | typeof DEBUG_GROUP, Map<string, ComponentMeta[]>>()
 
+    // 第一步：按基础组件名去重，保留最新版本
+    const deduplicatedMap = new Map<string, ComponentMeta>()
+
     componentMetasMap.forEach(meta => {
+      const metadata = meta.getMetadata()
+      const componentName = metadata.componentName
+
+      // 提取基础组件名（去除版本号）
+      const baseComponentName = componentName.includes('@') ? componentName.split('@')[0] : componentName
+
+      // 如果已存在，比较版本号
+      const existing = deduplicatedMap.get(baseComponentName)
+      if (!existing) {
+        deduplicatedMap.set(baseComponentName, meta)
+      } else {
+        // 比较版本号，保留较新的版本
+        const existingVersion = existing.getMetadata().componentName.split('@')[1] || '0.0.0'
+        const currentVersion = componentName.split('@')[1] || '0.0.0'
+
+        if (compareVersions(currentVersion, existingVersion) > 0) {
+          deduplicatedMap.set(baseComponentName, meta)
+        }
+      }
+    })
+
+    // 第二步：构建分类映射
+    deduplicatedMap.forEach(meta => {
       const metadata = meta.getMetadata()
       const group = (metadata.group as MaterialGroup | typeof DEBUG_GROUP) || 'basic'
       const category = metadata.category || 'default'

@@ -53,7 +53,16 @@ const configure: Configure = {
           type: 'group',
           key: 'advanced',
           title: '高级',
-          items: [],
+          items: [
+            {
+              name: 'nodeInfo',
+              title: '节点信息',
+              setter: 'NodeInfoSetter',
+              extraProps: {
+                label: false,
+              },
+            },
+          ],
         },
       ],
     },

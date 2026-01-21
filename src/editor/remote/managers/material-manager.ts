@@ -162,9 +162,7 @@ class MaterialManagerClass {
         // 使用版本化的 componentName 注册到物料系统
         const versionedComponentName = `${loaded.meta.componentName}@${version}`
 
-        materials.buildComponentMetasMap([{ ...loaded.meta, componentName: versionedComponentName }])
-
-        // 注册组件时使用版本化的 componentName
+        // 只调用一次 createComponentMeta，它会自动注册元数据和组件
         materials.createComponentMeta(
           { ...loaded.meta, componentName: versionedComponentName },
           {
@@ -280,7 +278,7 @@ class MaterialManagerClass {
    * @param version 目标版本
    */
   @action
-  async loadComponentVersion(packageName: string, version: string): Promise<void> {
+  async loadComponentVersion(packageName: string, version: string, originVersion: string): Promise<void> {
     const cacheKey = `${packageName}@${version}`
     const cached = this.remoteMaterialPackages.get(cacheKey)
 
@@ -288,12 +286,19 @@ class MaterialManagerClass {
       return // 已加载
     }
 
+    const originCacheKey = `${packageName}@${originVersion}`
+    const originCached = this.remoteMaterialPackages.get(originCacheKey)
+
+    if (!originCached) {
+      throw new Error(`Material ${packageName}@${originVersion} not found in cache`)
+    }
+
     try {
       // 加载完整物料（元数据 + 组件）
       const loaded = await materialLoader.loadMaterial({
         package: packageName,
         version,
-        globalName: cached?.globalName || '', // 如果缓存中没有，materialLoader 会自动解析
+        globalName: originCached?.globalName || '', // 如果缓存中没有，materialLoader 会自动解析
       })
 
       // 使用 runInAction 确保 MobX 响应式正确触发

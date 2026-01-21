@@ -1,5 +1,5 @@
 import { getProjectSchemaFromLocalStorage } from '@/lib/schema'
-import { init, materials, plugins, project } from '@easy-editor/core'
+import { init, materials, plugins, project, setters } from '@easy-editor/core'
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import DataSourcePlugin from '@easy-editor/plugin-datasource'
 import HotkeyPlugin from '@easy-editor/plugin-hotkey'
@@ -7,6 +7,7 @@ import { defaultProjectSchema } from './const'
 import { componentMetaMap } from './materials'
 import { pluginList } from './plugins'
 import { loadAllRemoteResources } from './remote'
+import { setterMap } from './setters'
 
 import './overrides.css'
 
@@ -26,7 +27,7 @@ plugins.registerPlugins([
   ...pluginList,
 ])
 materials.buildComponentMetasMap(Object.values(componentMetaMap))
-// setters.registerSetter(setterMap)
+setters.registerSetter(setterMap)
 
 await init({
   designMode: 'design',

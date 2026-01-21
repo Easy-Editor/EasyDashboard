@@ -23,11 +23,13 @@ import {
   Lock,
   PanelBottom,
   PanelTop,
+  RefreshCw,
   Trash2,
   Ungroup,
 } from 'lucide-react'
 import { observer } from 'mobx-react'
-import { Fragment, type PropsWithChildren } from 'react'
+import { Fragment, type PropsWithChildren, useState } from 'react'
+import { UpdateCheckDialog } from './UpdateCheckDialog'
 
 enum SelectionType {
   NONE = 'none',
@@ -343,6 +345,12 @@ const menuItems: MenuItem[] = [
     },
   },
   {
+    key: 'check-updates',
+    label: '检查组件更新',
+    icon: RefreshCw,
+    separator: true,
+  },
+  {
     key: 'delete',
     label: '删除',
     icon: Trash2,
@@ -370,13 +378,25 @@ const getMenuItems = (selectionType: SelectionType) => {
   let keys = []
   switch (selectionType) {
     case SelectionType.NONE:
-      keys = ['paste']
+      keys = ['paste', 'check-updates']
       break
     case SelectionType.SINGLE:
-      keys = ['layer', 'group', 'ungroup', 'copy', 'paste', 'cv', 'copy-paste-as', 'hide', 'lock', 'delete']
+      keys = [
+        'layer',
+        'group',
+        'ungroup',
+        'copy',
+        'paste',
+        'cv',
+        'copy-paste-as',
+        'hide',
+        'lock',
+        'check-updates',
+        'delete',
+      ]
       break
     case SelectionType.MULTIPLE:
-      keys = ['layer', 'group', 'ungroup', 'copy', 'paste', 'cv', 'hide', 'lock', 'delete']
+      keys = ['layer', 'group', 'ungroup', 'copy', 'paste', 'cv', 'hide', 'lock', 'check-updates', 'delete']
       break
   }
 
@@ -386,6 +406,8 @@ const getMenuItems = (selectionType: SelectionType) => {
 interface RendererContextMenuProps extends PropsWithChildren {}
 
 export const RendererContextMenu = observer(({ children }: RendererContextMenuProps) => {
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
+
   const currentDoc = project.currentDocument
   if (!currentDoc) {
     return children
@@ -397,45 +419,62 @@ export const RendererContextMenu = observer(({ children }: RendererContextMenuPr
     selected.length === 0 ? SelectionType.NONE : selected.length === 1 ? SelectionType.SINGLE : SelectionType.MULTIPLE
   const menuItems = getMenuItems(selectionType)
 
+  // 处理菜单项点击
+  const handleMenuItemClick = (item: MenuItem) => {
+    if (item.key === 'check-updates') {
+      setUpdateDialogOpen(true)
+    } else if (item.onClick) {
+      item.onClick()
+    }
+  }
+
   return (
-    <ContextMenu>
-      <ContextMenuTrigger className='w-full h-full'>{children}</ContextMenuTrigger>
-      <ContextMenuContent className='w-40'>
-        {menuItems.map(item => (
-          <Fragment key={item.key}>
-            {item.children ? (
-              <ContextMenuSub>
-                <ContextMenuSubTrigger className='text-xs h-8 px-2'>
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger className='w-full h-full'>{children}</ContextMenuTrigger>
+        <ContextMenuContent className='w-40'>
+          {menuItems.map(item => (
+            <Fragment key={item.key}>
+              {item.children ? (
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger className='text-xs h-8 px-2'>
+                    {item.icon && <item.icon className='w-4 h-4 mr-2' />}
+                    {item.label}
+                    {item.shortcut && <ContextMenuShortcut className='text-xs'>{item.shortcut}</ContextMenuShortcut>}
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className='w-32 text-xs'>
+                    {item.children.map(child => (
+                      <Fragment key={child.key}>
+                        <ContextMenuItem className='h-8 px-2 text-xs gap-0' onClick={child?.onClick}>
+                          {child.icon && <child.icon className='w-4 h-4 mr-2' />}
+                          {child.label}
+                          {child.shortcut && (
+                            <ContextMenuShortcut className='text-xs'>{child.shortcut}</ContextMenuShortcut>
+                          )}
+                        </ContextMenuItem>
+                        {child.separator && <ContextMenuSeparator className='my-1' />}
+                      </Fragment>
+                    ))}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
+              ) : (
+                <ContextMenuItem
+                  key={item.key}
+                  className='h-8 px-2 text-xs gap-0'
+                  onClick={() => handleMenuItemClick(item)}
+                >
                   {item.icon && <item.icon className='w-4 h-4 mr-2' />}
                   {item.label}
                   {item.shortcut && <ContextMenuShortcut className='text-xs'>{item.shortcut}</ContextMenuShortcut>}
-                </ContextMenuSubTrigger>
-                <ContextMenuSubContent className='w-32 text-xs'>
-                  {item.children.map(child => (
-                    <Fragment key={child.key}>
-                      <ContextMenuItem className='h-8 px-2 text-xs gap-0' onClick={child?.onClick}>
-                        {child.icon && <child.icon className='w-4 h-4 mr-2' />}
-                        {child.label}
-                        {child.shortcut && (
-                          <ContextMenuShortcut className='text-xs'>{child.shortcut}</ContextMenuShortcut>
-                        )}
-                      </ContextMenuItem>
-                      {child.separator && <ContextMenuSeparator className='my-1' />}
-                    </Fragment>
-                  ))}
-                </ContextMenuSubContent>
-              </ContextMenuSub>
-            ) : (
-              <ContextMenuItem key={item.key} className='h-8 px-2 text-xs gap-0' onClick={item?.onClick}>
-                {item.icon && <item.icon className='w-4 h-4 mr-2' />}
-                {item.label}
-                {item.shortcut && <ContextMenuShortcut className='text-xs'>{item.shortcut}</ContextMenuShortcut>}
-              </ContextMenuItem>
-            )}
-            {item.separator && <ContextMenuSeparator className='my-1' />}
-          </Fragment>
-        ))}
-      </ContextMenuContent>
-    </ContextMenu>
+                </ContextMenuItem>
+              )}
+              {item.separator && <ContextMenuSeparator className='my-1' />}
+            </Fragment>
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
+
+      <UpdateCheckDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} />
+    </>
   )
 })

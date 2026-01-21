@@ -44,7 +44,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             />
           </SidebarProvider>
         </main>
-        <Toaster />
+        <Toaster position='top-center' />
       </div>
       <AIChat />
     </div>

@@ -2,9 +2,9 @@ import type { FieldConfig } from '@easy-editor/core'
 
 export const generalBasicConfigure: FieldConfig[] = [
   {
-    name: 'id',
-    title: 'ID',
-    setter: 'NodeIdSetter',
+    name: 'nodeInfo',
+    title: '节点信息',
+    setter: 'NodeInfoSetter',
     extraProps: {
       label: false,
     },
@@ -60,6 +60,14 @@ export const generalAdvancedConfigure: FieldConfig[] = [
       },
     },
     items: [
+      {
+        name: 'nodeInfo',
+        title: '节点信息',
+        setter: 'NodeInfoSetter',
+        extraProps: {
+          label: false,
+        },
+      },
       {
         title: '显隐',
         setter: 'SwitchSetter',

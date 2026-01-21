@@ -11,7 +11,7 @@ export const remoteMaterialsConfig: RemoteMaterialConfig[] = [
   // basic
   {
     package: '@easy-editor/materials-dashboard-text',
-    version: '0.0.13',
+    version: '0.0.14',
     globalName: 'EasyEditorMaterialsText',
     enabled: true,
   },

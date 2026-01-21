@@ -22,6 +22,22 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { materialManager, remoteMaterialsConfig, RemoteLoadError } from '@/editor/remote'
 import { toast } from 'sonner'
 
+// 版本比较函数
+function compareVersions(v1: string, v2: string): number {
+  const parts1 = v1.split('.').map(Number)
+  const parts2 = v2.split('.').map(Number)
+
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const part1 = parts1[i] || 0
+    const part2 = parts2[i] || 0
+
+    if (part1 > part2) return 1
+    if (part1 < part2) return -1
+  }
+
+  return 0
+}
+
 interface RemoteMaterialDialogProps {
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -166,11 +182,47 @@ export const RemoteMaterialDialog = observer(({ open, onOpenChange }: RemoteMate
               <div className='border-t pt-4'>
                 <h4 className='mb-2 text-sm font-semibold'>已加载的远程物料：</h4>
                 <div className='space-y-1'>
-                  {loadedMaterials.map(m => (
-                    <div key={m.name} className='text-sm text-muted-foreground'>
-                      {m.name} - {m.metadata.title || m.metadata.componentName}
-                    </div>
-                  ))}
+                  {(() => {
+                    // 按基础组件名分组，显示所有版本
+                    const groupedMaterials = new Map<string, typeof loadedMaterials>()
+
+                    loadedMaterials.forEach(m => {
+                      const componentName = m.metadata.componentName
+                      const baseComponentName = componentName.includes('@')
+                        ? componentName.split('@')[0]
+                        : componentName
+
+                      if (!groupedMaterials.has(baseComponentName)) {
+                        groupedMaterials.set(baseComponentName, [])
+                      }
+                      groupedMaterials.get(baseComponentName)!.push(m)
+                    })
+
+                    return Array.from(groupedMaterials.entries()).map(([baseName, materials]) => {
+                      // 按版本号排序
+                      const sortedMaterials = materials.sort((a, b) => {
+                        const versionA = a.metadata.componentName.split('@')[1] || '0.0.0'
+                        const versionB = b.metadata.componentName.split('@')[1] || '0.0.0'
+                        return compareVersions(versionB, versionA) // 降序
+                      })
+
+                      return (
+                        <div key={baseName} className='text-sm'>
+                          <span className='font-medium'>{baseName}</span>
+                          <span className='text-muted-foreground ml-2'>
+                            (
+                            {sortedMaterials
+                              .map(m => {
+                                const version = m.metadata.componentName.split('@')[1] || 'unknown'
+                                return `v${version}`
+                              })
+                              .join(', ')}
+                            )
+                          </span>
+                        </div>
+                      )
+                    })
+                  })()}
                 </div>
               </div>
             )}

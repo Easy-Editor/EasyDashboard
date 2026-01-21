@@ -34,10 +34,11 @@ export class VersionResolver {
       return version
     }
 
-    // 对于 latest/stable 等标签，直接使用（CDN 支持）
+    // 对于 latest/stable 等标签，需要解析为具体版本号
     if (version === 'latest' || version === 'stable') {
-      this.cache.set(cacheKey, version)
-      return version
+      const resolved = await this.resolveFromRegistry(packageName, version)
+      this.cache.set(cacheKey, resolved)
+      return resolved
     }
 
     // 其他情况尝试从 npm registry 解析

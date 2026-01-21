@@ -5,3 +5,4 @@
 
 export { MaterialManagerClass, materialManager, type RemoteMaterialConfig } from './material-manager'
 export { SetterManagerClass, setterManager, type RemoteSetterConfig } from './setter-manager'
+export { VersionManagerClass, versionManager, type VersionCheckResult } from './version-manager'
