@@ -1,3 +1,4 @@
+import { RulerWrapper } from '@/components/editor/ruler'
 import { project } from '@easy-editor/core'
 import { SimulatorRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
@@ -5,6 +6,15 @@ import { RendererContextMenu } from './layouts/ContextMenu'
 
 const Renderer = observer(() => {
   const isEmpty = project.documents.length === 0
+  const simulator = project.simulator
+  const viewport = simulator?.viewport
+
+  // 获取画布尺寸
+  const canvasSize = {
+    width: viewport?.width ?? 1920,
+    height: viewport?.height ?? 1080,
+  }
+  const scale = viewport?.scale ?? 1
 
   if (isEmpty) {
     return (
@@ -72,7 +82,9 @@ const Renderer = observer(() => {
 
   return (
     <RendererContextMenu>
-      <SimulatorRenderer designer={project.designer} />
+      <RulerWrapper designer={project.designer} scale={scale} canvasSize={canvasSize}>
+        <SimulatorRenderer designer={project.designer} />
+      </RulerWrapper>
     </RendererContextMenu>
   )
 })

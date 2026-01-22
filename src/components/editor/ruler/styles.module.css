@@ -1,0 +1,177 @@
+/* 游尺基础样式 */
+.ruler {
+  position: relative;
+  background: var(--ruler-bg);
+  overflow: visible;
+  user-select: none;
+  cursor: crosshair;
+  flex-shrink: 0;
+  font-feature-settings: "tnum" 1;
+}
+
+.ruler.horizontal {
+  border-bottom: 1px solid var(--ruler-border);
+}
+
+.ruler.vertical {
+  border-right: 1px solid var(--ruler-border);
+}
+
+/* 刻度样式 */
+.tick {
+  position: absolute;
+}
+
+.tick[data-type="large"] {
+  background-color: var(--ruler-tick-major);
+}
+
+.tick[data-type="medium"] {
+  background-color: var(--ruler-tick-medium);
+}
+
+.tick[data-type="small"] {
+  background-color: var(--ruler-tick-minor);
+}
+
+.horizontal .tick {
+  width: 1px;
+}
+
+.vertical .tick {
+  height: 1px;
+}
+
+/* 刻度标签 */
+.tickLabel {
+  position: absolute;
+  font-size: 9px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--ruler-text);
+  line-height: 1;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+/* 水平游尺标签 */
+.horizontal .tickLabel {
+  transform: translateX(-50%);
+  top: 2px;
+}
+
+/* 垂直游尺标签 */
+.vertical .tickLabel {
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: center center;
+  left: -1px;
+}
+
+/* 鼠标位置指示器 */
+.cursor {
+  position: absolute;
+  pointer-events: none;
+  z-index: 10;
+  background-color: var(--ruler-cursor);
+  box-shadow: 0 0 4px var(--ruler-cursor-glow);
+}
+
+/* ========================================
+   游尺容器 - Grid 布局
+   ======================================== */
+.wrapper {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: 22px 1fr;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 左上角 */
+.corner {
+  grid-column: 1;
+  grid-row: 1;
+  width: 22px;
+  height: 22px;
+  background: var(--ruler-corner-bg);
+  border-right: 1px solid var(--ruler-corner-border);
+  border-bottom: 1px solid var(--ruler-corner-border);
+  z-index: 0;
+}
+
+/* 坐标标签 - 显示在画布 0,0 位置 */
+.coordsLabel {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  color: var(--ruler-coords-color);
+  background: var(--ruler-coords-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 50;
+  transform: translate(4px, 4px);
+}
+
+.horizontalRuler {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow: visible;
+  z-index: 1;
+}
+
+.verticalRuler {
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+  overflow: visible;
+  z-index: 1;
+}
+
+/* ========================================
+   画布区域
+   ======================================== */
+.canvasArea {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  background-color: var(--ruler-canvas-bg);
+}
+
+/* 网格背景 */
+.canvasGrid {
+  --grid-size: 20px;
+
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(var(--ruler-grid-color-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ruler-grid-color-major) 1px, transparent 1px),
+    linear-gradient(var(--ruler-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ruler-grid-color) 1px, transparent 1px);
+  background-size: calc(var(--grid-size) * 5 * var(--scale, 1)) calc(var(--grid-size) * 5 * var(--scale, 1)),
+    calc(var(--grid-size) * 5 * var(--scale, 1)) calc(var(--grid-size) * 5 * var(--scale, 1)),
+    calc(var(--grid-size) * var(--scale, 1)) calc(var(--grid-size) * var(--scale, 1)),
+    calc(var(--grid-size) * var(--scale, 1)) calc(var(--grid-size) * var(--scale, 1));
+  background-position: calc(var(--offset-x, 0) * 1px) calc(var(--offset-y, 0) * 1px);
+}
+
+/* ========================================
+   平移模式光标
+   ======================================== */
+.panMode {
+  cursor: grab !important;
+}
+
+.panMode.panning {
+  cursor: grabbing !important;
+}

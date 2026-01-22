@@ -133,7 +133,7 @@ const OutlineTree = observer(({ node, depth = 0 }: { node: Node<NodeSchema>; dep
       >
         <div className={styles.nodeContent}>
           <ComponentIcon className={styles.nodeIcon} />
-          <span className={styles.nodeName}>{node.componentName}</span>
+          <span className={styles.nodeName}>{node.title || node.componentName}</span>
         </div>
         <SidebarMenuExtra>
           <SidebarMenuExtraItem
@@ -175,7 +175,7 @@ const OutlineTree = observer(({ node, depth = 0 }: { node: Node<NodeSchema>; dep
               <ChevronRight className={styles.chevronIcon} />
             </CollapsibleTrigger>
             <ComponentIcon className={styles.nodeIcon} />
-            <span className={styles.nodeName}>{node.componentName}</span>
+            <span className={styles.nodeName}>{node.title || node.componentName}</span>
           </div>
           {!node.isRoot && (
             <SidebarMenuExtra>

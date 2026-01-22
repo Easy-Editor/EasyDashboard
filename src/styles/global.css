@@ -141,6 +141,25 @@
 
   /* ===== 悬浮阴影 ===== */
   --shadow-floating: 0 8px 30px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.06);
+
+  /* ===== 游尺系统 ===== */
+  --ruler-bg: hsl(0 0% 96%);
+  --ruler-border: hsl(0 0% 88%);
+  --ruler-tick-major: hsl(0 0% 40%);
+  --ruler-tick-medium: hsl(0 0% 58%);
+  --ruler-tick-minor: hsl(0 0% 75%);
+  --ruler-text: hsl(0 0% 35%);
+  --ruler-cursor: hsl(200 85% 45%);
+  --ruler-cursor-glow: hsl(200 85% 45% / 0.3);
+  --ruler-corner-bg: hsl(0 0% 96%);
+  --ruler-corner-border: hsl(0 0% 88%);
+  --ruler-coords-color: hsl(0 0% 40%);
+  --ruler-coords-bg: hsl(0 0% 96% / 0.9);
+  --ruler-canvas-bg: hsl(0 0% 98%);
+  --ruler-grid-color: hsl(0 0% 0% / 0.04);
+  --ruler-grid-color-major: hsl(0 0% 0% / 0.08);
+  --ruler-guideline-color: #ff3366;
+  --ruler-guideline-hover: #ff5588;
 }
 
 .dark {
@@ -216,6 +235,25 @@
   --grid-color-strong: hsl(0 0% 100% / 0.25);
   --border-tech: hsl(0 0% 22%);
   --shadow-floating: 0 8px 30px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.2);
+
+  /* ===== 游尺系统 - 暗色主题 ===== */
+  --ruler-bg: hsl(0 0% 12%);
+  --ruler-border: hsl(0 0% 18%);
+  --ruler-tick-major: hsl(0 0% 55%);
+  --ruler-tick-medium: hsl(0 0% 38%);
+  --ruler-tick-minor: hsl(0 0% 25%);
+  --ruler-text: hsl(0 0% 60%);
+  --ruler-cursor: hsl(200 80% 55%);
+  --ruler-cursor-glow: hsl(200 80% 55% / 0.4);
+  --ruler-corner-bg: hsl(0 0% 12%);
+  --ruler-corner-border: hsl(0 0% 18%);
+  --ruler-coords-color: hsl(0 0% 50%);
+  --ruler-coords-bg: hsl(0 0% 12% / 0.8);
+  --ruler-canvas-bg: hsl(0 0% 9%);
+  --ruler-grid-color: hsl(0 0% 100% / 0.04);
+  --ruler-grid-color-major: hsl(0 0% 100% / 0.08);
+  --ruler-guideline-color: #ff3366;
+  --ruler-guideline-hover: #ff5588;
 }
 
 @theme inline {

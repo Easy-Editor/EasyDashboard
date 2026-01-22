@@ -1,4 +1,5 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Input } from '@/components/ui/input'
 import {
   type MaterialCategory,
   MaterialCategoryLabel,
@@ -7,8 +8,9 @@ import {
 } from '@/editor/materials/type'
 import { materialManager } from '@/editor/remote'
 import { type ComponentMeta, project } from '@easy-editor/core'
+import { Search, X } from 'lucide-react'
 import { observer } from 'mobx-react'
-import React from 'react'
+import React, { useState } from 'react'
 import { DEBUG_GROUP, DebugSnippet } from './DebugSnippet'
 import { MaterialsMenu } from './MaterialsMenu'
 import { MaterialsSkeleton } from './MaterialsSkeleton'
@@ -33,10 +35,12 @@ function compareVersions(v1: string, v2: string): number {
 
 export const ComponentSidebar = observer(() => {
   const componentMetasMap = project.designer.materials.getComponentMetasMap()
+  const [searchTerm, setSearchTerm] = useState('')
 
   // 构建两级分类映射：group -> category -> components
   const groupCategoryMap = React.useMemo(() => {
     const map = new Map<MaterialGroup | typeof DEBUG_GROUP, Map<string, ComponentMeta[]>>()
+    const searchLower = searchTerm.toLowerCase().trim()
 
     // 第一步：按基础组件名去重，保留最新版本
     const deduplicatedMap = new Map<string, ComponentMeta>()
@@ -50,9 +54,7 @@ export const ComponentSidebar = observer(() => {
 
       // 如果已存在，比较版本号
       const existing = deduplicatedMap.get(baseComponentName)
-      if (!existing) {
-        deduplicatedMap.set(baseComponentName, meta)
-      } else {
+      if (existing) {
         // 比较版本号，保留较新的版本
         const existingVersion = existing.getMetadata().componentName.split('@')[1] || '0.0.0'
         const currentVersion = componentName.split('@')[1] || '0.0.0'
@@ -60,14 +62,32 @@ export const ComponentSidebar = observer(() => {
         if (compareVersions(currentVersion, existingVersion) > 0) {
           deduplicatedMap.set(baseComponentName, meta)
         }
+      } else {
+        deduplicatedMap.set(baseComponentName, meta)
       }
     })
 
-    // 第二步：构建分类映射
+    // 第二步：构建分类映射（带搜索过滤）
     deduplicatedMap.forEach(meta => {
       const metadata = meta.getMetadata()
       const group = (metadata.group as MaterialGroup | typeof DEBUG_GROUP) || 'basic'
       const category = metadata.category || 'default'
+
+      // 搜索过滤：检查组件名称、标题、snippets 标题
+      if (searchLower) {
+        const componentName = metadata.componentName.toLowerCase()
+        const title = (metadata.title || '').toLowerCase()
+        const snippetTitles = metadata.snippets?.map(s => s.title?.toLowerCase() || '') || []
+
+        const matchesSearch =
+          componentName.includes(searchLower) ||
+          title.includes(searchLower) ||
+          snippetTitles.some(t => t.includes(searchLower))
+
+        if (!matchesSearch) {
+          return
+        }
+      }
 
       // 初始化 group
       if (!map.has(group)) {
@@ -85,7 +105,7 @@ export const ComponentSidebar = observer(() => {
     })
 
     return map
-  }, [componentMetasMap])
+  }, [componentMetasMap, searchTerm])
 
   // 分离调试组和普通组
   const debugCategoryMap = groupCategoryMap.get(DEBUG_GROUP) || new Map()
@@ -97,13 +117,34 @@ export const ComponentSidebar = observer(() => {
   return (
     <div className='flex flex-col overflow-y-auto'>
       {/* 顶部工具栏 */}
-      <div className='flex items-center justify-between px-4 py-2 border-b'>
+      <div className='flex items-center justify-between px-4 py-2 border-b border-border/50'>
         <span className='text-sm font-medium'>Components</span>
         <MaterialsMenu />
       </div>
 
+      {/* 搜索框 */}
+      <div className='relative px-4 py-3 border-b border-border/30'>
+        <Search className='absolute left-7 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none' />
+        <Input
+          placeholder='Search materials...'
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className='pl-9 h-9 bg-muted/30 border-border/50 focus:border-primary/50 transition-colors text-sm placeholder:text-sm'
+        />
+        {searchTerm && (
+          <button
+            type='button'
+            onClick={() => setSearchTerm('')}
+            className='absolute right-7 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors'
+            aria-label='Clear search'
+          >
+            <X className='h-3 w-3' />
+          </button>
+        )}
+      </div>
+
       {/* 物料列表 */}
-      <div className='px-4'>
+      <div className='px-4 pt-2'>
         {/* 加载中的骨架屏 */}
         {materialManager.isLoading ? (
           <MaterialsSkeleton />

@@ -1,4 +1,5 @@
 overrides:
   '@easy-editor/core': link:../EasyEditor/packages/core
+  '@easy-editor/plugin-dashboard': link:../EasyEditor/packages/plugin-dashboard
   '@easy-editor/react-renderer': link:../EasyEditor/packages/react-renderer
   '@easy-editor/react-renderer-dashboard': link:../EasyEditor/packages/react-renderer-dashboard

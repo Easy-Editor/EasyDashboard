@@ -1,32 +1,14 @@
+:root {
+  --simulator-top-distance: 0px;
+  --simulator-bottom-distance: 0px;
+  --simulator-left-distance: 0px;
+  --simulator-right-distance: 0px;
+}
+
 .lc-project {
   .lc-simulator {
     background-color: unset !important;
-
-    /* 三层网格背景 */
-    /* 主网格 100px */
-    background-image: linear-gradient(var(--grid-color-strong) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-color-strong) 1px, transparent 1px), /* 中网格 50px */
-      linear-gradient(var(--grid-color) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-color) 1px, transparent 1px), /* 基础网格 10px */
-      linear-gradient(var(--grid-color) 0.5px, transparent 0.5px),
-      linear-gradient(90deg, var(--grid-color) 0.5px, transparent 0.5px);
-    background-size: 100px 100px, 100px 100px, 50px 50px, 50px 50px, 10px 10px, 10px 10px;
-    background-position: 0 0;
   }
-}
-
-/* 暗色模式画布增强 */
-.dark .lc-project .lc-simulator {
-  /* 径向渐变背景 */
-  background-color: hsl(0 0% 9%);
-  background-image: radial-gradient(ellipse 80% 60% at 50% 50%, hsl(0 0% 12%) 0%, hsl(0 0% 9%) 100%), /* 网格系统 */
-    linear-gradient(var(--grid-color-strong) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-color-strong) 1px, transparent 1px),
-    linear-gradient(var(--grid-color) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px),
-    linear-gradient(var(--grid-color) 0.5px, transparent 0.5px),
-    linear-gradient(90deg, var(--grid-color) 0.5px, transparent 0.5px);
-  background-size: 100% 100%, 100px 100px, 100px 100px, 50px 50px, 50px 50px, 10px 10px, 10px 10px;
 }
 
 /* 组件选中框发光效果 */

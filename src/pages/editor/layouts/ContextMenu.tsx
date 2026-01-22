@@ -431,7 +431,7 @@ export const RendererContextMenu = observer(({ children }: RendererContextMenuPr
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger className='w-full h-full'>{children}</ContextMenuTrigger>
+        <ContextMenuTrigger className='flex flex-1 min-w-0 min-h-0'>{children}</ContextMenuTrigger>
         <ContextMenuContent className='w-40'>
           {menuItems.map(item => (
             <Fragment key={item.key}>
