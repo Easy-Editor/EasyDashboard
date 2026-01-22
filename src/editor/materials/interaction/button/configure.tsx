@@ -776,8 +776,6 @@ const configure: Configure = {
                           })
                           return item
                         })
-
-                      console.log('target', target.getNode().export())
                     },
                   },
                 },

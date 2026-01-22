@@ -30,33 +30,11 @@ export const loadRemoteMaterialsFromComponentsMap = async (componentsMap?: Compo
   }
 
   if (remoteMaterials.length > 0) {
-    console.log(`[EasyEditor] Loading ${remoteMaterials.length} remote material metas from componentsMap...`)
     try {
-      await materialManager.loadMetaMultiple(remoteMaterials)
-      console.log('[EasyEditor] Remote material metas from componentsMap loaded successfully')
+      const loaded = await materialManager.loadFullMultiple(remoteMaterials)
+      console.log('loadRemoteMaterialsFromComponentsMap', loaded)
     } catch (error) {
       console.error('[EasyEditor] Failed to load remote material metas from componentsMap:', error)
     }
   }
-}
-
-/**
- * 自动批量加载所有远程组件代码（后台异步，不阻塞）
- */
-export const autoLoadAllRemoteComponents = async () => {
-  const packages = materialManager.getLoadedPackages()
-  const pendingPackages = packages.filter(p => !p.hasComponent)
-
-  if (pendingPackages.length === 0) {
-    return
-  }
-
-  console.log(`[EasyEditor] Auto-loading ${pendingPackages.length} remote components...`)
-
-  // 并行加载所有组件
-  const results = await Promise.allSettled(pendingPackages.map(p => materialManager.addComponent(p.name)))
-
-  const succeeded = results.filter(r => r.status === 'fulfilled').length
-  const failed = results.filter(r => r.status === 'rejected').length
-  console.log(`[EasyEditor] Auto-load completed: ${succeeded} success, ${failed} failed`)
 }

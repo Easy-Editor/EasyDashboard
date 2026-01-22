@@ -3,7 +3,7 @@
  * 远程资源模块统一导出
  */
 
-import { loadingState, RemoteLoadError } from '@easy-editor/core'
+import { loadingState } from '@easy-editor/core'
 import { remoteMaterialsConfig, remoteSettersConfig } from './config'
 import { materialManager, setterManager } from './managers'
 
@@ -27,7 +27,6 @@ export async function loadRemoteMaterialsMeta(): Promise<void> {
     return
   }
 
-  console.log(`[Remote] Loading ${remoteMaterialsConfig.length} remote material metas...`)
   await materialManager.loadMetaMultiple(remoteMaterialsConfig)
 }
 
@@ -39,7 +38,6 @@ export async function loadRemoteSetters(): Promise<void> {
     return
   }
 
-  console.log(`[Remote] Loading ${remoteSettersConfig.length} remote setter packages...`)
   await setterManager.loadMultiple(remoteSettersConfig)
 }
 

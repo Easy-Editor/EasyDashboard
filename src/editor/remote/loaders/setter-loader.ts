@@ -5,9 +5,9 @@
 
 import {
   type LoadOptions,
-  type SetterInfo,
   RemoteLoadError,
   RemoteLoadErrorType,
+  type SetterInfo,
   loadingState,
   resourceRegistry,
 } from '@easy-editor/core'
@@ -154,7 +154,6 @@ export class SetterLoader {
     this.registerToGlobal(globalName, setterExports)
 
     loadingState.updateProgress(cacheKey, 100)
-    console.log(`[SetterLoader] Loaded: ${cacheKey}`, setterExports)
     return setterExports
   }
 

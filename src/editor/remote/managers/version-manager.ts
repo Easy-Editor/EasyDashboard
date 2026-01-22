@@ -140,8 +140,6 @@ class VersionManagerClass {
         this.checkCache.delete(node.id)
         node.refreshSettingEntry()
       })
-
-      console.log(`[VersionManager] Node ${node.id} updated from ${originVersion} to ${targetVersion}`)
     } catch (error) {
       console.error(`[VersionManager] Failed to update node ${node.id}:`, error)
 

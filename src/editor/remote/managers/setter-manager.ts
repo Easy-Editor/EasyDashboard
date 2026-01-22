@@ -83,7 +83,6 @@ class SetterManagerClass {
       // 2. 注册到 setters 系统
       if (loaded.setterMap) {
         setters.registerSetter(loaded.setterMap as Record<string, unknown>)
-        console.log(`[SetterManager] Registered setters:`, Object.keys(loaded.setterMap))
       }
 
       // 3. 缓存
@@ -95,8 +94,6 @@ class SetterManagerClass {
           customFieldItem: loaded.customFieldItem,
         })
       })
-
-      console.log(`[SetterManager] Registered: ${packageName}@${version}`)
     } catch (error) {
       console.error(`[SetterManager] Failed: ${packageName}@${version}`, error)
       throw error
@@ -119,8 +116,6 @@ class SetterManagerClass {
 
       const succeeded = results.filter(r => r.status === 'fulfilled').length
       const failed = results.filter(r => r.status === 'rejected').length
-
-      console.log(`[SetterManager] Batch complete: ${succeeded} success, ${failed} failed`)
 
       return {
         total: configs.length,

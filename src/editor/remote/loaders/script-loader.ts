@@ -144,7 +144,6 @@ export class ScriptLoader {
 
       link.onload = () => {
         this.loadedCSS.add(cssKey)
-        console.log(`[ScriptLoader] CSS loaded: ${url}`)
         resolve()
       }
 
@@ -220,7 +219,6 @@ export class ScriptLoader {
       script.onload = () => {
         clearTimeout(timeoutId)
         this.loadedScripts.add(id)
-        console.log(`[ScriptLoader] Script loaded: ${url}`)
         resolve()
       }
 

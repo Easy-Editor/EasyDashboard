@@ -9,8 +9,8 @@
  * - Vite HMR 热更新
  */
 
-import { materials, MaterialSource } from '@easy-editor/core'
 import type { Component, ComponentMetadata } from '@easy-editor/core'
+import { MaterialSource, materials } from '@easy-editor/core'
 import { runInAction } from 'mobx'
 
 /** 物料连接配置 */
@@ -167,7 +167,6 @@ class LocalMaterialLoaderClass extends EventEmitter {
         meta: module.meta,
       })
 
-      console.log(`[LocalMaterialLoader] Connected to ${normalizedUrl}`, module.meta.componentName)
       return module
     } catch (error) {
       this.emit('error', { url: normalizedUrl, error })
@@ -214,8 +213,6 @@ class LocalMaterialLoaderClass extends EventEmitter {
       url: normalizedUrl,
       componentName: connection.componentName,
     })
-
-    console.log(`[LocalMaterialLoader] Disconnected from ${normalizedUrl}`)
   }
 
   /**
@@ -322,14 +319,12 @@ class LocalMaterialLoaderClass extends EventEmitter {
           window as unknown as { __federation_get?: (remote: string, module: string) => Promise<unknown> }
         ).__federation_get
         if (getModule) {
-          console.log('[LocalMaterialLoader] Using Module Federation to load module')
           const module = await getModule('materials_audio', './Audio')
           return module as LoadedMaterialModule
         }
       }
 
       // 回退到普通的动态 import
-      console.log('[LocalMaterialLoader] Falling back to dynamic import')
       const moduleUrl = `${baseUrl}${entry}?t=${Date.now()}&v=${version}`
       const module = await import(/* @vite-ignore */ moduleUrl)
       return module
@@ -376,7 +371,7 @@ class LocalMaterialLoaderClass extends EventEmitter {
     runInAction(() => {
       // 注册物料，标记为本地调试物料
       materials.createComponentMeta(registrationMeta, {
-        source: MaterialSource.LOCAL_DEBUG,
+        source: MaterialSource.DEBUG,
         component,
       })
 
@@ -391,8 +386,6 @@ class LocalMaterialLoaderClass extends EventEmitter {
       // 强制刷新 componentMetasMap
       materials.refreshComponentMetasMap()
     })
-
-    console.log(`[LocalMaterialLoader] Registered material: ${meta.componentName}`)
   }
 
   /**
@@ -404,12 +397,9 @@ class LocalMaterialLoaderClass extends EventEmitter {
       const wsProtocol = url.startsWith('https') ? 'wss' : 'ws'
       const wsUrl = `${url.replace(/^https?/, wsProtocol)}${wsPath}`
 
-      console.log(`[LocalMaterialLoader] Connecting to WebSocket: ${wsUrl}`)
-
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
-        console.log(`[LocalMaterialLoader] HMR WebSocket connected to ${wsUrl}`)
         this.emit('ws:connected', { url })
 
         // 重置重连状态
@@ -423,12 +413,9 @@ class LocalMaterialLoaderClass extends EventEmitter {
       ws.onmessage = async event => {
         try {
           const data = JSON.parse(event.data)
-          console.log('[LocalMaterialLoader] WebSocket message:', data.type)
 
           if (data.type === 'connected') {
-            console.log('[LocalMaterialLoader] Server acknowledged connection')
           } else if (data.type === 'update') {
-            console.log('[LocalMaterialLoader] HMR update detected, reloading module...')
             await this.handleHMRUpdate(url, info)
           }
         } catch {
@@ -442,7 +429,6 @@ class LocalMaterialLoaderClass extends EventEmitter {
       }
 
       ws.onclose = () => {
-        console.log('[LocalMaterialLoader] HMR WebSocket closed')
         this.emit('ws:closed', { url })
         this.scheduleReconnect(url, info)
       }
@@ -480,10 +466,6 @@ class LocalMaterialLoaderClass extends EventEmitter {
     connection.reconnect.retries++
     connection.reconnect.isReconnecting = true
 
-    console.log(
-      `[LocalMaterialLoader] Scheduling reconnection attempt ${connection.reconnect.retries}/${WS_RECONNECT_CONFIG.maxRetries} in ${delay}ms`,
-    )
-
     this.emit('ws:reconnecting', { url, attempt: connection.reconnect.retries, delay })
 
     if (connection.reconnect.timer) {
@@ -495,7 +477,6 @@ class LocalMaterialLoaderClass extends EventEmitter {
         return
       }
 
-      console.log(`[LocalMaterialLoader] Attempting reconnection ${connection.reconnect.retries}`)
       const newWs = this.setupViteHMR(url, info)
       if (newWs) {
         connection.ws = newWs
@@ -523,8 +504,6 @@ class LocalMaterialLoaderClass extends EventEmitter {
           componentName: module.meta.componentName,
           module,
         })
-
-        console.log('[LocalMaterialLoader] HMR update completed')
       }
     } catch (error) {
       console.error('[LocalMaterialLoader] HMR update failed:', error)

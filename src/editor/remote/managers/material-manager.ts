@@ -101,8 +101,6 @@ class MaterialManagerClass {
           hasComponent: false,
         })
       })
-
-      console.log(`[MaterialManager] Meta registered: ${packageName}@${version}`)
     } catch (error) {
       console.error(`[MaterialManager] Failed to load meta: ${packageName}@${version}`, error)
       throw error
@@ -125,8 +123,6 @@ class MaterialManagerClass {
 
       const succeeded = results.filter(r => r.status === 'fulfilled').length
       const failed = results.filter(r => r.status === 'rejected').length
-
-      console.log(`[MaterialManager] Batch meta load: ${succeeded} success, ${failed} failed`)
 
       return {
         total: configs.length,
@@ -185,12 +181,37 @@ class MaterialManagerClass {
         })
       })
 
-      console.log(`[MaterialManager] Full material registered: ${packageName}@${version}`)
-      console.log('[MaterialManager] componentsMap:', materials.componentsMap)
       return loaded
     } catch (error) {
       console.error(`[MaterialManager] Failed to load full material: ${packageName}@${version}`, error)
       throw error
+    }
+  }
+
+  /**
+   * 批量加载远程物料元数据
+   */
+  @action
+  async loadFullMultiple(configs: RemoteMaterialConfig[]): Promise<{
+    total: number
+    succeeded: number
+    failed: number
+  }> {
+    this.isLoading = true
+
+    try {
+      const results = await Promise.allSettled(configs.map(config => this.loadFull(config)))
+
+      const succeeded = results.filter(r => r.status === 'fulfilled').length
+      const failed = results.filter(r => r.status === 'rejected').length
+
+      return {
+        total: configs.length,
+        succeeded,
+        failed,
+      }
+    } finally {
+      this.isLoading = false
     }
   }
 
@@ -262,10 +283,6 @@ class MaterialManagerClass {
           hasComponent: true,
         })
       })
-
-      console.log('[MaterialManager] componentsMap after registration:', materials.componentsMap)
-
-      console.log(`[MaterialManager] Component registered to materials: ${packageName}@${cached.version}`)
     } catch (error) {
       console.error(`[MaterialManager] Failed to add component: ${packageName}`, error)
       throw error
@@ -325,8 +342,6 @@ class MaterialManagerClass {
           hasComponent: true,
         })
       })
-
-      console.log(`[MaterialManager] Component version loaded: ${packageName}@${version}`)
     } catch (error) {
       console.error(`[MaterialManager] Failed to load component version: ${packageName}@${version}`, error)
       throw error
@@ -347,8 +362,6 @@ class MaterialManagerClass {
 
     const succeeded = results.filter(r => r.status === 'fulfilled').length
     const failed = results.filter(r => r.status === 'rejected').length
-
-    console.log(`[MaterialManager] Batch full load: ${succeeded} success, ${failed} failed`)
 
     return {
       total: configs.length,

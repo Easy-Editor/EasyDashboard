@@ -1,5 +1,5 @@
 import { getProjectSchemaFromLocalStorage } from '@/lib/schema'
-import { init, materials, plugins, project, setters } from '@easy-editor/core'
+import { type ProjectSchema, init, materials, plugins, project, setters } from '@easy-editor/core'
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import DataSourcePlugin from '@easy-editor/plugin-datasource'
 import HotkeyPlugin from '@easy-editor/plugin-hotkey'
@@ -7,6 +7,7 @@ import { defaultProjectSchema } from './const'
 import { componentMetaMap } from './materials'
 import { pluginList } from './plugins'
 import { loadAllRemoteResources } from './remote'
+import { loadRemoteMaterialsFromComponentsMap } from './remote/util'
 import { setterMap } from './setters'
 
 import './overrides.css'
@@ -44,9 +45,11 @@ project.onSimulatorReady(simulator => {
 
 const initProjectSchema = async () => {
   // 从本地获取
-  const projectSchema = getProjectSchemaFromLocalStorage()
+  const projectSchema = getProjectSchemaFromLocalStorage() as ProjectSchema
   if (projectSchema) {
     project.load(projectSchema, true)
+    // 异步加载远程组件
+    loadRemoteMaterialsFromComponentsMap(projectSchema.componentsMap)
   } else {
     project.load(defaultProjectSchema, true)
   }
@@ -55,10 +58,6 @@ const initProjectSchema = async () => {
 initProjectSchema()
 
 // 异步加载远程资源
-loadAllRemoteResources()
-  .then(result => {
-    console.log('[Remote] Resources loaded:', result)
-  })
-  .catch(error => {
-    console.error('[Remote] Failed to load resources:', error)
-  })
+loadAllRemoteResources().catch(error => {
+  console.error('[Remote] Failed to load resources:', error)
+})

@@ -197,7 +197,6 @@ export class MaterialLoader {
       this.registerToGlobal(globalName, result)
     }
 
-    console.log(`[MaterialLoader] Component added: ${cacheKey}`)
     return component
   }
 
@@ -284,7 +283,6 @@ export class MaterialLoader {
     this.registerToGlobal(globalName, result)
 
     loadingState.updateProgress(cacheKey, 100)
-    console.log(`[MaterialLoader] Loaded: ${cacheKey}`, result)
     return result
   }
 
@@ -334,7 +332,6 @@ export class MaterialLoader {
 
     this.registerToGlobal(globalName, { meta })
 
-    console.log(`[MaterialLoader] Meta loaded: ${cacheKey}`, meta)
     return meta
   }
 
