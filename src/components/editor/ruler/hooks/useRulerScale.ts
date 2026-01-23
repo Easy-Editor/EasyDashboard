@@ -74,7 +74,8 @@ export function useRulerScale(options: UseRulerScaleOptions): UseRulerScaleResul
     const ticks: Tick[] = []
 
     // 计算可见范围（画布坐标）
-    const startCanvas = -offset
+    // offset 现在是屏幕位置 0 对应的画布坐标
+    const startCanvas = offset
     const endCanvas = startCanvas + length / scale
 
     // 对齐到小刻度

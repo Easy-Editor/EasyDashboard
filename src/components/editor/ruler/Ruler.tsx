@@ -31,10 +31,12 @@ export const Ruler = memo<RulerProps>(({ type, scale, length, offset, canvasSize
   const isHorizontal = type === 'horizontal'
 
   // 计算刻度
+  // offset 是画布原点在屏幕上的位置（屏幕像素）
+  // useRulerScale 需要的是屏幕位置 0 对应的画布坐标 = -offset / scale
   const { ticks } = useRulerScale({
     scale,
     length,
-    offset: offset / scale,
+    offset: -offset / scale,
     canvasSize,
   })
 

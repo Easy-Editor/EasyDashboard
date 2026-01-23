@@ -1,6 +1,6 @@
 import type { Designer } from '@easy-editor/core'
 import { observer } from 'mobx-react'
-import { useCallback, useEffect, useRef, useState, type FC, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FC, type ReactNode } from 'react'
 import { useCanvasPan } from './hooks/useCanvasPan'
 import { Ruler } from './Ruler'
 import styles from './styles.module.css'
@@ -32,9 +32,9 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
     const horizontalRulerRef = useRef<HTMLDivElement>(null)
     const verticalRulerRef = useRef<HTMLDivElement>(null)
 
-    const [cursorPos, setCursorPos] = useState<{ x?: number; y?: number }>({})
+    const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
     const [rulerDimensions, setRulerDimensions] = useState({ width: 0, height: 0 })
-    const [canvasAreaSize, setCanvasAreaSize] = useState({ width: 0, height: 0 })
+    const [canvasOrigin, setCanvasOrigin] = useState({ x: 0, y: 0 })
 
     // 画布平移
     const { offset, isSpacePressed, isPanning } = useCanvasPan({
@@ -42,66 +42,91 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
       enabled: enablePan,
     })
 
-    const canvasOrigin = {
-      x: canvasAreaSize.width / 2 - (canvasSize.width * scale) / 2,
-      y: canvasAreaSize.height / 2 - (canvasSize.height * scale) / 2,
-    }
+    // 更新游尺尺寸
+    const updateRulerDimensions = useCallback(() => {
+      const hRuler = horizontalRulerRef.current
+      const vRuler = verticalRulerRef.current
+      if (!hRuler || !vRuler) return
 
-    // 监听游尺容器尺寸变化和 scale 变化
-    useEffect(() => {
-      const updateDimensions = () => {
-        const hRuler = horizontalRulerRef.current
-        const vRuler = verticalRulerRef.current
-        const canvasArea = canvasAreaRef.current
-        if (hRuler && vRuler) {
-          setRulerDimensions({
-            width: hRuler.offsetWidth,
-            height: vRuler.offsetHeight,
-          })
-        }
-        if (canvasArea) {
-          setCanvasAreaSize({
-            width: canvasArea.offsetWidth,
-            height: canvasArea.offsetHeight,
-          })
-        }
-      }
+      setRulerDimensions({
+        width: hRuler.offsetWidth,
+        height: vRuler.offsetHeight,
+      })
+    }, [])
 
-      // 初始测量
-      updateDimensions()
+    // 更新画布原点位置（通过 DOM 查询获取准确位置）
+    const updateCanvasOrigin = useCallback(() => {
+      const container = canvasAreaRef.current
+      if (!container) return
 
-      // 使用 ResizeObserver 监听尺寸变化
+      const viewport = container.querySelector('.lc-simulator-canvas-viewport')
+      if (!viewport) return
+
+      const viewportRect = viewport.getBoundingClientRect()
+      const containerRect = container.getBoundingClientRect()
+
+      setCanvasOrigin({
+        x: viewportRect.left - containerRect.left,
+        y: viewportRect.top - containerRect.top,
+      })
+    }, [])
+
+    // 监听容器尺寸变化
+    useLayoutEffect(() => {
+      const wrapper = wrapperRef.current
+      const canvasArea = canvasAreaRef.current
+      if (!wrapper || !canvasArea) return
+
+      updateRulerDimensions()
+      updateCanvasOrigin()
+
       const resizeObserver = new ResizeObserver(() => {
-        updateDimensions()
+        updateRulerDimensions()
+        updateCanvasOrigin()
+      })
+      resizeObserver.observe(wrapper)
+      resizeObserver.observe(canvasArea)
+
+      return () => resizeObserver.disconnect()
+    }, [updateRulerDimensions, updateCanvasOrigin])
+
+    // 监听 viewport 元素变化
+    useEffect(() => {
+      const container = canvasAreaRef.current
+      if (!container) return
+
+      const mutationObserver = new MutationObserver(updateCanvasOrigin)
+      mutationObserver.observe(container, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
       })
 
-      if (wrapperRef.current) {
-        resizeObserver.observe(wrapperRef.current)
-      }
-      if (canvasAreaRef.current) {
-        resizeObserver.observe(canvasAreaRef.current)
-      }
+      return () => mutationObserver.disconnect()
+    }, [updateCanvasOrigin])
 
-      return () => {
-        resizeObserver.disconnect()
-      }
-    }, [scale])
+    // 监听 scale 变化
+    useEffect(() => {
+      updateCanvasOrigin()
+    }, [scale, updateCanvasOrigin])
 
-    // 鼠标移动更新位置
+    // 鼠标移动更新坐标
     const handleMouseMove = useCallback(
       (e: React.MouseEvent) => {
-        if (!canvasAreaRef.current) return
-        const rect = canvasAreaRef.current.getBoundingClientRect()
-        // 计算相对于画布原点的坐标
-        const x = (e.clientX - rect.left - canvasOrigin.x - offset.x) / scale
-        const y = (e.clientY - rect.top - canvasOrigin.y - offset.y) / scale
+        const container = canvasAreaRef.current
+        if (!container) return
+
+        const rect = container.getBoundingClientRect()
+        const x = (e.clientX - rect.left - canvasOrigin.x) / scale
+        const y = (e.clientY - rect.top - canvasOrigin.y) / scale
         setCursorPos({ x, y })
       },
-      [canvasOrigin, offset, scale],
+      [canvasOrigin, scale],
     )
 
     const handleMouseLeave = useCallback(() => {
-      setCursorPos({})
+      setCursorPos(null)
     }, [])
 
     // 添加辅助线
@@ -119,12 +144,12 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
       [designer],
     )
 
-    // 计算网格样式
+    // 网格样式
     const gridStyle: React.CSSProperties = showGrid
       ? ({
           '--scale': scale,
-          '--offset-x': offset.x,
-          '--offset-y': offset.y,
+          '--offset-x': canvasOrigin.x,
+          '--offset-y': canvasOrigin.y,
         } as React.CSSProperties)
       : {}
 
@@ -134,8 +159,14 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
 
     return (
       <div ref={wrapperRef} className={styles.wrapper}>
-        {/* 左上角 */}
-        <div className={styles.corner} />
+        {/* 左上角 + 坐标显示 */}
+        <div className={styles.corner}>
+          {cursorPos && (
+            <span className={styles.coordsLabel}>
+              {Math.round(cursorPos.x)}, {Math.round(cursorPos.y)}
+            </span>
+          )}
+        </div>
 
         {/* 水平游尺 */}
         <div ref={horizontalRulerRef} className={styles.horizontalRuler}>
@@ -143,9 +174,9 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
             type='horizontal'
             scale={scale}
             length={rulerDimensions.width}
-            offset={canvasOrigin.x + offset.x}
+            offset={canvasOrigin.x}
             canvasSize={canvasSize.width}
-            cursorPosition={cursorPos.x}
+            cursorPosition={cursorPos?.x}
             onAddGuideLine={handleAddVerticalGuideLine}
           />
         </div>
@@ -156,9 +187,9 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
             type='vertical'
             scale={scale}
             length={rulerDimensions.height}
-            offset={canvasOrigin.y + offset.y}
+            offset={canvasOrigin.y}
             canvasSize={canvasSize.height}
-            cursorPosition={cursorPos.y}
+            cursorPosition={cursorPos?.y}
             onAddGuideLine={handleAddHorizontalGuideLine}
           />
         </div>
@@ -173,15 +204,10 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
           {/* 网格背景 */}
           {showGrid && <div className={styles.canvasGrid} style={gridStyle} />}
 
-          {/* 坐标显示 */}
-          {cursorPos.x !== undefined && cursorPos.y !== undefined && (
-            <div className={styles.coordsLabel} style={{ left: offset.x, top: offset.y }}>
-              {Math.round(cursorPos.x)}, {Math.round(cursorPos.y)}
-            </div>
-          )}
-
           {/* 画布内容 */}
-          {children}
+          <div className={styles.canvasContent} style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}>
+            {children}
+          </div>
         </div>
       </div>
     )

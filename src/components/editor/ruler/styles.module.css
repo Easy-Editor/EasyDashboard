@@ -99,12 +99,20 @@
   background: var(--ruler-corner-bg);
   border-right: 1px solid var(--ruler-corner-border);
   border-bottom: 1px solid var(--ruler-corner-border);
-  z-index: 0;
+  z-index: 10;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* 坐标标签 - 显示在画布 0,0 位置 */
+/* 坐标标签 - 固定在左上角 */
 .coordsLabel {
   position: absolute;
+  left: 100%;
+  top: 100%;
+  margin-left: 4px;
+  margin-top: 4px;
   font-size: 10px;
   font-weight: 500;
   font-family: "SF Mono", Monaco, Consolas, monospace;
@@ -114,8 +122,7 @@
   border-radius: 3px;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 50;
-  transform: translate(4px, 4px);
+  z-index: 100;
 }
 
 .horizontalRuler {
@@ -145,6 +152,13 @@
   min-width: 0;
   min-height: 0;
   background-color: var(--ruler-canvas-bg);
+}
+
+/* 画布内容容器 - 用于平移 */
+.canvasContent {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
 }
 
 /* 网格背景 */
