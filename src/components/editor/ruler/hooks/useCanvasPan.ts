@@ -16,6 +16,14 @@ interface UseCanvasPanOptions {
   enabled?: boolean
   /** 偏移量变化回调 */
   onOffsetChange?: (offset: { x: number; y: number }) => void
+  /** 当前缩放比例 */
+  scale?: number
+  /** 缩放变化回调 */
+  onScaleChange?: (scale: number) => void
+  /** 最小缩放比例 */
+  minScale?: number
+  /** 最大缩放比例 */
+  maxScale?: number
 }
 
 interface UseCanvasPanResult extends CanvasPanState {
@@ -30,7 +38,15 @@ interface UseCanvasPanResult extends CanvasPanState {
  * 按住空格键 + 拖动鼠标实现画布平移
  */
 export function useCanvasPan(options: UseCanvasPanOptions): UseCanvasPanResult {
-  const { containerRef, enabled = true, onOffsetChange } = options
+  const {
+    containerRef,
+    enabled = true,
+    onOffsetChange,
+    scale = 1,
+    onScaleChange,
+    minScale = 0.1,
+    maxScale = 3,
+  } = options
 
   const [offset, setOffsetState] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
@@ -116,6 +132,28 @@ export function useCanvasPan(options: UseCanvasPanOptions): UseCanvasPanResult {
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [enabled, isSpacePressed, isPanning, startPos, startOffset, offset, setOffset, containerRef])
+
+  // 滚轮缩放处理
+  useEffect(() => {
+    if (!enabled || !isSpacePressed || !onScaleChange) return
+
+    const container = containerRef.current
+    if (!container) return
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      // 向上滚动放大，向下滚动缩小
+      const delta = e.deltaY > 0 ? -0.1 : 0.1
+      const newScale = Math.max(minScale, Math.min(maxScale, scale + delta))
+      onScaleChange(newScale)
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel)
+    }
+  }, [enabled, isSpacePressed, scale, onScaleChange, minScale, maxScale, containerRef])
 
   return {
     offset,

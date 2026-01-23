@@ -19,6 +19,12 @@ export interface RulerWrapperProps {
   showGrid?: boolean
   /** 是否启用平移 */
   enablePan?: boolean
+  /** 缩放变化回调 */
+  onScaleChange?: (scale: number) => void
+  /** 最小缩放比例 */
+  minScale?: number
+  /** 最大缩放比例 */
+  maxScale?: number
 }
 
 /**
@@ -26,7 +32,18 @@ export interface RulerWrapperProps {
  * 包裹画布，提供游尺和辅助线功能
  */
 export const RulerWrapper: FC<RulerWrapperProps> = observer(
-  ({ designer, children, scale, canvasSize, showRuler = true, showGrid = true, enablePan = true }) => {
+  ({
+    designer,
+    children,
+    scale,
+    canvasSize,
+    showRuler = true,
+    showGrid = true,
+    enablePan = true,
+    onScaleChange,
+    minScale = 0.1,
+    maxScale = 3,
+  }) => {
     const wrapperRef = useRef<HTMLDivElement>(null)
     const canvasAreaRef = useRef<HTMLDivElement>(null)
     const horizontalRulerRef = useRef<HTMLDivElement>(null)
@@ -40,6 +57,10 @@ export const RulerWrapper: FC<RulerWrapperProps> = observer(
     const { offset, isSpacePressed, isPanning } = useCanvasPan({
       containerRef: canvasAreaRef,
       enabled: enablePan,
+      scale,
+      onScaleChange,
+      minScale,
+      maxScale,
     })
 
     // 更新游尺尺寸

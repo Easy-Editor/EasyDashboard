@@ -2,6 +2,7 @@ import { RulerWrapper } from '@/components/editor/ruler'
 import { project } from '@easy-editor/core'
 import { SimulatorRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
+import { useCallback } from 'react'
 import { RendererContextMenu } from './layouts/ContextMenu'
 
 const Renderer = observer(() => {
@@ -15,6 +16,16 @@ const Renderer = observer(() => {
     height: viewport?.height ?? 1080,
   }
   const scale = viewport?.scale ?? 1
+
+  // 缩放变化回调
+  const handleScaleChange = useCallback(
+    (newScale: number) => {
+      if (viewport) {
+        viewport.scale = newScale
+      }
+    },
+    [viewport],
+  )
 
   if (isEmpty) {
     return (
@@ -82,7 +93,7 @@ const Renderer = observer(() => {
 
   return (
     <RendererContextMenu>
-      <RulerWrapper designer={project.designer} scale={scale} canvasSize={canvasSize}>
+      <RulerWrapper designer={project.designer} scale={scale} canvasSize={canvasSize} onScaleChange={handleScaleChange}>
         <SimulatorRenderer designer={project.designer} />
       </RulerWrapper>
     </RendererContextMenu>
