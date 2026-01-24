@@ -1,3 +1,4 @@
+import { project } from '@easy-editor/core'
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 
 interface CanvasPanState {
@@ -47,6 +48,7 @@ export function useCanvasPan(options: UseCanvasPanOptions): UseCanvasPanResult {
     minScale = 0.1,
     maxScale = 3,
   } = options
+  const marqueeSelection = project.designer.marqueeSelection
 
   const [offset, setOffsetState] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
@@ -74,6 +76,8 @@ export function useCanvasPan(options: UseCanvasPanOptions): UseCanvasPanResult {
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault()
         setIsSpacePressed(true)
+        // 拖拽画布时，禁用框选
+        marqueeSelection.enabled = false
       }
     }
 
@@ -81,6 +85,7 @@ export function useCanvasPan(options: UseCanvasPanOptions): UseCanvasPanResult {
       if (e.code === 'Space') {
         setIsSpacePressed(false)
         setIsPanning(false)
+        marqueeSelection.enabled = true
       }
     }
 
