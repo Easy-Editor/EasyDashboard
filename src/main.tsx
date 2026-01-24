@@ -10,7 +10,7 @@ initGlobals()
 
 if (typeof window !== 'undefined') {
   scan({
-    enabled: true,
+    enabled: false,
     log: false,
   })
 }

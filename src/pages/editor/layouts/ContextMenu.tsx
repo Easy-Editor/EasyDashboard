@@ -26,6 +26,14 @@ import {
   RefreshCw,
   Trash2,
   Ungroup,
+  AlignStartVertical,
+  AlignEndVertical,
+  AlignCenterVertical,
+  AlignStartHorizontal,
+  AlignEndHorizontal,
+  AlignCenterHorizontal,
+  AlignHorizontalDistributeCenter,
+  AlignVerticalDistributeCenter,
 } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { Fragment, type PropsWithChildren, useState } from 'react'
@@ -136,6 +144,62 @@ const menuItems: MenuItem[] = [
             node.levelDown()
           }
         },
+      },
+    ],
+  },
+  {
+    key: 'align',
+    label: '对齐',
+    icon: AlignCenterVertical,
+    children: [
+      {
+        key: 'align-left',
+        label: '左对齐',
+        icon: AlignStartVertical,
+        onClick: () => project.designer.alignment.alignLeft(),
+      },
+      {
+        key: 'align-right',
+        label: '右对齐',
+        icon: AlignEndVertical,
+        onClick: () => project.designer.alignment.alignRight(),
+      },
+      {
+        key: 'align-top',
+        label: '上对齐',
+        icon: AlignStartHorizontal,
+        onClick: () => project.designer.alignment.alignTop(),
+      },
+      {
+        key: 'align-bottom',
+        label: '下对齐',
+        icon: AlignEndHorizontal,
+        onClick: () => project.designer.alignment.alignBottom(),
+      },
+      {
+        key: 'align-h-center',
+        label: '水平居中',
+        icon: AlignCenterVertical,
+        onClick: () => project.designer.alignment.alignHorizontalCenter(),
+      },
+      {
+        key: 'align-v-center',
+        label: '垂直居中',
+        icon: AlignCenterHorizontal,
+        separator: true,
+        onClick: () => project.designer.alignment.alignVerticalCenter(),
+      },
+      {
+        key: 'distribute-h',
+        label: '水平分布',
+        icon: AlignHorizontalDistributeCenter,
+        onClick: () => project.designer.alignment.distributeHorizontal(),
+      },
+      {
+        key: 'distribute-v',
+        label: '垂直分布',
+        icon: AlignVerticalDistributeCenter,
+        onClick: () => project.designer.alignment.distributeVertical(),
       },
     ],
   },
@@ -396,7 +460,7 @@ const getMenuItems = (selectionType: SelectionType) => {
       ]
       break
     case SelectionType.MULTIPLE:
-      keys = ['layer', 'group', 'ungroup', 'copy', 'paste', 'cv', 'hide', 'lock', 'check-updates', 'delete']
+      keys = ['layer', 'align', 'group', 'ungroup', 'copy', 'paste', 'cv', 'hide', 'lock', 'check-updates', 'delete']
       break
   }
 
