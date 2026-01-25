@@ -11,6 +11,14 @@ import {
 } from '@/components/ui/context-menu'
 import { TRANSFORM_STAGE, insertChildren, project } from '@easy-editor/core'
 import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalDistributeCenter,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalDistributeCenter,
   ArrowDown,
   ArrowUp,
   Clipboard,
@@ -23,17 +31,12 @@ import {
   Lock,
   PanelBottom,
   PanelTop,
+  Redo2,
   RefreshCw,
+  Scissors,
   Trash2,
+  Undo2,
   Ungroup,
-  AlignStartVertical,
-  AlignEndVertical,
-  AlignCenterVertical,
-  AlignStartHorizontal,
-  AlignEndHorizontal,
-  AlignCenterHorizontal,
-  AlignHorizontalDistributeCenter,
-  AlignVerticalDistributeCenter,
 } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { Fragment, type PropsWithChildren, useState } from 'react'
@@ -48,7 +51,7 @@ enum SelectionType {
 interface MenuItem {
   key: string
   label: string
-  icon?: React.ComponentType
+  icon?: React.ComponentType<{ className?: string }>
   children?: MenuItem[]
   separator?: boolean
   shortcut?: string
@@ -65,20 +68,12 @@ const menuItems: MenuItem[] = [
         key: 'layer-top',
         label: '置顶',
         icon: PanelTop,
+        shortcut: '⌘⇧↑',
         onClick: () => {
-          const selection = project.designer.selection
-          if (!selection) {
-            return
-          }
-
-          const selected = selection.getTopNodes(false)
-          if (!selected || selected.length < 1) {
-            return
-          }
-
+          const selected = project.designer.selection.getTopNodes(false)
+          if (!selected?.length) return
           for (let i = selected.length - 1; i >= 0; i--) {
-            const node = selected[i]
-            node.levelTop()
+            selected[i].levelBottom() // 视觉置顶 = levelBottom
           }
         },
       },
@@ -86,20 +81,12 @@ const menuItems: MenuItem[] = [
         key: 'layer-bottom',
         label: '置底',
         icon: PanelBottom,
+        shortcut: '⌘⇧↓',
         onClick: () => {
-          const selection = project.designer.selection
-          if (!selection) {
-            return
-          }
-
-          const selected = selection.getTopNodes(false)
-          if (!selected || selected.length < 1) {
-            return
-          }
-
+          const selected = project.designer.selection.getTopNodes(false)
+          if (!selected?.length) return
           for (let i = selected.length - 1; i >= 0; i--) {
-            const node = selected[i]
-            node.levelBottom()
+            selected[i].levelTop() // 视觉置底 = levelTop
           }
         },
       },
@@ -107,20 +94,14 @@ const menuItems: MenuItem[] = [
         key: 'layer-up',
         label: '上移一层',
         icon: ArrowUp,
+        shortcut: '⌘↑',
         onClick: () => {
-          const selection = project.designer.selection
-          if (!selection) {
-            return
-          }
-
-          const selected = selection.getTopNodes(false)
-          if (!selected || selected.length < 1) {
-            return
-          }
-
+          const selected = project.designer.selection.getTopNodes(false)
+          if (!selected?.length) return
           for (let i = selected.length - 1; i >= 0; i--) {
             const node = selected[i]
-            node.levelUp()
+            if (node.parent && node.index >= node.parent.childrenNodes.length - 1) continue
+            node.levelDown() // 视觉上移 = levelDown
           }
         },
       },
@@ -128,20 +109,14 @@ const menuItems: MenuItem[] = [
         key: 'layer-down',
         label: '下移一层',
         icon: ArrowDown,
+        shortcut: '⌘↓',
         onClick: () => {
-          const selection = project.designer.selection
-          if (!selection) {
-            return
-          }
-
-          const selected = selection.getTopNodes(false)
-          if (!selected || selected.length < 1) {
-            return
-          }
-
+          const selected = project.designer.selection.getTopNodes(false)
+          if (!selected?.length) return
           for (let i = selected.length - 1; i >= 0; i--) {
             const node = selected[i]
-            node.levelDown()
+            if (node.index <= 0) continue
+            node.levelUp() // 视觉下移 = levelUp
           }
         },
       },
@@ -207,12 +182,36 @@ const menuItems: MenuItem[] = [
     key: 'group',
     label: '成组',
     icon: Group,
+    shortcut: '⌘G',
+    onClick: () => {
+      const doc = project.currentDocument
+      const selection = project.designer.selection
+      if (!doc) return
+      const selected = selection.getTopNodes(false)
+      if (!selected || selected.length < 2) return
+      const groupNode = (doc as any).group(selected.map((n: any) => n.id))
+      if (groupNode) selection.select(groupNode.id)
+    },
   },
   {
     key: 'ungroup',
     label: '取消成组',
     icon: Ungroup,
+    shortcut: '⌘⇧G',
     separator: true,
+    onClick: () => {
+      const doc = project.currentDocument
+      const selection = project.designer.selection
+      if (!doc) return
+      const selected = selection.getTopNodes(false)
+      if (!selected?.length) return
+      for (const node of selected) {
+        if (node.isGroup) {
+          ;(doc as any).ungroup(node)
+        }
+      }
+      selection.clear()
+    },
   },
   {
     key: 'copy',
@@ -220,20 +219,29 @@ const menuItems: MenuItem[] = [
     icon: ClipboardCopy,
     shortcut: '⌘C',
     async onClick() {
-      const doc = project.currentDocument
-      if (!doc) {
-        return
-      }
-
       const selected = project.designer.selection.getTopNodes(false)
-      if (!selected || selected.length < 1) {
-        return
-      }
-
+      if (!selected?.length) return
       const componentsTree = selected.map(item => item?.export(TRANSFORM_STAGE.CLONE))
       const data = { type: 'NodeSchema', componentsMap: {}, componentsTree }
-
       await navigator.clipboard.writeText(JSON.stringify(data))
+    },
+  },
+  {
+    key: 'cut',
+    label: '剪切',
+    icon: Scissors,
+    shortcut: '⌘X',
+    async onClick() {
+      const selection = project.designer.selection
+      const selected = selection.getTopNodes(false)
+      if (!selected?.length) return
+      const componentsTree = selected.map(item => item?.export(TRANSFORM_STAGE.CLONE))
+      const data = { type: 'NodeSchema', componentsMap: {}, componentsTree }
+      await navigator.clipboard.writeText(JSON.stringify(data))
+      for (const node of selected) {
+        node.remove()
+      }
+      selection.clear()
     },
   },
   {
@@ -244,52 +252,34 @@ const menuItems: MenuItem[] = [
     async onClick() {
       const doc = project.currentDocument
       const selection = project.designer.selection
-      if (!doc) {
-        return
-      }
-
-      const data = JSON.parse(await navigator.clipboard.readText())
-      if (data.componentsTree) {
-        const target = doc?.rootNode
-
-        if (!target) {
-          return
+      if (!doc) return
+      try {
+        const data = JSON.parse(await navigator.clipboard.readText())
+        if (data.componentsTree) {
+          const nodes = insertChildren(doc.rootNode!, data.componentsTree)
+          if (nodes) selection.selectAll(nodes.map(o => o.id))
         }
-
-        const nodes = insertChildren(target, data.componentsTree)
-        if (nodes) {
-          selection.selectAll(nodes.map(o => o.id))
-        }
-      }
+      } catch {}
     },
   },
   {
     key: 'cv',
     label: '拷贝',
     icon: ClipboardPen,
+    shortcut: '⌘D',
     onClick() {
       const doc = project.currentDocument
       const selection = project.designer.selection
-      if (!doc) {
-        return
-      }
-
+      if (!doc) return
       const selected = selection.getTopNodes(false)
-      if (!selected || selected.length < 1) {
-        return
-      }
-
+      if (!selected?.length) return
       const newNodesId: string[] = []
       for (const node of selected) {
-        const cloneNodeSchema = node.export(TRANSFORM_STAGE.CLONE)
-        // 添加偏移
-        cloneNodeSchema.$dashboard!.rect!.x = (cloneNodeSchema.$dashboard!.rect!.x ?? 0) + 10
-        cloneNodeSchema.$dashboard!.rect!.y = (cloneNodeSchema.$dashboard!.rect!.y ?? 0) + 10
-        // 插入
-        const newNode = doc.insertNode(node.parent!, cloneNodeSchema, node.index + 1)
-        if (newNode) {
-          newNodesId.push(newNode.id)
-        }
+        const cloneSchema = node.export(TRANSFORM_STAGE.CLONE)
+        cloneSchema.$dashboard!.rect!.x = (cloneSchema.$dashboard!.rect!.x ?? 0) + 10
+        cloneSchema.$dashboard!.rect!.y = (cloneSchema.$dashboard!.rect!.y ?? 0) + 10
+        const newNode = doc.insertNode(node.parent!, cloneSchema, node.index + 1)
+        if (newNode) newNodesId.push(newNode.id)
       }
       selection.selectAll(newNodesId)
     },
@@ -325,19 +315,9 @@ const menuItems: MenuItem[] = [
     icon: Eye,
     shortcut: '⌘⇧H',
     onClick() {
-      const selection = project.designer.selection
-      if (!selection) {
-        return
-      }
-
-      const selected = selection.getTopNodes(false)
-      if (!selected || selected.length < 1) {
-        return
-      }
-
-      for (const node of selected) {
-        node.hide(false)
-      }
+      const selected = project.designer.selection.getTopNodes(false)
+      if (!selected?.length) return
+      for (const node of selected) node.hide(false)
     },
   },
   {
@@ -347,18 +327,9 @@ const menuItems: MenuItem[] = [
     shortcut: '⌘⇧H',
     onClick() {
       const selection = project.designer.selection
-      if (!selection) {
-        return
-      }
-
       const selected = selection.getTopNodes(false)
-      if (!selected || selected.length < 1) {
-        return
-      }
-
-      for (const node of selected) {
-        node.hide()
-      }
+      if (!selected?.length) return
+      for (const node of selected) node.hide()
       selection.clear()
     },
   },
@@ -370,18 +341,9 @@ const menuItems: MenuItem[] = [
     separator: true,
     onClick() {
       const selection = project.designer.selection
-      if (!selection) {
-        return
-      }
-
       const selected = selection.getTopNodes(false)
-      if (!selected || selected.length < 1) {
-        return
-      }
-
-      for (const node of selected) {
-        node.lock(false)
-      }
+      if (!selected?.length) return
+      for (const node of selected) node.lock(false)
       selection.clear()
     },
   },
@@ -393,18 +355,9 @@ const menuItems: MenuItem[] = [
     separator: true,
     onClick() {
       const selection = project.designer.selection
-      if (!selection) {
-        return
-      }
-
       const selected = selection.getTopNodes(false)
-      if (!selected || selected.length < 1) {
-        return
-      }
-
-      for (const node of selected) {
-        node.lock()
-      }
+      if (!selected?.length) return
+      for (const node of selected) node.lock()
       selection.clear()
     },
   },
@@ -415,34 +368,44 @@ const menuItems: MenuItem[] = [
     separator: true,
   },
   {
+    key: 'undo',
+    label: '撤销',
+    icon: Undo2,
+    shortcut: '⌘Z',
+    onClick() {
+      project.currentDocument?.history.back()
+    },
+  },
+  {
+    key: 'redo',
+    label: '重做',
+    icon: Redo2,
+    shortcut: '⌘Y',
+    separator: true,
+    onClick() {
+      project.currentDocument?.history.forward()
+    },
+  },
+  {
     key: 'delete',
     label: '删除',
     icon: Trash2,
     shortcut: 'Del',
     onClick() {
       const selection = project.designer.selection
-      if (!selection) {
-        return
-      }
-
       const selected = selection.getTopNodes(false)
-      if (!selected || selected.length < 1) {
-        return
-      }
-
-      for (const node of selected) {
-        node.remove()
-      }
+      if (!selected?.length) return
+      for (const node of selected) node.remove()
       selection.clear()
     },
   },
 ]
 
 const getMenuItems = (selectionType: SelectionType) => {
-  let keys = []
+  let keys: string[] = []
   switch (selectionType) {
     case SelectionType.NONE:
-      keys = ['paste', 'check-updates']
+      keys = ['paste', 'undo', 'redo', 'check-updates']
       break
     case SelectionType.SINGLE:
       keys = [
@@ -450,17 +413,35 @@ const getMenuItems = (selectionType: SelectionType) => {
         'group',
         'ungroup',
         'copy',
+        'cut',
         'paste',
         'cv',
         'copy-paste-as',
         'hide',
         'lock',
+        'undo',
+        'redo',
         'check-updates',
         'delete',
       ]
       break
     case SelectionType.MULTIPLE:
-      keys = ['layer', 'align', 'group', 'ungroup', 'copy', 'paste', 'cv', 'hide', 'lock', 'check-updates', 'delete']
+      keys = [
+        'layer',
+        'align',
+        'group',
+        'ungroup',
+        'copy',
+        'cut',
+        'paste',
+        'cv',
+        'hide',
+        'lock',
+        'undo',
+        'redo',
+        'check-updates',
+        'delete',
+      ]
       break
   }
 
@@ -495,7 +476,7 @@ export const RendererContextMenu = observer(({ children }: RendererContextMenuPr
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger className='flex flex-1 min-w-0 min-h-0'>{children}</ContextMenuTrigger>
+        <ContextMenuTrigger className='flex flex-1 min-w-0 min-h-0 w-full'>{children}</ContextMenuTrigger>
         <ContextMenuContent className='w-40'>
           {menuItems.map(item => (
             <Fragment key={item.key}>

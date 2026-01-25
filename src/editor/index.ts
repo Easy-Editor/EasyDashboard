@@ -2,7 +2,6 @@ import { getProjectSchemaFromLocalStorage } from '@/lib/schema'
 import { type ProjectSchema, init, materials, plugins, project, setters } from '@easy-editor/core'
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import DataSourcePlugin from '@easy-editor/plugin-datasource'
-import HotkeyPlugin from '@easy-editor/plugin-hotkey'
 import { defaultProjectSchema } from './const'
 import { componentMetaMap } from './materials'
 import { pluginList } from './plugins'
@@ -23,7 +22,6 @@ plugins.registerPlugins([
       },
     },
   }),
-  HotkeyPlugin(),
   DataSourcePlugin(),
   ...pluginList,
 ])

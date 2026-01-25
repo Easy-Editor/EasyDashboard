@@ -20,7 +20,8 @@
       "Bash(dir:*)",
       "Bash(pnpm format:*)",
       "Bash(pnpm build:*)",
-      "Bash(pnpm build:prod:*)"
+      "Bash(pnpm build:prod:*)",
+      "Bash(pushd:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -1,6 +1,6 @@
-import HotKeyMoveNodePlugin from './plugin-hotkey-move-node'
+import HotkeyPlugin from './plugin-hotkey'
 
 /**
- * 插件
+ * 插件列表
  */
-export const pluginList = [HotKeyMoveNodePlugin()]
+export const pluginList = [HotkeyPlugin()]
