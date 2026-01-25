@@ -138,14 +138,12 @@ const OutlineTree = observer(({ node, depth = 0 }: { node: Node<NodeSchema>; dep
         <SidebarMenuExtra>
           <SidebarMenuExtraItem
             className={cn(styles.actionButton, (isShowExtra || node.isHidden) && styles.actionButtonVisible)}
-            data-active={node.isHidden}
             onClick={handleHide}
           >
             {node.isHidden ? <EyeOff /> : <Eye />}
           </SidebarMenuExtraItem>
           <SidebarMenuExtraItem
             className={cn(styles.actionButton, (isShowExtra || node.isLocked) && styles.actionButtonVisible)}
-            data-active={node.isLocked}
             onClick={handleLock}
           >
             {node.isLocked ? <LockKeyhole /> : <LockKeyholeOpen />}

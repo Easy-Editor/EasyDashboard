@@ -41,6 +41,10 @@ project.onSimulatorReady(simulator => {
   simulator.set('deviceStyle', { viewport: { width: 1920, height: 1080 } })
 })
 
+project.onRendererReady(() => {
+  project.documents[0].rootNode?.select()
+})
+
 const initProjectSchema = async () => {
   // 从本地获取
   const projectSchema = getProjectSchemaFromLocalStorage() as ProjectSchema
