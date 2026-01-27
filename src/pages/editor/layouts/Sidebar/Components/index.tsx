@@ -109,6 +109,7 @@ export const ComponentSidebar = observer(() => {
 
   // 分离调试组和普通组
   const debugCategoryMap = groupCategoryMap.get(DEBUG_GROUP) || new Map()
+  const hasMultipleDebugCategories = debugCategoryMap.size > 1 || !debugCategoryMap.has('default')
   groupCategoryMap.delete(DEBUG_GROUP)
 
   // 对普通组排序
@@ -153,7 +154,7 @@ export const ComponentSidebar = observer(() => {
             {/* 调试中的物料组（如果有） */}
             {debugCategoryMap.size > 0 && (
               <AccordionItem value={DEBUG_GROUP}>
-                <AccordionTrigger className='text-green-600 hover:text-green-700 py-3 hover:bg-accent/30 rounded-md transition-all duration-200'>
+                <AccordionTrigger className='py-2.5 px-3 text-green-600 hover:text-green-700 hover:bg-accent/30 rounded-md transition-all duration-200'>
                   <span className='flex items-center gap-2'>
                     <span className='relative flex h-3 w-3'>
                       <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75' />
@@ -162,31 +163,48 @@ export const ComponentSidebar = observer(() => {
                     <span className='font-semibold'>调试中</span>
                   </span>
                 </AccordionTrigger>
-                <AccordionContent className='transition-all data-[state=closed]:animate-[accordion-up_300ms_ease-out] data-[state=open]:animate-[accordion-down_400ms_ease-out]'>
+                <AccordionContent className='pt-2 pb-3 px-2 transition-all data-[state=closed]:animate-[accordion-up_300ms_ease-out] data-[state=open]:animate-[accordion-down_400ms_ease-out]'>
                   {/* 调试组的二级分类 */}
-                  <Accordion type='single' collapsible className='pl-2'>
-                    {Array.from(debugCategoryMap.entries()).map(([category, components]) => (
-                      <AccordionItem key={category} value={category}>
-                        <AccordionTrigger className='py-2 text-sm hover:bg-accent/30 rounded-md transition-all duration-200'>
-                          {MaterialCategoryLabel[category as MaterialCategory] || category}
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className='grid grid-cols-2 gap-2 p-2'>
-                            {components.map(component => {
-                              const metadata = component.getMetadata()
-                              return metadata.snippets?.map(snippet => (
-                                <DebugSnippet
-                                  key={`${component.componentName}-${snippet.title}`}
-                                  snippet={snippet}
-                                  componentMeta={component}
-                                />
-                              ))
-                            })}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
+                  {hasMultipleDebugCategories ? (
+                    <Accordion type='single' collapsible className='pl-2'>
+                      {Array.from(debugCategoryMap.entries()).map(([category, components]) => (
+                        <AccordionItem key={category} value={category}>
+                          <AccordionTrigger className='py-2.5 px-4 text-sm hover:bg-accent/30 rounded-md transition-all duration-200'>
+                            {MaterialCategoryLabel[category as MaterialCategory] || category}
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className='grid grid-cols-2 gap-2 p-2'>
+                              {components.map(component => {
+                                const metadata = component.getMetadata()
+                                return metadata.snippets?.map(snippet => (
+                                  <DebugSnippet
+                                    key={`${component.componentName}-${snippet.title}`}
+                                    snippet={snippet}
+                                    componentMeta={component}
+                                  />
+                                ))
+                              })}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  ) : (
+                    Array.from(debugCategoryMap.entries()).map(([category, components]) => (
+                      <div key={category} className='grid grid-cols-2 gap-2 p-2'>
+                        {components.map(component => {
+                          const metadata = component.getMetadata()
+                          return metadata.snippets?.map(snippet => (
+                            <DebugSnippet
+                              key={`${component.componentName}-${snippet.title}`}
+                              snippet={snippet}
+                              componentMeta={component}
+                            />
+                          ))
+                        })}
+                      </div>
+                    ))
+                  )}
                 </AccordionContent>
               </AccordionItem>
             )}
@@ -211,7 +229,7 @@ export const ComponentSidebar = observer(() => {
                             .sort((a, b) => a[0].localeCompare(b[0]))
                             .map(([category, components]) => (
                               <AccordionItem key={category} value={category}>
-                                <AccordionTrigger className='py-2 text-sm font-normal hover:bg-accent/30 rounded-md transition-all duration-200'>
+                                <AccordionTrigger className='py-2.5 px-4 text-sm font-normal hover:bg-accent/30 rounded-md transition-all duration-200'>
                                   {MaterialCategoryLabel[category as MaterialCategory] || category}
                                 </AccordionTrigger>
                                 <AccordionContent>
@@ -223,12 +241,16 @@ export const ComponentSidebar = observer(() => {
                                       return metadata.snippets?.map(snippet =>
                                         isRemoteMaterial ? (
                                           <RemoteSnippet
-                                            key={snippet.title}
+                                            key={`${component.componentName}-${snippet.title}`}
                                             snippet={snippet}
                                             componentMeta={component}
                                           />
                                         ) : (
-                                          <Snippet key={snippet.title} snippet={snippet} componentMeta={component} />
+                                          <Snippet
+                                            key={`${component.componentName}-${snippet.title}`}
+                                            snippet={snippet}
+                                            componentMeta={component}
+                                          />
                                         ),
                                       )
                                     })}
@@ -246,9 +268,17 @@ export const ComponentSidebar = observer(() => {
 
                             return metadata.snippets?.map(snippet =>
                               isRemoteMaterial ? (
-                                <RemoteSnippet key={snippet.title} snippet={snippet} componentMeta={component} />
+                                <RemoteSnippet
+                                  key={`${component.componentName}-${snippet.title}`}
+                                  snippet={snippet}
+                                  componentMeta={component}
+                                />
                               ) : (
-                                <Snippet key={snippet.title} snippet={snippet} componentMeta={component} />
+                                <Snippet
+                                  key={`${component.componentName}-${snippet.title}`}
+                                  snippet={snippet}
+                                  componentMeta={component}
+                                />
                               ),
                             )
                           })}

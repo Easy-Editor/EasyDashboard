@@ -15,8 +15,8 @@ import { CircleFadingArrowUp } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { VersionCheckResult } from '../../../remote/managers'
-import { versionManager } from '../../../remote/managers'
+import type { VersionCheckResult } from '../../remote/managers'
+import { versionManager } from '../../remote/managers'
 
 interface NodeInfoSetterProps extends SetterProps<unknown> {}
 

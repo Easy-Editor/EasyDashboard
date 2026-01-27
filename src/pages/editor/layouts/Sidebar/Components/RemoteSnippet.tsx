@@ -207,27 +207,48 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
   return (
     <Card
       ref={ref}
+      aria-label={`Drag ${snippet.title} to canvas (Remote)`}
+      tabIndex={0}
       className={cn(
-        'cursor-move select-none aspect-square hover:scale-105 transition-all duration-300',
+        'group relative overflow-hidden cursor-move select-none aspect-square',
+        'border border-blue-500/40 bg-card/60 backdrop-blur-sm',
+        'transition-all duration-200 ease-out',
+        'hover:bg-card hover:border-blue-500/60 hover:shadow-md hover:scale-[1.02]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50',
+        'active:scale-[0.98]',
         isLoading && 'opacity-50 cursor-wait',
       )}
       onDoubleClick={handleDoubleClick}
       onDragStart={handleDragStart}
       draggable={true}
     >
-      <CardContent
-        className={cn(
-          snippet.screenshot ? 'justify-between' : 'justify-center',
-          'flex flex-col items-center w-full h-full p-4 relative',
+      <CardContent className='relative flex flex-col items-center justify-between w-full h-full p-2.5 gap-1.5'>
+        {snippet.screenshot ? (
+          <div className='flex-1 w-full flex items-center justify-center rounded-md overflow-hidden bg-muted/30'>
+            <img
+              src={snippet.screenshot}
+              alt={`Preview of ${snippet.title}`}
+              className='w-full h-full object-contain transition-transform duration-200 group-hover:scale-105'
+              loading='lazy'
+            />
+          </div>
+        ) : (
+          <div className='flex-1 w-full flex items-center justify-center rounded-md bg-muted/30'>
+            <span className='text-muted-foreground/50 text-xs'>No preview</span>
+          </div>
         )}
-      >
-        {snippet.screenshot && <img src={snippet.screenshot} alt={snippet.title} className='object-cover' />}
-        <span className='w-full text-sm font-medium text-center overflow-hidden text-ellipsis whitespace-nowrap'>
+        <span
+          className={cn(
+            'w-full text-xs font-medium text-center line-clamp-1',
+            'text-muted-foreground group-hover:text-foreground',
+            'transition-colors duration-150',
+          )}
+        >
           {snippet.title}
         </span>
         {isLoading && (
-          <div className='absolute inset-0 flex items-center justify-center bg-background/50 rounded'>
-            <div className='text-xs text-muted-foreground'>loading...</div>
+          <div className='absolute inset-0 flex items-center justify-center bg-background/80 rounded-lg'>
+            <div className='text-xs text-muted-foreground'>Loading...</div>
           </div>
         )}
       </CardContent>
