@@ -1,15 +1,5 @@
+import Group from './group/meta'
 import Root from './root/meta'
-
-// Inner
-import Group from './inner/group/meta'
-
-// Basic
-
-// Chart
-
-// Data
-
-// Interaction
 
 /**
  * 物料元数据

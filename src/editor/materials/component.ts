@@ -1,7 +1,5 @@
+import Group from './group/component'
 import Root from './root/component'
-
-// Inner
-import Group from './inner/group/component'
 
 /**
  * 物料组件

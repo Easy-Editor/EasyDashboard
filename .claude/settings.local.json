@@ -21,7 +21,8 @@
       "Bash(pnpm format:*)",
       "Bash(pnpm build:*)",
       "Bash(pnpm build:prod:*)",
-      "Bash(pushd:*)"
+      "Bash(pushd:*)",
+      "Skill(superpowers:brainstorming)"
     ]
   },
   "enableAllProjectMcpServers": true,
