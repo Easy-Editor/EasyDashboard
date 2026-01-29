@@ -23,9 +23,6 @@ importers:
       '@easy-editor/plugin-datasource':
         specifier: ^1.0.4
         version: 1.0.4(@easy-editor/core@EasyEditor+packages+core)(mobx@6.15.0)(rax@1.2.3)
-      '@easy-editor/plugin-hotkey':
-        specifier: ^1.0.2
-        version: 1.0.2(@easy-editor/core@EasyEditor+packages+core)
       '@easy-editor/react-renderer':
         specifier: link:../EasyEditor/packages/react-renderer
         version: link:../EasyEditor/packages/react-renderer
@@ -140,6 +137,9 @@ importers:
       react:
         specifier: ^19.2.3
         version: 19.2.3
+      react-data-grid:
+        specifier: 7.0.0-beta.59
+        version: 7.0.0-beta.59(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react-day-picker:
         specifier: 8.10.1
         version: 8.10.1(date-fns@4.1.0)(react@19.2.3)
@@ -564,11 +564,6 @@ packages:
     peerDependencies:
       '@easy-editor/core': ^1.0.2
       mobx: ^6.13.5
-
-  '@easy-editor/plugin-hotkey@1.0.2':
-    resolution: {integrity: sha512-WZd4TQHiP576cIwGacMgTMVOsbf88F1RI+fN8X5Z7SNf6lZZn0Y7pOYgBGo53eM/Vknw9BO0wpNiQAJYFA7UMQ==}
-    peerDependencies:
-      '@easy-editor/core': ^1.0.2
 
   '@easy-editor/renderer-core@1.0.2':
     resolution: {integrity: sha512-nYS3P1VxX5ltJiNCZ3GZNfnFr6WYHYHBRMp3YsYVapDDnd0teJbBPdZtFI/msZNSNEGyEXwy3ljc5JN6/eRdsw==}
@@ -3169,6 +3164,12 @@ packages:
     resolution: {integrity: sha512-/lkZ7Yb3be06e68y4wn5WIyudzvrnHiTEjeAznJ7nPrfmjoCan2hcKPXmTYXdHU+IqkvGbzDlLZRWbVtmRTAcw==}
     engines: {npm: '>=3.0.0'}
 
+  react-data-grid@7.0.0-beta.59:
+    resolution: {integrity: sha512-iAp/UYWjfmXYFsyKDtGDMP1IvhwtQSjCP6G/wFEbMNuumWGOEZF8Ut1S2Bp4XxVpOrBkEVKXn+QC3rs14AcB7A==}
+    peerDependencies:
+      react: ^19.2
+      react-dom: ^19.2
+
   react-day-picker@8.10.1:
     resolution: {integrity: sha512-TMx7fNbhLk15eqcMt+7Z7S2KF7mfTId/XJDjKE8f+IUcFn0l08/kI4FiYTL/0yuOLmEcbR4Fwe3GJf/NiiMnPA==}
     peerDependencies:
@@ -4144,10 +4145,6 @@ snapshots:
       universal-request: 2.2.2(rax@1.2.3)
     transitivePeerDependencies:
       - rax
-
-  '@easy-editor/plugin-hotkey@1.0.2(@easy-editor/core@EasyEditor+packages+core)':
-    dependencies:
-      '@easy-editor/core': link:../EasyEditor/packages/core
 
   '@easy-editor/renderer-core@1.0.2(@easy-editor/core@EasyEditor+packages+core)':
     dependencies:
@@ -6384,6 +6381,11 @@ snapshots:
       rax-clone-element: 1.0.0(rax@1.2.3)
       rax-create-factory: 1.0.0(rax@1.2.3)
       rax-is-valid-element: 1.0.1
+
+  react-data-grid@7.0.0-beta.59(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
 
   react-day-picker@8.10.1(date-fns@4.1.0)(react@19.2.3):
     dependencies:

@@ -22,7 +22,10 @@
       "Bash(pnpm build:*)",
       "Bash(pnpm build:prod:*)",
       "Bash(pushd:*)",
-      "Skill(superpowers:brainstorming)"
+      "Skill(superpowers:brainstorming)",
+      "Bash(du:*)",
+      "Bash(pnpm add:*)",
+      "Bash(xargs:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

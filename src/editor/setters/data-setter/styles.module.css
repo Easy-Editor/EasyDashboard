@@ -1,0 +1,312 @@
+/* DataSetter 样式 */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.select {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+}
+
+.input {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+}
+
+/* 字段映射表 */
+.mappingTable {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mappingHeader {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.mappingRow {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.mappingColField {
+  width: 70px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.mappingColMapping {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.mappingColDesc {
+  width: 100px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mappingSelect {
+  height: 26px;
+  font-size: 12px;
+}
+
+.required {
+  color: var(--destructive);
+  margin-left: 2px;
+}
+
+.removeBtn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+
+/* 数据预览 */
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.viewToggle {
+  display: flex;
+  background-color: var(--muted);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.viewBtn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viewBtn:hover {
+  color: var(--foreground);
+}
+
+.viewBtnActive {
+  background-color: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.previewContent {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* 表格视图 */
+.tableWrapper {
+  width: 100%;
+}
+
+.dataGrid {
+  font-size: 12px;
+  border: none !important;
+}
+
+.tableFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  background-color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+.addRowBtn {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.addRowBtnSmall {
+  font-size: 11px;
+  height: 22px;
+  padding: 0 8px;
+}
+
+.cellInput {
+  width: 100%;
+  height: 100%;
+  padding: 0 8px;
+  border: none;
+  outline: none;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+/* 代码视图 */
+.codeWrapper {
+  width: 100%;
+}
+
+/* 空状态 */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.emptyHint {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* 代码文本框 */
+.codeTextarea {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 100px;
+  margin-top: 8px;
+}
+
+/* 键值对编辑器 */
+.kvEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kvHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kvAddBtn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.kvList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kvRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kvInput {
+  flex: 1;
+  height: 26px;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.kvRemoveBtn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* 数据源选择器 */
+.dsSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.dsAddBtn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.dsActionBtn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.emptyOption {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.loadingText {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

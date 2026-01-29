@@ -1,6 +1,7 @@
 import type { Configure, Node } from '@easy-editor/core'
 import { updateNodeRect } from '@easy-editor/plugin-dashboard'
 import Group from './component'
+
 const configure: Configure = {
   props: [
     {
@@ -11,7 +12,7 @@ const configure: Configure = {
         {
           type: 'group',
           key: 'basic',
-          title: '基本',
+          title: '配置',
           items: [
             {
               name: 'nodeInfo',
@@ -77,6 +78,19 @@ const configure: Configure = {
               setter: 'NodeInfoSetter',
               extraProps: {
                 label: false,
+              },
+            },
+            {
+              title: '显隐',
+              setter: 'SwitchSetter',
+              extraProps: {
+                supportVariable: true,
+                getValue(target) {
+                  return target.getNode().getExtraPropValue('condition')
+                },
+                setValue(target, value: boolean) {
+                  target.getNode().setExtraProp('condition', value)
+                },
               },
             },
           ],

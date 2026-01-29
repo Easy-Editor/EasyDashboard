@@ -1,5 +1,5 @@
 import type { ComponentMetadata } from '@easy-editor/core'
-import { MaterialGroup } from '../../type'
+import { MaterialGroup } from '../type'
 import configure from './configure'
 
 const meta: ComponentMetadata = {

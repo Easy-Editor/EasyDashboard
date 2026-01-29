@@ -258,8 +258,8 @@ export const defaultProjectSchema: ProjectSchema = {
             dataHandler: {
               type: 'JSExpression',
               value: `function dataHandler(response) {
-  console.log('dataHandler', response);
-  return response.data.result;
+  console.log('info dataHandler', response, response.data.data.result);
+  return response.data.data.result;
 }`,
             },
           },
@@ -284,6 +284,13 @@ export const defaultProjectSchema: ProjectSchema = {
                 name: '张三',
                 email: 'zhangsan@example.com',
               },
+            },
+            dataHandler: {
+              type: 'JSExpression',
+              value: `function dataHandler(response) {
+  console.log('userApi dataHandler', response.data.data.result);
+  return response.data.data.result;
+}`,
             },
           },
         ],

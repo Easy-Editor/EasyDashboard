@@ -1,6 +1,4 @@
-import type { UploadValue } from '@/editor/setters/basic/upload-setter'
 import type { Configure } from '@easy-editor/core'
-import { generalBasicConfigure } from '../configure'
 import Root from './component'
 
 const configure: Configure = {
@@ -13,9 +11,16 @@ const configure: Configure = {
         {
           type: 'group',
           key: 'basic',
-          title: '基本',
+          title: '配置',
           items: [
-            ...generalBasicConfigure,
+            {
+              name: 'nodeInfo',
+              title: '节点信息',
+              setter: 'NodeInfoSetter',
+              extraProps: {
+                label: false,
+              },
+            },
             {
               type: 'group',
               title: '全局属性',
@@ -36,7 +41,7 @@ const configure: Configure = {
                   title: '图片地址',
                   setter: 'UploadSetter',
                   extraProps: {
-                    setValue(target, value: UploadValue) {
+                    setValue(target, value: any) {
                       if (value) {
                         target.parent.setPropValue('backgroundImage', value.base64)
                       } else {
