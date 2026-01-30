@@ -1,14 +1,13 @@
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 /**
  * DataTableView - 表格视图
  * 使用 react-data-grid 实现 Excel 风格的数据表格
  */
-import { useMemo, useCallback } from 'react'
-import { DataGrid, type Column, type RenderEditCellProps } from 'react-data-grid'
-import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
-import type { ExpectedField } from './types'
+import { useCallback, useMemo } from 'react'
+import { type Column, DataGrid, type RenderEditCellProps } from 'react-data-grid'
 import 'react-data-grid/lib/styles.css'
-import styles from './styles.module.css'
+import type { ExpectedField } from './types'
 
 interface DataTableViewProps {
   data: unknown[]
@@ -22,7 +21,7 @@ interface DataTableViewProps {
 function TextEditor<TRow, TSummaryRow>({ row, column, onRowChange, onClose }: RenderEditCellProps<TRow, TSummaryRow>) {
   return (
     <input
-      className={styles.cellInput}
+      className='w-full h-full px-2 border-none outline-none bg-background text-foreground text-xs'
       value={(row as any)[column.key] ?? ''}
       onChange={e => onRowChange({ ...row, [column.key]: e.target.value })}
       onBlur={() => onClose(true)}
@@ -68,7 +67,20 @@ export const DataTableView = (props: DataTableViewProps) => {
 
   // 从数据中提取列定义
   const columns: Column<any>[] = useMemo(() => {
-    return fieldKeys.map(field => ({
+    // 序号列
+    const indexColumn: Column<any> = {
+      key: '__rowIndex',
+      name: '#',
+      width: 40,
+      minWidth: 40,
+      maxWidth: 40,
+      frozen: true,
+      resizable: false,
+      renderCell: ({ row }: { row: any }) => row.__index + 1,
+    }
+
+    // 数据列
+    const dataColumns = fieldKeys.map(field => ({
       key: field.key,
       name: field.name,
       resizable: true,
@@ -85,9 +97,11 @@ export const DataTableView = (props: DataTableViewProps) => {
         }
         return String(value)
       },
-      width: `${100 / fieldKeys.length}%`,
+      width: 100,
       minWidth: 80,
     }))
+
+    return [indexColumn, ...dataColumns]
   }, [fieldKeys, editable])
 
   // 处理行数据变更
@@ -119,10 +133,10 @@ export const DataTableView = (props: DataTableViewProps) => {
 
   if (rows.length === 0) {
     return (
-      <div className={styles.emptyState}>
+      <div className='flex flex-col items-center justify-center py-8 px-4 text-muted-foreground text-xs'>
         <span>暂无数据</span>
         {editable && (
-          <Button variant='outline' size='sm' className={styles.addRowBtn} onClick={handleAddRow}>
+          <Button variant='outline' size='sm' className='mt-3 text-xs' onClick={handleAddRow}>
             <Plus className='h-3 w-3 mr-1' />
             添加数据
           </Button>
@@ -132,16 +146,16 @@ export const DataTableView = (props: DataTableViewProps) => {
   }
 
   return (
-    <div className={styles.tableWrapper}>
+    <div className='w-full overflow-x-auto'>
       <DataGrid
         columns={columns}
         rows={rows}
         onRowsChange={handleRowsChange}
-        className={styles.dataGrid}
+        className='text-xs !border-none w-full !h-[300px]'
         rowKeyGetter={(row: { __index: number }) => row.__index}
         enableVirtualization={rows.length > 50}
       />
-      <div className={styles.tableFooter}>
+      <div className='flex items-center justify-between px-3 py-1.5 text-[11px] text-muted-foreground bg-muted border-t border-border'>
         {data.length > limit ? (
           <span>
             显示前 {limit} 条，共 {data.length} 条数据
@@ -150,7 +164,7 @@ export const DataTableView = (props: DataTableViewProps) => {
           <span>共 {data.length} 条数据</span>
         )}
         {editable && (
-          <Button variant='ghost' size='sm' className={styles.addRowBtnSmall} onClick={handleAddRow}>
+          <Button variant='ghost' size='sm' className='text-[11px] h-[22px] px-2' onClick={handleAddRow}>
             <Plus className='h-3 w-3 mr-1' />
             添加行
           </Button>

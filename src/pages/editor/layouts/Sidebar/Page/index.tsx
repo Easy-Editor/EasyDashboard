@@ -3,34 +3,57 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { SidebarMenu, SidebarMenuItem, SidebarMenuSub } from '@/components/ui/sidebar'
 import { SidebarMenuExtra, SidebarMenuExtraItem } from '@/components/ui/sidebar-extra'
 import { defaultRootSchema } from '@/editor/const'
+import { loadRemoteMaterialsFromComponentsMap } from '@/editor/remote/util'
+import { getPageDataFromLocalStorage } from '@/lib/schema'
 import { cn } from '@/lib/utils'
-import { type Document, project } from '@easy-editor/core'
+import { type Document, type RootSchema, project } from '@easy-editor/core'
 import { ChevronRight, CirclePlus, File, FilePenLine, Folder, Trash2 } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { PageModal, type PageModalProps } from './PageModal'
 
+/** 页面信息（用于显示列表） */
+interface PageInfo {
+  fileName: string
+  fileDesc: string
+  isLoaded: boolean
+  doc?: Document
+}
+
 export const PageSidebar = observer(() => {
-  const docs = project.documents
+  const loadedDocs = project.documents
   const currentDoc = project.currentDocument
+  const componentsTree = project.get<RootSchema[]>('componentsTree') || []
+
+  // 合并已加载和未加载的页面信息
+  const pages: PageInfo[] = componentsTree.map(schema => {
+    const loadedDoc = loadedDocs.find(doc => doc.fileName === schema.fileName)
+    return {
+      fileName: schema.fileName || '',
+      fileDesc: (schema as any).fileDesc || schema.fileName || '',
+      isLoaded: !!loadedDoc,
+      doc: loadedDoc,
+    }
+  })
+
   const [editData, setEditData] = useState<{
     fileName: string
     fileDesc: string
   }>()
   const [open, setOpen] = useState(false)
 
-  const handleEdit = (doc: Document) => {
+  const handleEdit = (page: PageInfo) => {
     setEditData({
-      fileName: doc.fileName,
-      fileDesc: doc.rootNode?.getExtraPropValue('fileDesc') as string,
+      fileName: page.fileName,
+      fileDesc: page.fileDesc,
     })
     setOpen(true)
   }
 
   const handleConfirm: PageModalProps['onConfirm'] = formData => {
     if (editData) {
-      const doc = project.getDocument(editData.fileName)
+      const doc = project.getDocumentByFileName(editData.fileName)
       if (doc) {
         doc.rootNode?.setExtraPropValue('fileDesc', formData.fileDesc)
       }
@@ -77,8 +100,8 @@ export const PageSidebar = observer(() => {
               </div>
               <CollapsibleContent>
                 <SidebarMenuSub className='mr-0 pr-0'>
-                  {docs?.map(doc => (
-                    <Page key={doc.id} doc={doc} currentDoc={currentDoc} handleEdit={handleEdit} />
+                  {pages.map(page => (
+                    <Page key={page.fileName} page={page} currentDoc={currentDoc} handleEdit={handleEdit} />
                   ))}
                 </SidebarMenuSub>
               </CollapsibleContent>
@@ -91,61 +114,93 @@ export const PageSidebar = observer(() => {
 })
 
 const Page: React.FC<{
-  doc: Document
+  page: PageInfo
   currentDoc: Document | undefined
-  handleEdit: (doc: Document) => void
+  handleEdit: (page: PageInfo) => void
 }> = props => {
-  const { doc, currentDoc, handleEdit } = props
+  const { page, currentDoc, handleEdit } = props
   const [isShowExtra, setIsShowExtra] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSelect = (doc: Document) => {
-    doc.open()
+  const handleSelect = async (page: PageInfo) => {
+    // 如果已加载，直接打开
+    if (page.isLoaded && page.doc) {
+      page.doc.open()
+      return
+    }
+
+    // 未加载，需要从 localStorage 加载
+    setIsLoading(true)
+    try {
+      const pageData = getPageDataFromLocalStorage(page.fileName)
+
+      // 加载该页面的远程物料
+      if (pageData?.componentsMap) {
+        await loadRemoteMaterialsFromComponentsMap(pageData.componentsMap)
+      }
+
+      // 打开页面（会从 componentsTree 中查找并创建 Document）
+      project.open(page.fileName)
+    } catch (error) {
+      console.error('Failed to load page:', error)
+      toast.error('页面加载失败')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleDelete = (doc: Document) => {
-    // TODO: 待修复，删除最后一个页面时，再创建后页面无法显示
-    if (project.documents.length === 1) {
+  const handleDelete = (page: PageInfo) => {
+    if ((project.get<RootSchema[]>('componentsTree') || []).length === 1) {
       toast.error('至少需要一个页面')
       return
     }
 
-    doc.remove()
+    if (page.doc) {
+      page.doc.remove()
+    }
 
-    if (doc.id === currentDoc?.id) {
-      project.documents[0].open()
+    // 如果删除的是当前页面，切换到第一个页面
+    if (page.doc?.id === currentDoc?.id) {
+      const firstDoc = project.documents[0]
+      if (firstDoc) {
+        firstDoc.open()
+      }
     }
   }
 
+  const isCurrentPage = page.doc?.id === currentDoc?.id
+
   return (
     <div
-      key={doc.id}
+      key={page.fileName}
       onMouseEnter={() => setIsShowExtra(true)}
       onMouseLeave={() => setIsShowExtra(false)}
       className={cn(
         'flex w-full items-center rounded-md p-2 text-left text-sm justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer',
-        doc.id === currentDoc?.id && 'bg-sidebar-accent text-sidebar-accent-foreground',
+        isCurrentPage && 'bg-sidebar-accent text-sidebar-accent-foreground',
+        isLoading && 'opacity-50 pointer-events-none',
       )}
     >
       <div
         className='flex-1 flex items-center gap-2 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground'
-        onClick={() => handleSelect(doc)}
+        onClick={() => handleSelect(page)}
       >
         <File />
         <span>
-          {doc.rootNode?.getExtraPropValue('fileDesc') as string}
-          <span className='text-xs text-muted-foreground ml-1'>({doc.fileName})</span>
+          {page.fileDesc}
+          <span className='text-xs text-muted-foreground ml-1'>({page.fileName})</span>
         </span>
       </div>
       <SidebarMenuExtra>
         <SidebarMenuExtraItem className={cn('invisible', isShowExtra && 'visible')}>
-          <FilePenLine onClick={() => handleEdit(doc)} />
+          <FilePenLine onClick={() => handleEdit(page)} />
         </SidebarMenuExtraItem>
         <SidebarMenuExtraItem className={cn('invisible', isShowExtra && 'visible')}>
           <AlertModal
             title='确定删除吗？'
             description='删除后，该页面将无法恢复。'
             trigger={<Trash2 onClick={e => e.stopPropagation()} />}
-            onConfirm={() => handleDelete(doc)}
+            onConfirm={() => handleDelete(page)}
           />
         </SidebarMenuExtraItem>
       </SidebarMenuExtra>

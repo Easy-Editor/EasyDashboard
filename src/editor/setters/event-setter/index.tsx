@@ -4,7 +4,7 @@ import { DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { JSFunction, SetterProps } from '@easy-editor/core'
-import { Settings, Trash } from 'lucide-react'
+import { Settings, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { EventBindModal, type EventBindModalProps, type Tab } from './EventBindModal'
 
@@ -37,7 +37,9 @@ interface EventSetterProps extends SetterProps<Event> {
 
 const EventSetter = (props: EventSetterProps) => {
   const { value, onChange, events, field } = props
-  const methods = field.designer?.currentDocument?.rootNode?.getExtraPropValue('methods') as Record<string, JSFunction>
+  const node = field.nodes[0]
+  const methods = node.document?.rootNode?.getExtraPropValue('methods') as Record<string, JSFunction>
+
   // 这里需要使用 key 来触发重新渲染，让 select 保持 undefined
   const [openKey, setOpenKey] = useState(0)
   const [open, setOpen] = useState(false)
@@ -51,6 +53,15 @@ const EventSetter = (props: EventSetterProps) => {
     setOpenKey(prev => prev + 1)
     setOpen(true)
     setEventName(value)
+  }
+
+  // 生成事件处理函数
+  const generateEventHandler = (relatedEventName: string, paramStr?: string): JSFunction => {
+    const params = paramStr ? `[${paramStr}]` : '[]'
+    return {
+      type: 'JSFunction',
+      value: `function(){return this.${relatedEventName}.apply(this,Array.prototype.slice.call(arguments).concat(${params})) }`,
+    }
   }
 
   const handleModalConfirm: EventBindModalProps['onConfirm'] = param => {
@@ -68,6 +79,10 @@ const EventSetter = (props: EventSetterProps) => {
       newEventData.paramStr = param.extendParam
     }
 
+    // 生成事件处理函数并设置到节点上
+    const eventHandler = generateEventHandler(param.event, param.extendParam)
+    node.setPropValue(eventName, eventHandler)
+
     // 编辑
     if (editEventName) {
       onChange?.({
@@ -78,15 +93,28 @@ const EventSetter = (props: EventSetterProps) => {
     }
     // 新增
     else {
+      // 从 events 配置中获取 description
+      const eventConfig = events.flatMap(e => e.children).find(c => c.value === eventName)
+
       onChange?.({
         eventDataList: [...(value?.eventDataList || []), newEventData],
-        eventList: [...(value?.eventList || []), { name: newEventData.name }],
+        eventList: [
+          ...(value?.eventList || []),
+          {
+            name: newEventData.name,
+            description: eventConfig?.description,
+            disabled: true,
+          },
+        ],
       })
       setEventName(undefined)
     }
   }
 
   const handleDeleteEvent = (eventData: EventData) => {
+    // 删除节点上的事件处理函数
+    node.clearPropValue(eventData.name)
+
     onChange?.({
       eventDataList: value?.eventDataList?.filter(item => item.name !== eventData.name),
       eventList: value?.eventList?.filter(item => item.name !== eventData.name),
@@ -107,61 +135,85 @@ const EventSetter = (props: EventSetterProps) => {
       onConfirm={handleModalConfirm}
       method={releatedEventName}
     >
-      <div className='flex flex-col w-full'>
-        {events.map((event, index) => (
-          <Select key={`${event.title}-${openKey}-${index}`} value={undefined} onValueChange={handleValueChange}>
-            <SelectTrigger className='w-full justify-center [&>svg]:hidden text-xs'>
-              <SelectValue placeholder={event.title} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {event.children.map(child => (
-                  <DialogTrigger key={child.value} asChild>
-                    <SelectItem
-                      value={child.value}
-                      disabled={value?.eventDataList?.some(item => item.name === child.value)}
-                      className='flex justify-between'
-                    >
-                      <span>{child.label}</span>
-                      <span className='text-xs text-gray-500'>{child.description}</span>
-                    </SelectItem>
-                  </DialogTrigger>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        ))}
-      </div>
-      <Table className='mt-4'>
-        <TableHeader>
-          <TableRow>
-            <TableHead className='w-[220px] text-xs'>已有事件</TableHead>
-            <TableHead className='text-xs'>操作</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {value?.eventDataList?.map(eventData => (
-            <TableRow key={eventData.name}>
-              <TableCell className='font-medium text-xs'>
-                {eventData.name}
-                <span className='px-2'>-</span>
-                <Button variant='link' className='text-xs px-0 py-0 h-0'>
-                  {eventData.relatedEventName}
-                </Button>
-              </TableCell>
-              <TableCell className='flex gap-2'>
-                <Settings className='h-3 w-3 cursor-pointer' onClick={() => handleEditEvent(eventData)} />
-                <AlertModal
-                  title='确定删除吗？'
-                  description='删除后，该状态将无法恢复。'
-                  trigger={<Trash className='h-3 w-3 cursor-pointer' />}
-                  onConfirm={() => handleDeleteEvent(eventData)}
-                />
-              </TableCell>
-            </TableRow>
+      <div className='flex flex-col gap-3 w-full'>
+        {/* 上方：事件选择 */}
+        <div className='flex gap-2 w-full'>
+          {events.map((event, index) => (
+            <Select key={`${event.title}-${openKey}-${index}`} value={undefined} onValueChange={handleValueChange}>
+              <SelectTrigger className='flex-1 h-7 text-xs justify-between'>
+                <SelectValue placeholder={event.title} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {event.children.map(child => (
+                    <DialogTrigger key={child.value} asChild>
+                      <SelectItem
+                        value={child.value}
+                        disabled={value?.eventDataList?.some(item => item.name === child.value)}
+                        className='flex justify-between items-center gap-2'
+                      >
+                        <span>{child.label}</span>
+                        {child.description && (
+                          <span className='text-[11px] text-muted-foreground'>{child.description}</span>
+                        )}
+                      </SelectItem>
+                    </DialogTrigger>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           ))}
-        </TableBody>
-      </Table>
+        </div>
+
+        {/* 下方：已有事件表格 */}
+        <div className='w-full'>
+          {value?.eventDataList && value.eventDataList.length > 0 ? (
+            <Table className='m-0'>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className='text-[11px] font-medium px-2 py-1.5 h-auto'>已有事件</TableHead>
+                  <TableHead className='text-[11px] font-medium px-2 py-1.5 h-auto'>操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {value.eventDataList.map(eventData => (
+                  <TableRow key={eventData.name}>
+                    <TableCell className='text-xs px-2 py-1.5'>
+                      <span className='font-medium'>{eventData.name}</span>
+                      <span className='px-2 text-muted-foreground'>→</span>
+                      <Button
+                        variant='link'
+                        className='text-xs p-0 h-auto text-primary hover:underline'
+                        onClick={() => handleEditEvent(eventData)}
+                      >
+                        {eventData.relatedEventName}
+                      </Button>
+                    </TableCell>
+                    <TableCell className='flex items-center gap-2'>
+                      <Settings
+                        className='w-4 h-4 cursor-pointer text-muted-foreground transition-colors hover:text-foreground'
+                        onClick={() => handleEditEvent(eventData)}
+                      />
+                      <AlertModal
+                        title='确定删除吗？'
+                        description='删除后，该事件绑定将无法恢复。'
+                        trigger={
+                          <Trash2 className='w-4 h-4 cursor-pointer text-muted-foreground transition-colors hover:text-destructive' />
+                        }
+                        onConfirm={() => handleDeleteEvent(eventData)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className='flex flex-col items-center justify-center p-4 text-muted-foreground text-[11px] border border-dashed border-border rounded-md'>
+              <span>暂无事件绑定</span>
+            </div>
+          )}
+        </div>
+      </div>
     </EventBindModal>
   )
 }

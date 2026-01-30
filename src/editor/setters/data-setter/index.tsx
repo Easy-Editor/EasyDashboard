@@ -15,7 +15,6 @@ import { DataCodeView } from './DataCodeView'
 import { DataMappingTable } from './DataMappingTable'
 import { DataTableView } from './DataTableView'
 import { DatasourceSelector } from './DatasourceSelector'
-import styles from './styles.module.css'
 import type { DataSetterProps, DataSetterValue, DataSourceType, PreviewViewType } from './types'
 
 const SOURCE_TYPE_OPTIONS = [
@@ -164,13 +163,13 @@ const DataSetter = (props: DataSetterProps) => {
   )
 
   return (
-    <div className={styles.container}>
+    <div className='flex flex-col gap-4 w-full'>
       {/* 1. 数据源类型选择 */}
-      <div className={styles.section}>
-        <div className={styles.row}>
-          <span className={styles.label}>数据源类型</span>
+      <div className='flex flex-col gap-2'>
+        <div className='flex items-center gap-2'>
+          <span className='text-xs font-medium text-foreground min-w-[70px] shrink-0'>数据源类型</span>
           <Select value={currentValue.sourceType} onValueChange={handleSourceTypeChange}>
-            <SelectTrigger className={styles.select}>
+            <SelectTrigger className='flex-1 h-7 text-xs'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -206,30 +205,32 @@ const DataSetter = (props: DataSetterProps) => {
       )}
 
       {/* 4. 数据预览 */}
-      <div className={styles.section}>
-        <div className={styles.previewHeader}>
-          <span className={styles.label}>
+      <div className='flex flex-col gap-2'>
+        <div className='flex items-center justify-between'>
+          <span className='text-xs font-medium text-foreground min-w-[70px] shrink-0'>
             {isStaticMode ? '数据编辑' : '数据预览'}
-            {isLoading && <span className={styles.loadingText}> 加载中...</span>}
+            {isLoading && (
+              <span className='text-[11px] font-normal text-muted-foreground animate-pulse'> 加载中...</span>
+            )}
           </span>
-          <div className={styles.viewToggle}>
+          <div className='flex bg-muted rounded p-0.5'>
             <button
               type='button'
-              className={`${styles.viewBtn} ${previewView === 'table' ? styles.viewBtnActive : ''}`}
+              className={`px-2.5 py-1 text-[11px] font-medium text-muted-foreground bg-transparent border-none rounded-sm cursor-pointer transition-all hover:text-foreground ${previewView === 'table' ? 'bg-background text-foreground shadow-sm' : ''}`}
               onClick={() => setPreviewView('table')}
             >
               表格
             </button>
             <button
               type='button'
-              className={`${styles.viewBtn} ${previewView === 'code' ? styles.viewBtnActive : ''}`}
+              className={`px-2.5 py-1 text-[11px] font-medium text-muted-foreground bg-transparent border-none rounded-sm cursor-pointer transition-all hover:text-foreground ${previewView === 'code' ? 'bg-background text-foreground shadow-sm' : ''}`}
               onClick={() => setPreviewView('code')}
             >
               代码
             </button>
           </div>
         </div>
-        <div className={styles.previewContent}>
+        <div className='border border-border rounded-md overflow-hidden'>
           {previewView === 'table' ? (
             <DataTableView
               data={previewData}

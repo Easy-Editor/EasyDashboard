@@ -91,21 +91,23 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {children}
-      <DialogContent className='!max-w-[800px]'>
+      <DialogContent className='max-w-[800px]!'>
         <DialogHeader>
           <DialogTitle>事件绑定</DialogTitle>
-          <DialogDescription className='mt-2'>
-            <div className='flex gap-4 text-xs h-[400px]'>
-              <div className='flex flex-col gap-2'>
-                <div className='font-bold'>事件选择</div>
-                <div className='flex border-[1px] h-full'>
-                  <div className='flex flex-col w-[100px] border-r-[1px]'>
+          <DialogDescription asChild>
+            <div className='flex gap-6 text-xs min-h-[360px]'>
+              {/* 左侧：事件选择 */}
+              <div className='flex flex-col gap-2 w-[300px] shrink-0'>
+                <div className='text-xs font-semibold text-foreground'>事件选择</div>
+                <div className='flex border border-border rounded-md overflow-hidden flex-1'>
+                  {/* Tab 列表 */}
+                  <div className='flex flex-col w-[90px] shrink-0 border-r border-border bg-muted'>
                     {tabList.map(item => (
                       <div
                         key={item.value}
                         className={cn(
-                          'w-full h-7 flex items-center pl-2 cursor-pointer',
-                          tab === item.value && 'bg-accent/70',
+                          'flex items-center px-2.5 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground border-l-2 border-transparent hover:bg-accent hover:text-foreground',
+                          tab === item.value && 'bg-background text-foreground font-medium !border-l-primary',
                         )}
                         onClick={() => {
                           setTab(item.value)
@@ -116,33 +118,39 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
                       </div>
                     ))}
                   </div>
-                  <div className='flex flex-col w-[150px]'>
+                  {/* 方法列表 */}
+                  <div className='flex flex-col flex-1 min-w-0 max-h-80 overflow-y-auto'>
                     {Object.entries(currentMethods).map(([key, value]) => (
                       <div
                         key={key}
                         className={cn(
-                          'w-full h-7 flex items-center pl-2 cursor-pointer',
-                          event === key && 'bg-accent/70',
+                          'flex flex-col px-2.5 py-1.5 cursor-pointer transition-all border-l-2 border-transparent border-b border-border last:border-b-0 hover:bg-accent',
+                          event === key && 'bg-accent !border-l-primary',
                         )}
                         onClick={() => setEvent(key)}
                       >
-                        <div className='flex items-center gap-1'>
-                          <span>{key}</span>
-                          {value.description && <span className='text-xs text-gray-500'>({value.description})</span>}
-                        </div>
+                        <span className='text-xs font-medium text-foreground'>{key}</span>
+                        {value.description && (
+                          <span className='text-[11px] text-muted-foreground mt-0.5'>{value.description}</span>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
-              <div className='flex-1 flex flex-col gap-2'>
-                <div className='font-bold'>事件名称</div>
-                <Input className='h-8 !text-xs px-2 py-[5px]' value={event} disabled />
-                <div className='flex gap-4 mt-2'>
-                  <div className='font-bold'>扩展参数设置</div>
+
+              {/* 右侧：配置区 */}
+              <div className='flex-1 flex flex-col gap-3 min-w-0 pl-6 border-l border-border'>
+                <div className='text-xs font-semibold text-foreground'>配置信息</div>
+                <div className='flex flex-col gap-1.5'>
+                  <div className='text-xs font-semibold text-foreground'>事件名称</div>
+                  <Input className='h-8 text-xs' value={event || ''} disabled />
+                </div>
+                <div className='flex items-center gap-3 mt-2'>
+                  <div className='text-xs font-semibold text-foreground'>扩展参数设置</div>
                   <Switch checked={enabledExtendParam} onCheckedChange={setEnabledExtendParam} />
                 </div>
-                <div className='relative w-full h-full'>
+                <div className='relative flex-1 min-h-[180px] border border-border rounded-md overflow-hidden'>
                   <CodeEditor
                     language='json'
                     value={extendParam}
@@ -150,14 +158,7 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
                     options={{ readOnly: !enabledExtendParam }}
                   />
                   {!enabledExtendParam && (
-                    <div
-                      className='absolute inset-0 bg-white/50 dark:bg-black/50 cursor-not-allowed'
-                      aria-label='Editor disabled'
-                      role='button'
-                      tabIndex={0}
-                      aria-disabled
-                      onKeyDown={e => e.preventDefault()}
-                    />
+                    <div className='absolute inset-0 bg-muted opacity-60 cursor-not-allowed z-10' />
                   )}
                 </div>
               </div>
@@ -165,11 +166,11 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>
-            确定
-          </Button>
-          <Button variant='outline' onClick={() => setOpen(false)} className='h-8 text-xs px-4 py-[5px]'>
+          <Button variant='outline' onClick={() => setOpen(false)} className='h-8 text-xs px-4'>
             取消
+          </Button>
+          <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4' disabled={!event}>
+            确定
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,10 +1,9 @@
+import { CodeEditor } from '@/components/common/CodeEditor'
 /**
  * DataCodeView - 代码视图
  * 使用 Monaco Editor 显示和编辑 JSON 数据
  */
 import { useCallback, useMemo } from 'react'
-import { CodeEditor } from '@/components/common/CodeEditor'
-import styles from './styles.module.css'
 
 interface DataCodeViewProps {
   data: unknown[]
@@ -41,12 +40,12 @@ export const DataCodeView = (props: DataCodeViewProps) => {
   )
 
   return (
-    <div className={styles.codeWrapper}>
+    <div className='w-full'>
       <CodeEditor
         language='json'
         value={jsonString}
         onChange={handleChange}
-        height='200px'
+        height='300px'
         options={{
           readOnly: !editable,
           lineNumbers: 'on',

@@ -10,7 +10,6 @@ import type { DataSource, Node } from '@easy-editor/core'
 import type { InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import styles from './styles.module.css'
 import type { DataSourceType } from './types'
 
 interface DatasourceSelectorProps {
@@ -101,23 +100,23 @@ export const DatasourceSelector = (props: DatasourceSelectorProps) => {
   const isComponentMode = sourceType === 'datasource'
 
   return (
-    <div className={styles.section}>
+    <div className='flex flex-col gap-2'>
       {/* 数据源选择 */}
-      <div className={styles.row}>
-        <span className={styles.label}>数据源</span>
-        <div className={styles.dsSelectRow}>
+      <div className='flex items-center gap-2'>
+        <span className='text-xs font-medium text-foreground min-w-[70px] shrink-0'>数据源</span>
+        <div className='flex items-center gap-1 flex-1'>
           {isComponentMode && (
-            <Button variant='outline' size='sm' className={styles.dsAddBtn} onClick={handleOpenCreate}>
+            <Button variant='outline' size='sm' className='w-7 h-7 p-0 shrink-0' onClick={handleOpenCreate}>
               <Plus className='w-3 h-3' />
             </Button>
           )}
           <Select value={datasourceId || ''} onValueChange={handleDatasourceChange}>
-            <SelectTrigger className={styles.select}>
+            <SelectTrigger className='flex-1 h-7 text-xs'>
               <SelectValue placeholder='选择数据源' />
             </SelectTrigger>
             <SelectContent>
               {dataSourceList.length === 0 ? (
-                <div className={styles.emptyOption}>暂无数据源</div>
+                <div className='px-3 py-2 text-xs text-muted-foreground text-center'>暂无数据源</div>
               ) : (
                 dataSourceList.map((ds: any) => (
                   <SelectItem key={ds.id} value={ds.id}>
@@ -129,10 +128,10 @@ export const DatasourceSelector = (props: DatasourceSelectorProps) => {
           </Select>
           {isComponentMode && datasourceId && (
             <>
-              <Button variant='ghost' size='sm' className={styles.dsActionBtn} onClick={handleOpenEdit}>
+              <Button variant='ghost' size='sm' className='w-6 h-6 p-0 shrink-0' onClick={handleOpenEdit}>
                 <Pencil className='w-3 h-3' />
               </Button>
-              <Button variant='ghost' size='sm' className={styles.dsActionBtn} onClick={handleDelete}>
+              <Button variant='ghost' size='sm' className='w-6 h-6 p-0 shrink-0' onClick={handleDelete}>
                 <Trash2 className='w-3 h-3' />
               </Button>
             </>

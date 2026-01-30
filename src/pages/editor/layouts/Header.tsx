@@ -1,5 +1,10 @@
 import { Button } from '@/components/ui/button'
-import { savePageInfoToLocalStorage, savePageSchemaToLocalStorage, saveProjectSchemaToLocalStorage } from '@/lib/schema'
+import {
+  type PageMeta,
+  savePageDataToLocalStorage,
+  savePageMetaListToLocalStorage,
+  saveProjectSchemaToLocalStorage,
+} from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { TRANSFORM_STAGE, project } from '@easy-editor/core'
 import { toast } from 'sonner'
@@ -8,20 +13,35 @@ import { MainNav } from './Nav'
 export function AppHeader({ className }: { className?: string }) {
   const save = (kind: 'project' | 'page' = 'page') => {
     if (kind === 'project') {
+      // 保存整个项目（用于预览）
       saveProjectSchemaToLocalStorage(project.export(TRANSFORM_STAGE.SAVE))
-    } else {
-      const pageInfo = []
-      for (const doc of project.documents) {
-        pageInfo.push({ path: doc.fileName, title: doc.rootNode?.getExtraPropValue('fileDesc') as string })
-        savePageSchemaToLocalStorage(doc.fileName, doc.export(TRANSFORM_STAGE.SAVE))
-      }
-      savePageInfoToLocalStorage(pageInfo)
     }
+
+    // 按页面保存（ProjectSchema 格式，componentsTree 只有一个元素）
+    const pageMetaList: PageMeta[] = []
+    for (const doc of project.documents) {
+      const schema = doc.export(TRANSFORM_STAGE.SAVE)
+      const componentsMap = doc.getComponentsMap()
+
+      // 保存页面数据（ProjectSchema 格式）
+      savePageDataToLocalStorage(doc.fileName, {
+        version: '1.0.0',
+        componentsTree: [schema],
+        componentsMap,
+      })
+
+      pageMetaList.push({
+        fileName: doc.fileName,
+        fileDesc: (doc.rootNode?.getExtraPropValue('fileDesc') as string) || doc.fileName,
+      })
+    }
+    savePageMetaListToLocalStorage(pageMetaList)
+
     toast.success('保存成功')
   }
 
   const preview = () => {
-    save('page')
+    save('project')
     window.open('/preview', '_blank')
   }
 
