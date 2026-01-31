@@ -1,10 +1,14 @@
 /**
  * 全局变量初始化
- * 将 React、ReactDOM 等暴露到 window 对象，供 UMD 组件使用
+ * 将 React、ReactDOM、echarts 等暴露到 window 对象，供 UMD 组件使用
  */
 
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
+import * as echarts from 'echarts/core'
+import * as echartsCharts from 'echarts/charts'
+import * as echartsComponents from 'echarts/components'
+import * as echartsRenderers from 'echarts/renderers'
 
 /**
  * 初始化全局变量
@@ -35,10 +39,22 @@ export function initGlobals() {
       console.log('[Globals] ✅ window.jsxRuntime exposed')
     }
 
-    // $EasyEditor 命名空间（如果不存在）
-    if (!window.$EasyEditor) {
-      window.$EasyEditor = {}
-      console.log('[Globals] ✅ window.$EasyEditor initialized')
+    // ECharts 及其子模块（用于图表组件）
+    if (!window.echarts) {
+      // 合并所有 echarts 模块到一个对象
+      const echartsAll = {
+        ...echarts,
+        ...echartsCharts,
+        ...echartsComponents,
+        ...echartsRenderers,
+      }
+      window.echarts = echartsAll
+      // 同时暴露子模块路径，供开发模式下的虚拟模块使用
+      window['echarts/core'] = echarts
+      window['echarts/charts'] = echartsCharts
+      window['echarts/components'] = echartsComponents
+      window['echarts/renderers'] = echartsRenderers
+      console.log('[Globals] ✅ window.echarts and submodules exposed')
     }
   }
 }
