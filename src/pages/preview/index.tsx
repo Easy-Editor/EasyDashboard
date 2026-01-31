@@ -6,17 +6,30 @@ import type { ProjectSchema } from '@easy-editor/core'
 import { createDataSourceEngine } from '@easy-editor/plugin-datasource'
 import { PureRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+
+// 从 schema 中提取分辨率
+const getViewportFromSchema = (projectSchema: ProjectSchema) => {
+  const firstPage = projectSchema?.componentsTree?.[0] as any
+  const rect = firstPage?.$dashboard?.rect
+  return {
+    width: rect?.width ?? 1920,
+    height: rect?.height ?? 1080,
+  }
+}
 
 const Preview = observer(() => {
   const [projectSchema] = useState<ProjectSchema>(() => getProjectSchemaFromLocalStorage())
+
+  // 从 schema 动态获取 viewport
+  const viewport = useMemo(() => getViewportFromSchema(projectSchema), [projectSchema])
 
   return (
     <div className='h-full w-full'>
       <PureRenderer
         projectSchema={projectSchema}
         components={{ ...components, ...materialManager.remoteComponentsMap }}
-        viewport={{ width: 1920, height: 1080 }}
+        viewport={viewport}
         onBeforeNavigate={async (pageSchema, projectComponentsMap) => {
           // 尝试从页面级存储获取 componentsMap
           const pageData = pageSchema.fileName ? getPageDataFromLocalStorage(pageSchema.fileName) : null

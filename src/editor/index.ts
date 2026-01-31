@@ -38,7 +38,15 @@ await init({
 })
 
 project.onSimulatorReady(simulator => {
-  simulator.set('deviceStyle', { viewport: { width: 1920, height: 1080 } })
+  // 从已加载的 schema 中读取分辨率
+  const projectSchema = getProjectSchemaFromLocalStorage()
+  const firstPage = projectSchema?.componentsTree?.[0] as any
+  const rect = firstPage?.$dashboard?.rect
+  const viewport = {
+    width: rect?.width ?? 1920,
+    height: rect?.height ?? 1080,
+  }
+  simulator.set('deviceStyle', { viewport })
 })
 
 project.onRendererReady(() => {
