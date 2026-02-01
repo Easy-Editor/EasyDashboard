@@ -1,37 +1,65 @@
 import { Button } from '@/components/ui/button'
+import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Maximize2 } from 'lucide-react'
+import { MoveDiagonal } from 'lucide-react'
 import type { FC } from 'react'
 
 export interface CanvasToolbarProps {
-  /** 当前缩放比例 */
   scale: number
-  /** 自适应宽度回调 */
   onFitWidth: () => void
+  onScaleChange?: (scale: number) => void
+  minScale?: number
+  maxScale?: number
 }
 
-/**
- * 画布底部工具条
- * 提供画布缩放、自适应等操作
- */
-export const CanvasToolbar: FC<CanvasToolbarProps> = ({ scale, onFitWidth }) => {
+export const CanvasToolbar: FC<CanvasToolbarProps> = ({
+  scale,
+  onFitWidth,
+  onScaleChange,
+  minScale = 0.1,
+  maxScale = 3,
+}) => {
+  const handleSliderChange = (values: number[]) => {
+    onScaleChange?.(values[0])
+  }
+
   return (
-    <div className='flex h-10 items-center justify-center gap-2 border-t bg-background/80 backdrop-blur-sm'>
+    <div className='flex h-8 shrink-0 items-center justify-end gap-2 border-t bg-background px-2'>
       <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant='ghost' size='sm' className='h-7 gap-1.5 px-2 text-xs' onClick={onFitWidth}>
-              <Maximize2 className='h-3.5 w-3.5' />
-              <span>自适应宽度</span>
+            <Button variant='ghost' size='icon' className='h-6 w-6' onClick={onFitWidth}>
+              <MoveDiagonal className='h-3.5 w-3.5' />
             </Button>
           </TooltipTrigger>
           <TooltipContent side='top'>
-            <p>调整缩放以适应画布宽度</p>
+            <p>自适应画布</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
 
-      <span className='text-xs text-muted-foreground'>{Math.round(scale * 100)}%</span>
+      {/* 缩放滑块 */}
+      {onScaleChange && (
+        <div
+          className='w-24'
+          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onContextMenu={e => e.stopPropagation()}
+        >
+          <Slider
+            value={[scale]}
+            min={minScale}
+            max={maxScale}
+            step={0.05}
+            onValueChange={handleSliderChange}
+            className='cursor-pointer'
+          />
+        </div>
+      )}
+
+      <span className='min-w-10 text-center text-xs text-muted-foreground tabular-nums'>
+        {Math.round(scale * 100)}%
+      </span>
     </div>
   )
 }

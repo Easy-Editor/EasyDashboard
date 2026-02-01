@@ -10,6 +10,16 @@ declare global {
       Fragment: typeof import('react').Fragment
     }
 
+    echarts?: typeof import('echarts/core') &
+      typeof import('echarts/charts') &
+      typeof import('echarts/components') &
+      typeof import('echarts/renderers')
+
+    'echarts/core'?: typeof import('echarts/core')
+    'echarts/charts'?: typeof import('echarts/charts')
+    'echarts/components'?: typeof import('echarts/components')
+    'echarts/renderers'?: typeof import('echarts/renderers')
+
     $EasyEditor?: Record<string, unknown>
   }
 }

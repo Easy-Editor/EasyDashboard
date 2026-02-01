@@ -31,3 +31,16 @@
   transform: scale(1.2) !important;
   box-shadow: var(--glow-md) var(--glow-color-active) !important;
 }
+
+/* 修复画布截断问题 - 大分辨率时不被截断 */
+.lc-simulator {
+  overflow: visible !important;
+}
+
+.lc-simulator .lc-simulator-canvas {
+  overflow: visible !important;
+}
+
+.lc-simulator .lc-simulator-content {
+  overflow: visible !important;
+}

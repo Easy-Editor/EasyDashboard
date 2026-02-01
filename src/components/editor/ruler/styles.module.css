@@ -148,7 +148,7 @@
   grid-column: 2;
   grid-row: 2;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
   min-height: 0;
   background-color: var(--ruler-canvas-bg);
@@ -159,6 +159,7 @@
   position: absolute;
   inset: 0;
   will-change: transform;
+  overflow: visible;
 }
 
 /* 网格背景 */

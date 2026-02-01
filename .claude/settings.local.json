@@ -25,7 +25,8 @@
       "Skill(superpowers:brainstorming)",
       "Bash(du:*)",
       "Bash(pnpm add:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(pnpm add:ui:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
