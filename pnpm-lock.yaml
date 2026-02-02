@@ -4,35 +4,28 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@easy-editor/core': link:../EasyEditor/packages/core
-  '@easy-editor/plugin-dashboard': link:../EasyEditor/packages/plugin-dashboard
-  '@easy-editor/react-renderer': link:../EasyEditor/packages/react-renderer
-  '@easy-editor/react-renderer-dashboard': link:../EasyEditor/packages/react-renderer-dashboard
-  '@easy-editor/renderer-core': link:../EasyEditor/packages/renderer-core
-
 importers:
 
   .:
     dependencies:
       '@easy-editor/core':
-        specifier: link:../EasyEditor/packages/core
-        version: link:../EasyEditor/packages/core
+        specifier: ^1.0.3
+        version: 1.0.3(mobx@6.15.0)
       '@easy-editor/plugin-dashboard':
-        specifier: link:../EasyEditor/packages/plugin-dashboard
-        version: link:../EasyEditor/packages/plugin-dashboard
+        specifier: ^1.0.3
+        version: 1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(mobx@6.15.0)
       '@easy-editor/plugin-datasource':
-        specifier: ^1.0.4
-        version: 1.0.4(@easy-editor/core@EasyEditor+packages+core)(mobx@6.15.0)(rax@1.2.3)
+        specifier: ^1.0.5
+        version: 1.0.5(@easy-editor/core@1.0.3(mobx@6.15.0))(mobx@6.15.0)(rax@1.2.3)
       '@easy-editor/react-renderer':
-        specifier: link:../EasyEditor/packages/react-renderer
-        version: link:../EasyEditor/packages/react-renderer
+        specifier: ^1.0.3
+        version: 1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(@easy-editor/renderer-core@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0)))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@easy-editor/react-renderer-dashboard':
-        specifier: link:../EasyEditor/packages/react-renderer-dashboard
-        version: link:../EasyEditor/packages/react-renderer-dashboard
+        specifier: ^1.0.4
+        version: 1.0.4(@easy-editor/core@1.0.3(mobx@6.15.0))(@easy-editor/plugin-dashboard@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(mobx@6.15.0))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@easy-editor/renderer-core':
-        specifier: link:../EasyEditor/packages/renderer-core
-        version: link:../EasyEditor/packages/renderer-core
+        specifier: ^1.0.3
+        version: 1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -107,7 +100,7 @@ importers:
         version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@uiw/react-color-sketch':
         specifier: ^2.9.2
-        version: 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -566,11 +559,50 @@ packages:
     resolution: {integrity: sha512-/yCrWGCoA1SVKOks25EGadP9Pnj0oAIHGpl2wH2M2Y46dPM2ueb8wyCVOD7O3WCTkaJ0IkKvzhl1JY7+uCT2Dw==}
     engines: {node: '>=v18'}
 
-  '@easy-editor/plugin-datasource@1.0.4':
-    resolution: {integrity: sha512-k2OvFquDtPhqXIgV48hv/g6sSkZpmD4UJEwxm2hHPQKLkYkyuMurucMR01Q47670YRt6kbnCt/HrSGEKP95VUw==}
+  '@easy-editor/core@1.0.3':
+    resolution: {integrity: sha512-AE39fXQBV85o0h7yQ4FE5FActCoS6K4Rk7bSjDUzg4QXMK0Jp0UGcJdhpm1oHopuCdtTIyO4XI5QPwwErF53qQ==}
     peerDependencies:
-      '@easy-editor/core': ^1.0.2
       mobx: ^6.13.5
+
+  '@easy-editor/plugin-dashboard@1.0.3':
+    resolution: {integrity: sha512-hnDM8XQBDX/jU7bHkpQ7pRPnptmqDGqhowwKiDmT2kjjnVZrIDI2wv1UApfLiS0rzf/YAx1iE4TlHFuwtX9eTA==}
+    peerDependencies:
+      '@easy-editor/core': ^1.0.3
+      mobx: ^6.13.5
+
+  '@easy-editor/plugin-datasource@1.0.5':
+    resolution: {integrity: sha512-0ZErApEPs2SdVOMDHZVjYH30EYsSbkhaNQBwO9LinXAvapqiwILrgqq44g/7Qfs8n87w1Bm52QZNVeU/PjhGJg==}
+    peerDependencies:
+      '@easy-editor/core': ^1.0.3
+      mobx: ^6.13.5
+
+  '@easy-editor/react-renderer-dashboard@1.0.4':
+    resolution: {integrity: sha512-ZmXFtBA9Owz0NdNzZmxhqVNCSiVNMc/a5C+QTHTR/MaQOALFR/CoLy6NOYKG9icS9pOsOW2faB0+g81bP2Txzg==}
+    peerDependencies:
+      '@easy-editor/core': ^1.0.3
+      '@easy-editor/plugin-dashboard': ^1.0.3
+      '@types/react': ^19
+      '@types/react-dom': ^19
+      mobx: ^6.13.5
+      mobx-react: ^9.2.0
+      react: ^19
+      react-dom: ^19
+
+  '@easy-editor/react-renderer@1.0.3':
+    resolution: {integrity: sha512-V5GiO4KWE3WhNK+zT91dli47xMx1mhT1aM5oIKBnwTgxrGydSX/EuiwJS7Y1+6S15dEuS0p9rgN3w6WaT6YHxw==}
+    peerDependencies:
+      '@easy-editor/core': ^1.0.3
+      '@easy-editor/renderer-core': ^1.0.3
+      '@types/react': ^19
+      '@types/react-dom': ^19
+      mobx-react: ^9.2.0
+      react: ^19
+      react-dom: ^19
+
+  '@easy-editor/renderer-core@1.0.3':
+    resolution: {integrity: sha512-3A9RelQhcjvI6aXYKNW0rOo73Yqt7ZkIzA97IPpP7q5EjRCQnhX8AJPcpcuuRWcaJZdGqFjWF60R1fosNzoEaw==}
+    peerDependencies:
+      '@easy-editor/core': ^1.0.3
 
   '@esbuild/aix-ppc64@0.24.2':
     resolution: {integrity: sha512-thpVCb/rhxE/BnMLQ7GReQLLN8q9qbHmI55F4489/ByVg2aQaQ6kbcLb6FHkocZzQhxc4gx0sCk0tJkKBFzDhA==}
@@ -2150,62 +2182,62 @@ packages:
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
-  '@uiw/color-convert@2.9.3':
-    resolution: {integrity: sha512-f+FK32Cx+iUbYCcylHwGHheynDcP9wMzZZqpCmn/fXj2rkHQLqK1bxuC4071Ij/Mmky01nlymPXD+Do6mBeaKA==}
+  '@uiw/color-convert@2.9.4':
+    resolution: {integrity: sha512-iFqdh+yCwGGZz0CJOBAiF7Yj31QlF9oquGqIQSvDkRqiEFmPLhXXH7/HMQriuJpweoPkyzsXoX7g006AILB85w==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
 
-  '@uiw/react-color-alpha@2.9.3':
-    resolution: {integrity: sha512-mB0t8gkeN70PyiNzIlgBpxiljo3kC7IjfiDITAC1RQRDmVKzSmRn0iMLZ6LcGJ6Zc8hDiWgi8jI+y2VP1njzxA==}
-    peerDependencies:
-      '@babel/runtime': '>=7.19.0'
-      react: '>=16.9.0'
-      react-dom: '>=16.9.0'
-
-  '@uiw/react-color-editable-input-rgba@2.9.3':
-    resolution: {integrity: sha512-fbMsiaXR1uf7uP8hB+fBr5HdyfCSmn+0wgwwIfL0Y0mYYdr+3uTmDTykJYjMUEWmK2Sqo+MADrlcfGl1/VcRCA==}
+  '@uiw/react-color-alpha@2.9.4':
+    resolution: {integrity: sha512-TgPdJ79PCHYT1R6h9EC3f4dXCFjPA0XigiCTmPlwMpY5CEcXs6as6yYkPPYwlOpvKRtroQuRCPtXuMbjtHRmTQ==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
       react: '>=16.9.0'
       react-dom: '>=16.9.0'
 
-  '@uiw/react-color-editable-input@2.9.3':
-    resolution: {integrity: sha512-p50pZoqCVZkK8YPTNnVoyQ0mJ0pNhFNmkFp4n8iK7IL7QUfoY/n7FtTV8tGUAjE8DrXbvrj3PHd7tabQhtLZJQ==}
+  '@uiw/react-color-editable-input-rgba@2.9.4':
+    resolution: {integrity: sha512-3x5MHEKIt4jDh1ZBvAUWausNBJWIoDZSe40n39rfXcAzS7EzvrP+uxap6CuY3OBF4BINUXuQSU3FubME/n2kXA==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
       react: '>=16.9.0'
       react-dom: '>=16.9.0'
 
-  '@uiw/react-color-hue@2.9.3':
-    resolution: {integrity: sha512-01BIlVTfI/UsFSCBbOEmsAW1ZZ04kNxtcsxSszQof5KHSoR1wGZhc8NY/l5K8gFwLcVQLB1h8Jm5ORpaRegdPA==}
+  '@uiw/react-color-editable-input@2.9.4':
+    resolution: {integrity: sha512-xmSZZ5OGi/ErbRFYafo8n2N7Df5Ti81/Y7BELA/HAz6ax4Bjtwg6tI461RgvKXutK5Xk0J5n21BHrTP+ydInrQ==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
       react: '>=16.9.0'
       react-dom: '>=16.9.0'
 
-  '@uiw/react-color-saturation@2.9.3':
-    resolution: {integrity: sha512-QpqvfKZpCZQNB8BeWX7Fv8USwg7GaVd7oRyxXzLwPl+h0Y1lZAMm5a1xkpc3ebn5MvRFekgD21X5aw7t9zv7FA==}
+  '@uiw/react-color-hue@2.9.4':
+    resolution: {integrity: sha512-C5bHJ5MMBTkzTFXDWBjVQMOkcoqFMK9Uw3fd4KojYL7GMSSDd1eOlMaHoz2HfRPd5WplCyAMovB4YqHsWcDWew==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
       react: '>=16.9.0'
       react-dom: '>=16.9.0'
 
-  '@uiw/react-color-sketch@2.9.3':
-    resolution: {integrity: sha512-KBdetRYWYUm+rPf0Mn7uJAD06bHKE5+9jiitZRHUrYavDrOB2yJ2IAPsxYhAu5OkHQD2IoFSxcP3LROhPgFgDA==}
+  '@uiw/react-color-saturation@2.9.4':
+    resolution: {integrity: sha512-i8v64erhWT22REQ+yABdXRlbRsyaG1EvKKpib61cMCHyrVqatEirUpjp5pUfqObvvlBBj9YMSpPYeVkjNzE+0g==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
       react: '>=16.9.0'
       react-dom: '>=16.9.0'
 
-  '@uiw/react-color-swatch@2.9.3':
-    resolution: {integrity: sha512-G/tz3Zm9JRdzGsXb47WBTFeiyN5j954CqzDyeOmSyjIq/ZZQMBcFvy5wMv3iQi5xbwLlHs7qRelJnTZGzVqnZg==}
+  '@uiw/react-color-sketch@2.9.4':
+    resolution: {integrity: sha512-BmeiqtT3ZR1F4xuEvqPzCjolcAurO/3NZGddL9WPy2gBH98zgoX6DKhWlbabdj9g0cJEY6dME3ah1/q31rYDZw==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
       react: '>=16.9.0'
       react-dom: '>=16.9.0'
 
-  '@uiw/react-drag-event-interactive@2.9.3':
-    resolution: {integrity: sha512-L81/ZR413YdJQa0l+aIbkMdxl7hK6Ocf9YQIewXb9rl++clXvsf1x/AWHH12l4iQKuz3wFEKobqhHWwrDYa88A==}
+  '@uiw/react-color-swatch@2.9.4':
+    resolution: {integrity: sha512-BoeLB8P7MMaXwDk90TSHI+NfPw8uVeVKkiIFH1Lo7Qx6tm0XwCd5OvTSKe907VTqjT8FGK5VfqlR2ExXWl8AXQ==}
+    peerDependencies:
+      '@babel/runtime': '>=7.19.0'
+      react: '>=16.9.0'
+      react-dom: '>=16.9.0'
+
+  '@uiw/react-drag-event-interactive@2.9.4':
+    resolution: {integrity: sha512-I5AZquK4C4LN24OvixRwk4krFaEYAGOaGRD3pgtByfQv4br3igb/94wt3cxz/EMKSzOM1aSAH857ipHBYpOSXg==}
     peerDependencies:
       '@babel/runtime': '>=7.19.0'
       react: '>=16.9.0'
@@ -2297,8 +2329,8 @@ packages:
     resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
     engines: {node: '>=6'}
 
-  caniuse-lite@1.0.30001766:
-    resolution: {integrity: sha512-4C0lfJ0/YPjJQHagaE9x2Elb69CIqEPZeG0anQt9SIvIoOH4a4uaRl73IavyO+0qZh6MDLH//DrXThEYKHkmYA==}
+  caniuse-lite@1.0.30001767:
+    resolution: {integrity: sha512-34+zUAMhSH+r+9eKmYG+k2Rpt8XttfE4yXAjoZvkAPs15xcYQhyBYdalJ65BzivAvGRMViEjy6oKr/S91loekQ==}
 
   chalk@5.6.2:
     resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
@@ -2565,6 +2597,10 @@ packages:
   eventemitter3@5.0.4:
     resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
 
+  events@3.3.0:
+    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
+    engines: {node: '>=0.8.x'}
+
   execa@8.0.1:
     resolution: {integrity: sha512-VyhnebXciFV2DESc+p6B+y0LjSm0krU4OgJN44qFAhBY0TJ+1V61tYD2+wHusZ6F9n5K+vl8k0sTy7PEfV4qpg==}
     engines: {node: '>=16.17'}
@@ -2674,6 +2710,9 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  history@5.3.0:
+    resolution: {integrity: sha512-ZqaKwjjrAYUYfLG+htGaIIZ4nioX2L70ZUMIFysS3xvBsSG4x/n1V6TXV3N8ZYNuFGlDirFg32T7B6WOUPDYcQ==}
 
   human-id@4.1.3:
     resolution: {integrity: sha512-tsYlhAYpjCKa//8rXZ9DqKEawhPoSytweBC2eNvcaDK+57RZLHGqNs3PZTQO6yekLFSuvA6AlnAfrw1uBvtb+Q==}
@@ -4172,14 +4211,57 @@ snapshots:
       '@types/conventional-commits-parser': 5.0.2
       chalk: 5.6.2
 
-  '@easy-editor/plugin-datasource@1.0.4(@easy-editor/core@EasyEditor+packages+core)(mobx@6.15.0)(rax@1.2.3)':
+  '@easy-editor/core@1.0.3(mobx@6.15.0)':
     dependencies:
-      '@easy-editor/core': link:../EasyEditor/packages/core
+      events: 3.3.0
+      mobx: 6.15.0
+      nanoid: 5.1.6
+
+  '@easy-editor/plugin-dashboard@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(mobx@6.15.0)':
+    dependencies:
+      '@easy-editor/core': 1.0.3(mobx@6.15.0)
+      mobx: 6.15.0
+
+  '@easy-editor/plugin-datasource@1.0.5(@easy-editor/core@1.0.3(mobx@6.15.0))(mobx@6.15.0)(rax@1.2.3)':
+    dependencies:
+      '@easy-editor/core': 1.0.3(mobx@6.15.0)
       lodash-es: 4.17.23
       mobx: 6.15.0
       universal-request: 2.2.2(rax@1.2.3)
     transitivePeerDependencies:
       - rax
+
+  '@easy-editor/react-renderer-dashboard@1.0.4(@easy-editor/core@1.0.3(mobx@6.15.0))(@easy-editor/plugin-dashboard@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(mobx@6.15.0))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@easy-editor/core': 1.0.3(mobx@6.15.0)
+      '@easy-editor/plugin-dashboard': 1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(mobx@6.15.0)
+      '@easy-editor/react-renderer': 1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(@easy-editor/renderer-core@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0)))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@easy-editor/renderer-core': 1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))
+      '@types/react': 19.2.10
+      '@types/react-dom': 19.2.3(@types/react@19.2.10)
+      history: 5.3.0
+      lodash-es: 4.17.23
+      mobx: 6.15.0
+      mobx-react: 9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+      react-router: 7.13.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+
+  '@easy-editor/react-renderer@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))(@easy-editor/renderer-core@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0)))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@easy-editor/core': 1.0.3(mobx@6.15.0)
+      '@easy-editor/renderer-core': 1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))
+      '@types/react': 19.2.10
+      '@types/react-dom': 19.2.3(@types/react@19.2.10)
+      lodash-es: 4.17.23
+      mobx-react: 9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
+  '@easy-editor/renderer-core@1.0.3(@easy-editor/core@1.0.3(mobx@6.15.0))':
+    dependencies:
+      '@easy-editor/core': 1.0.3(mobx@6.15.0)
+      lodash-es: 4.17.23
 
   '@esbuild/aix-ppc64@0.24.2':
     optional: true
@@ -5479,69 +5561,69 @@ snapshots:
   '@types/trusted-types@2.0.7':
     optional: true
 
-  '@uiw/color-convert@2.9.3(@babel/runtime@7.28.6)':
+  '@uiw/color-convert@2.9.4(@babel/runtime@7.28.6)':
     dependencies:
       '@babel/runtime': 7.28.6
 
-  '@uiw/react-color-alpha@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-color-alpha@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@uiw/color-convert': 2.9.3(@babel/runtime@7.28.6)
-      '@uiw/react-drag-event-interactive': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/color-convert': 2.9.4(@babel/runtime@7.28.6)
+      '@uiw/react-drag-event-interactive': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@uiw/react-color-editable-input-rgba@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-color-editable-input-rgba@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@uiw/color-convert': 2.9.3(@babel/runtime@7.28.6)
-      '@uiw/react-color-editable-input': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/color-convert': 2.9.4(@babel/runtime@7.28.6)
+      '@uiw/react-color-editable-input': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@uiw/react-color-editable-input@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-color-editable-input@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@uiw/react-color-hue@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-color-hue@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@uiw/color-convert': 2.9.3(@babel/runtime@7.28.6)
-      '@uiw/react-color-alpha': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/color-convert': 2.9.4(@babel/runtime@7.28.6)
+      '@uiw/react-color-alpha': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@uiw/react-color-saturation@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-color-saturation@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@uiw/color-convert': 2.9.3(@babel/runtime@7.28.6)
-      '@uiw/react-drag-event-interactive': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/color-convert': 2.9.4(@babel/runtime@7.28.6)
+      '@uiw/react-drag-event-interactive': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@uiw/react-color-sketch@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-color-sketch@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@uiw/color-convert': 2.9.3(@babel/runtime@7.28.6)
-      '@uiw/react-color-alpha': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@uiw/react-color-editable-input': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@uiw/react-color-editable-input-rgba': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@uiw/react-color-hue': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@uiw/react-color-saturation': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@uiw/react-color-swatch': 2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/color-convert': 2.9.4(@babel/runtime@7.28.6)
+      '@uiw/react-color-alpha': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/react-color-editable-input': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/react-color-editable-input-rgba': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/react-color-hue': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/react-color-saturation': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@uiw/react-color-swatch': 2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@uiw/react-color-swatch@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-color-swatch@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@uiw/color-convert': 2.9.3(@babel/runtime@7.28.6)
+      '@uiw/color-convert': 2.9.4(@babel/runtime@7.28.6)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@uiw/react-drag-event-interactive@2.9.3(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@uiw/react-drag-event-interactive@2.9.4(@babel/runtime@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@babel/runtime': 7.28.6
       react: 19.2.4
@@ -5621,14 +5703,14 @@ snapshots:
   browserslist@4.28.1:
     dependencies:
       baseline-browser-mapping: 2.9.19
-      caniuse-lite: 1.0.30001766
+      caniuse-lite: 1.0.30001767
       electron-to-chromium: 1.5.283
       node-releases: 2.0.27
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
 
   callsites@3.1.0: {}
 
-  caniuse-lite@1.0.30001766: {}
+  caniuse-lite@1.0.30001767: {}
 
   chalk@5.6.2: {}
 
@@ -5937,6 +6019,8 @@ snapshots:
 
   eventemitter3@5.0.4: {}
 
+  events@3.3.0: {}
+
   execa@8.0.1:
     dependencies:
       cross-spawn: 7.0.6
@@ -6046,6 +6130,10 @@ snapshots:
       slash: 3.0.0
 
   graceful-fs@4.2.11: {}
+
+  history@5.3.0:
+    dependencies:
+      '@babel/runtime': 7.28.6
 
   human-id@4.1.3: {}
 
