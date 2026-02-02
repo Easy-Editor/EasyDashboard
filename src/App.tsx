@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
-import { LogoLoading } from './components/common/LogoLoading'
+import { LogoLoading } from './components/common/logo-loading'
 import { ThemeProvider } from './components/theme-provider'
 
 const Preview = lazy(() => import('./pages/preview'))

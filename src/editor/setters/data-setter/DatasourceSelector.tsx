@@ -3,7 +3,7 @@
  * 统一处理数据源模式和全局数据源模式的选择
  */
 
-import { DataSourceEditorModal } from '@/components/common/DataSourceEditorModal'
+import { DataSourceEditorModal } from '@/components/common/datasource-editor'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { DataSource, Node } from '@easy-editor/core'

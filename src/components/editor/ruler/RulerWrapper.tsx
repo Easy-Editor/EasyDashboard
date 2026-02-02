@@ -1,8 +1,8 @@
-import type { Designer } from '@easy-editor/core'
+import { type Designer, project } from '@easy-editor/core'
 import { observer } from 'mobx-react'
-import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { useCanvasPan } from './hooks/useCanvasPan'
+import { type ReactNode, forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { Ruler } from './Ruler'
+import { useCanvasPan } from './hooks/useCanvasPan'
 import styles from './styles.module.css'
 
 export interface RulerWrapperRef {
@@ -16,18 +16,12 @@ export interface RulerWrapperProps {
   /** 设计器实例 */
   designer: Designer
   children: ReactNode
-  /** 缩放比例 */
-  scale: number
-  /** 画布尺寸（画布像素） */
-  canvasSize: { width: number; height: number }
   /** 是否显示游尺 */
   showRuler?: boolean
   /** 是否显示网格 */
   showGrid?: boolean
   /** 是否启用平移 */
   enablePan?: boolean
-  /** 缩放变化回调 */
-  onScaleChange?: (scale: number) => void
   /** 最小缩放比例 */
   minScale?: number
   /** 最大缩放比例 */
@@ -41,20 +35,25 @@ export interface RulerWrapperProps {
 export const RulerWrapper = observer(
   forwardRef<RulerWrapperRef, RulerWrapperProps>(
     (
-      {
-        designer,
-        children,
-        scale,
-        canvasSize,
-        showRuler = true,
-        showGrid = true,
-        enablePan = true,
-        onScaleChange,
-        minScale = 0.1,
-        maxScale = 3,
-      },
+      { designer, children, showRuler = true, showGrid = true, enablePan = true, minScale = 0.1, maxScale = 3 },
       ref,
     ) => {
+      const viewport = project.simulator?.viewport
+      const scale = viewport?.scale ?? 1
+      const simulator = project.simulator
+      const deviceViewport = simulator?.deviceStyle?.viewport as { width?: number; height?: number } | undefined
+
+      const canvasSize = {
+        width: deviceViewport?.width ?? 1920,
+        height: deviceViewport?.height ?? 1080,
+      }
+
+      const onScaleChange = (newScale: number) => {
+        if (viewport) {
+          viewport.scale = newScale
+        }
+      }
+
       const wrapperRef = useRef<HTMLDivElement>(null)
       const canvasAreaRef = useRef<HTMLDivElement>(null)
       const horizontalRulerRef = useRef<HTMLDivElement>(null)

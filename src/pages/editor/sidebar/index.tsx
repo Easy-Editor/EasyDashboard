@@ -15,12 +15,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Code, CodeXml, Component, Database, File, ListTree, Wand, X } from 'lucide-react'
 import type * as React from 'react'
 import { useEffect, useState } from 'react'
-import { ComponentSidebar } from './Components'
-import { DataSourceSidebar } from './DataSource'
+import { ComponentSidebar } from './components'
+import { DataSourceSidebar } from './data-source'
 import { MaterialsSidebar } from './Materials'
-import { MethodStateSidebar } from './MethodState'
+import { MethodStateSidebar } from './method-state'
 import { OutlineSidebar } from './Outline'
-import { PageSidebar } from './Page'
+import { PageSidebar } from './page'
 import { SchemaSidebar } from './Schema'
 
 const data = {

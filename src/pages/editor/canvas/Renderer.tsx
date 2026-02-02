@@ -3,45 +3,33 @@ import { RulerWrapper, type RulerWrapperRef } from '@/components/editor/ruler'
 import { project } from '@easy-editor/core'
 import { SimulatorRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
-import { useCallback, useEffect, useRef } from 'react'
-import { RendererContextMenu } from './layouts/ContextMenu'
+import { useEffect, useRef, useState } from 'react'
+import { RendererContextMenu } from '../context-menu'
 
 const Renderer = observer(() => {
-  const rulerWrapperRef = useRef<RulerWrapperRef>(null)
   const isEmpty = project.documents.length === 0
-  const simulator = project.simulator
-  const viewport = simulator?.viewport
-  const deviceViewport = simulator?.deviceStyle?.viewport as { width?: number; height?: number } | undefined
 
-  // 获取画布尺寸（从 deviceStyle.viewport 获取）
-  const canvasSize = {
-    width: deviceViewport?.width ?? 1920,
-    height: deviceViewport?.height ?? 1080,
-  }
-  const scale = viewport?.scale ?? 1
-
-  // 缩放变化回调
-  const handleScaleChange = useCallback(
-    (newScale: number) => {
-      if (viewport) {
-        viewport.scale = newScale
-      }
-    },
-    [viewport],
-  )
+  const rulerWrapperRef = useRef<RulerWrapperRef>(null)
+  const [isReady, setIsReady] = useState(false)
 
   // 自适应宽度
-  const handleFitWidth = useCallback(() => {
+  const handleFitWidth = () => {
     rulerWrapperRef.current?.fitWidth()
-  }, [])
+  }
 
-  // 初始化时自动自适应宽度
+  // TODO: 需要优化
   useEffect(() => {
-    // 延迟执行确保 DOM 已渲染
-    const timer = requestAnimationFrame(() => {
-      handleFitWidth()
+    if (isReady) {
+      setTimeout(() => {
+        handleFitWidth()
+      }, 200)
+    }
+  }, [isReady])
+
+  useEffect(() => {
+    project.onRendererReady(() => {
+      setIsReady(true)
     })
-    return () => cancelAnimationFrame(timer)
   }, [])
 
   if (isEmpty) {
@@ -112,17 +100,11 @@ const Renderer = observer(() => {
     <RendererContextMenu>
       <div className='flex min-w-0 w-full h-full flex-col'>
         <div className='min-h-0 min-w-0 flex-1 h-full'>
-          <RulerWrapper
-            ref={rulerWrapperRef}
-            designer={project.designer}
-            scale={scale}
-            canvasSize={canvasSize}
-            onScaleChange={handleScaleChange}
-          >
+          <RulerWrapper ref={rulerWrapperRef} designer={project.designer}>
             <SimulatorRenderer designer={project.designer} />
           </RulerWrapper>
         </div>
-        <CanvasToolbar scale={scale} onFitWidth={handleFitWidth} onScaleChange={handleScaleChange} />
+        <CanvasToolbar onFitWidth={handleFitWidth} />
       </div>
     </RendererContextMenu>
   )

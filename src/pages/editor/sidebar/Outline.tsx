@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { type Key, useState } from 'react'
-import { RendererContextMenu } from '../ContextMenu'
+import { RendererContextMenu } from '../context-menu'
 import styles from './Outline.module.css'
 
 // Component icon mapping

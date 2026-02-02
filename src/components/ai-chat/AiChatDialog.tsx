@@ -7,7 +7,7 @@ import { Bot, ChevronDown, ChevronUp, Lightbulb, Send, User, X } from 'lucide-re
 import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { categorizedSuggestions, quickSuggestions, systemPrompt } from './prompt'
-import { useCustomChat } from './use-custom-chat'
+import { useCustomChat } from './useCustomChat'
 import { executeAiOperations, filterMessageContent } from './utils'
 
 interface AiChatDialogProps {

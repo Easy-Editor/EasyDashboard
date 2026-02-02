@@ -1,6 +1,6 @@
-import AppLayout from '@/pages/editor/layouts'
+import AppLayout from './EditorLayout'
 import { Suspense } from 'react'
-import Renderer from './Renderer'
+import Renderer from './canvas/Renderer'
 
 export default function Editor() {
   return (

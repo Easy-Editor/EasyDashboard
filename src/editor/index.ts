@@ -78,7 +78,7 @@ const initProjectSchema = async () => {
   }
 }
 
-initProjectSchema()
+await initProjectSchema()
 
 // 异步加载远程资源
 loadAllRemoteResources().catch(error => {

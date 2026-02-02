@@ -1,4 +1,4 @@
-import { DataSourceEditorModal, type DataSourceEditorModalProps } from '@/components/common/DataSourceEditorModal'
+import { DataSourceEditorModal, type DataSourceEditorModalProps } from '@/components/common/datasource-editor'
 import type { DataSource, DataSourceItem, Node } from '@easy-editor/core'
 import type { InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
 import { Plus } from 'lucide-react'

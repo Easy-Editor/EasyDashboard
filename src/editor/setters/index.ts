@@ -13,4 +13,4 @@ export const setterMap = {
   ResolutionSetter,
 }
 
-export * from './custom-field-item'
+export * from './CustomFieldItem'

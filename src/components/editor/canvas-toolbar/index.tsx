@@ -1,24 +1,27 @@
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { project } from '@easy-editor/core'
 import { MoveDiagonal } from 'lucide-react'
+import { observer } from 'mobx-react'
 import type { FC } from 'react'
 
 export interface CanvasToolbarProps {
-  scale: number
   onFitWidth: () => void
-  onScaleChange?: (scale: number) => void
   minScale?: number
   maxScale?: number
 }
 
-export const CanvasToolbar: FC<CanvasToolbarProps> = ({
-  scale,
-  onFitWidth,
-  onScaleChange,
-  minScale = 0.1,
-  maxScale = 3,
-}) => {
+export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, minScale = 0.1, maxScale = 3 }) => {
+  const viewport = project.simulator?.viewport
+  const scale = viewport?.scale ?? 1
+
+  const onScaleChange = (newScale: number) => {
+    if (viewport) {
+      viewport.scale = newScale
+    }
+  }
+
   const handleSliderChange = (values: number[]) => {
     onScaleChange?.(values[0])
   }
@@ -62,4 +65,4 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = ({
       </span>
     </div>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { CodeEditor } from '@/components/common/CodeEditor'
+import { CodeEditor } from '@/components/common/code-editor'
 import { project } from '@easy-editor/core'
 import { observer } from 'mobx-react'
 

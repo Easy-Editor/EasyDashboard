@@ -1,9 +1,9 @@
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { Toaster } from '@/components/ui/sonner'
-import { AIChat } from './AIChat'
-import { ConfigureSidebar } from './Configure'
-import { AppHeader } from './Header'
-import { AppSidebar } from './Sidebar'
+import { AIChat } from './dialogs/AIChat'
+import { ConfigureSidebar } from './configure'
+import { AppHeader } from './header'
+import { AppSidebar } from './sidebar'
 
 import '@/editor'
 

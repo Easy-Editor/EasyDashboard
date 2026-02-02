@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { project } from '@easy-editor/core'
 import { useEffect, useRef, useState } from 'react'
-import type { SnippetProps } from '.'
+import type { SnippetProps } from './Snippet'
 
 /** 调试分组名称 */
 export const DEBUG_GROUP = 'DEBUG'

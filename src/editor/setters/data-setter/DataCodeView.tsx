@@ -1,4 +1,4 @@
-import { CodeEditor } from '@/components/common/CodeEditor'
+import { CodeEditor } from '@/components/common/code-editor'
 /**
  * DataCodeView - 代码视图
  * 使用 Monaco Editor 显示和编辑 JSON 数据
