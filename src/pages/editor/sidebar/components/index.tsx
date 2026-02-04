@@ -119,7 +119,7 @@ export const ComponentSidebar = observer(() => {
     <div className='flex flex-col overflow-y-auto'>
       {/* 顶部工具栏 */}
       <div className='flex items-center justify-between px-4 py-2 border-b border-border/50'>
-        <span className='text-sm font-medium'>Components</span>
+        <span className='text-sm font-medium'>列表</span>
         <MaterialsMenu />
       </div>
 
@@ -127,7 +127,7 @@ export const ComponentSidebar = observer(() => {
       <div className='relative px-4 py-3 border-b border-border/30'>
         <Search className='absolute left-7 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none' />
         <Input
-          placeholder='Search materials...'
+          placeholder='搜索物料...'
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           className='pl-9 h-9 bg-muted/30 border-border/50 focus:border-primary/50 transition-colors text-sm placeholder:text-sm'

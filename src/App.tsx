@@ -10,13 +10,12 @@ const Editor = lazy(() => import('./pages/editor'))
 function App() {
   return (
     <ErrorBoundary fallback={<div className='p-4 text-red-500'>严重错误！请刷新页面</div>}>
-      <ThemeProvider defaultTheme='dark' storageKey='easy-dashboard-theme'>
+      <ThemeProvider defaultTheme='system' storageKey='easy-dashboard-theme'>
         <Suspense fallback={<LogoLoading />}>
           <BrowserRouter>
             <Routes>
               <Route path='/' element={<Editor />} />
               <Route path='/preview' element={<Preview />} />
-              <Route path='/test' element={<div>test</div>} />
 
               <Route path='*' element={<Navigate to='/' />} />
             </Routes>

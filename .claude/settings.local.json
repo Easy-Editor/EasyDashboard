@@ -26,7 +26,10 @@
       "Bash(du:*)",
       "Bash(pnpm add:*)",
       "Bash(xargs:*)",
-      "Bash(pnpm add:ui:*)"
+      "Bash(pnpm add:ui:*)",
+      "Bash(ping:*)",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_close"
     ]
   },
   "enableAllProjectMcpServers": true,

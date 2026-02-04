@@ -3,12 +3,12 @@
  * 物料管理下拉菜单 - 整合本地调试和远程组件入口
  */
 
-import { useState, useEffect, useCallback } from 'react'
-import { observer } from 'mobx-react'
-import { Cloud, Plug, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { localLoader } from '@/editor/remote'
+import { Cloud, Plug, Settings } from 'lucide-react'
+import { observer } from 'mobx-react'
+import { useCallback, useEffect, useState } from 'react'
 import { LocalMaterialDebugDialog } from './LocalMaterialDebugDialog'
 import { RemoteMaterialDialog } from './RemoteMaterialDialog'
 
@@ -47,7 +47,7 @@ export const MaterialsMenu = observer(() => {
         <DropdownMenuTrigger asChild>
           <Button variant='outline' size='sm' className={hasConnections ? 'border-green-500' : ''}>
             <Settings className='mr-1 h-4 w-4' />
-            Materials
+            物料
             {hasConnections && <span className='ml-1.5 h-2 w-2 rounded-full bg-green-500 animate-pulse' />}
           </Button>
         </DropdownMenuTrigger>

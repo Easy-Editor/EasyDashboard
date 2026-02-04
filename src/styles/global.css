@@ -155,11 +155,14 @@
   --ruler-corner-border: hsl(0 0% 88%);
   --ruler-coords-color: hsl(0 0% 40%);
   --ruler-coords-bg: hsl(0 0% 96% / 0.9);
-  --ruler-canvas-bg: hsl(0 0% 98%);
+  --ruler-canvas-bg: hsl(0 0% 94%);
   --ruler-grid-color: hsl(0 0% 0% / 0.04);
   --ruler-grid-color-major: hsl(0 0% 0% / 0.08);
   --ruler-guideline-color: #ff3366;
   --ruler-guideline-hover: #ff5588;
+
+  /* ===== 仪表盘默认背景 ===== */
+  --dashboard-default-bg: #E5E5E5;
 }
 
 .dark {
@@ -254,6 +257,9 @@
   --ruler-grid-color-major: hsl(0 0% 100% / 0.08);
   --ruler-guideline-color: #ff3366;
   --ruler-guideline-hover: #ff5588;
+
+  /* ===== 仪表盘默认背景 ===== */
+  --dashboard-default-bg: #262626;
 }
 
 @theme inline {

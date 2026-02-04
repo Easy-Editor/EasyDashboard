@@ -5,7 +5,7 @@ export const defaultRootSchema: RootSchema = {
   fileDesc: '首页',
   componentName: 'Root',
   props: {
-    backgroundColor: '#232630',
+    backgroundColor: 'var(--dashboard-default-bg)',
     className: 'page test',
   },
   isRoot: true,

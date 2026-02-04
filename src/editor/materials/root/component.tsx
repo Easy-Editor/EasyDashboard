@@ -17,7 +17,9 @@ const Root = (props: RootProps) => {
       className='w-full h-full'
       style={{
         ...style,
-        background: backgroundImage ? `url(${backgroundImage}) center center / cover no-repeat` : backgroundColor,
+        background: backgroundImage
+          ? `url(${backgroundImage}) center center / cover no-repeat`
+          : backgroundColor || 'var(--dashboard-default-bg)',
       }}
     >
       {children}
