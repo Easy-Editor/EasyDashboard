@@ -1,5 +1,6 @@
 import { CanvasToolbar } from '@/components/editor/canvas-toolbar'
 import { RulerWrapper, type RulerWrapperRef } from '@/components/editor/ruler'
+import { useEditorMode } from '@/contexts/editor-mode-context'
 import { project } from '@easy-editor/core'
 import { SimulatorRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
@@ -8,9 +9,11 @@ import { RendererContextMenu } from '../context-menu'
 
 const Renderer = observer(() => {
   const isEmpty = project.documents.length === 0
+  const { mode } = useEditorMode()
 
   const rulerWrapperRef = useRef<RulerWrapperRef>(null)
   const [isReady, setIsReady] = useState(false)
+  const prevModeRef = useRef(mode)
 
   // 自适应宽度
   const handleFitWidth = () => {
@@ -31,6 +34,16 @@ const Renderer = observer(() => {
       setIsReady(true)
     })
   }, [])
+
+  // 模式切换时触发自适应画布
+  useEffect(() => {
+    if (isReady && prevModeRef.current !== mode && mode !== 'code') {
+      setTimeout(() => {
+        handleFitWidth()
+      }, 100)
+    }
+    prevModeRef.current = mode
+  }, [mode, isReady])
 
   if (isEmpty) {
     return (

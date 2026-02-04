@@ -12,7 +12,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Code, CodeXml, Component, Database, File, ListTree, Wand, X } from 'lucide-react'
+import { Code, Component, Database, File, ListTree, Wand, X } from 'lucide-react'
 import type * as React from 'react'
 import { useEffect, useState } from 'react'
 import { ComponentSidebar } from './components'
@@ -21,7 +21,6 @@ import { MaterialsSidebar } from './Materials'
 import { MethodStateSidebar } from './method-state'
 import { OutlineSidebar } from './Outline'
 import { PageSidebar } from './page'
-import { SchemaSidebar } from './Schema'
 
 const data = {
   navTop: [
@@ -62,14 +61,6 @@ const data = {
       component: <MaterialsSidebar />,
     },
   ],
-  navBottom: [
-    {
-      key: 'schema',
-      title: 'Schema',
-      icon: CodeXml,
-      component: <SchemaSidebar />,
-    },
-  ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -89,7 +80,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       style={
         {
           ...props.style,
-          '--sidebar-width': activeItem?.key === 'schema' ? '1000px' : '350px',
+          '--sidebar-width': '350px',
         } as React.CSSProperties
       }
     >
@@ -97,51 +88,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarContent>
           <SidebarGroup className='h-full'>
             <SidebarGroupContent className='h-full px-1.5 md:px-0'>
-              <SidebarMenu className='h-full flex flex-col justify-between'>
-                <div>
-                  {data.navTop.map(item => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        tooltip={{
-                          children: item.title,
-                          hidden: false,
-                        }}
-                        onClick={() => {
-                          setActiveItem(item)
-                          setOpen(item.key === activeItem?.key ? !open : true)
-                        }}
-                        isActive={activeItem?.key === item.key}
-                        data-active={activeItem?.key === item.key}
-                        className='px-2.5 md:px-2 transition-all duration-200 [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95'
-                      >
-                        <item.icon className='transition-all duration-200 [transition-timing-function:var(--ease-out)] group-hover:scale-110' />
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </div>
-                <div>
-                  {data.navBottom.map(item => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        tooltip={{
-                          children: item.title,
-                          hidden: false,
-                        }}
-                        onClick={() => {
-                          setActiveItem(item)
-                          setOpen(item.key === activeItem.key ? !open : true)
-                        }}
-                        isActive={activeItem?.key === item.key}
-                        data-active={activeItem?.key === item.key}
-                        className='px-2.5 md:px-2 transition-all duration-200 [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95'
-                      >
-                        <item.icon className='transition-all duration-200 [transition-timing-function:var(--ease-out)] group-hover:scale-110' />
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </div>
+              <SidebarMenu>
+                {data.navTop.map(item => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      tooltip={{
+                        children: item.title,
+                        hidden: false,
+                      }}
+                      onClick={() => {
+                        setActiveItem(item)
+                        setOpen(item.key === activeItem?.key ? !open : true)
+                      }}
+                      isActive={activeItem?.key === item.key}
+                      data-active={activeItem?.key === item.key}
+                      className='px-2.5 md:px-2 transition-all duration-200 [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95'
+                    >
+                      <item.icon className='transition-all duration-200 [transition-timing-function:var(--ease-out)] group-hover:scale-110' />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

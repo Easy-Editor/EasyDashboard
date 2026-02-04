@@ -8,6 +8,8 @@ import {
 import { cn } from '@/lib/utils'
 import { TRANSFORM_STAGE, project } from '@easy-editor/core'
 import { toast } from 'sonner'
+import { EditorModeTabs } from './EditorModeTabs'
+import { HistoryButtons } from './HistoryButtons'
 import { MainNav } from './Nav'
 
 export function AppHeader({ className }: { className?: string }) {
@@ -58,7 +60,12 @@ export function AppHeader({ className }: { className?: string }) {
     >
       <div className='w-full h-full px-4 flex items-center justify-between'>
         <MainNav />
+        <div className='absolute left-1/2 -translate-x-1/2'>
+          <EditorModeTabs />
+        </div>
         <div className='flex items-center gap-2'>
+          <HistoryButtons />
+          <div className='h-4 w-px bg-border/60' />
           <Button variant='ghost' size='sm' className='h-8 gap-2' onClick={preview}>
             预览
           </Button>
