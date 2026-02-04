@@ -359,6 +359,80 @@ class MaterialManagerClass {
 
     return versions.sort()
   }
+
+  /**
+   * 删除远程物料
+   * @param packageName 包名
+   * @param version 版本号（可选，不传则删除该包的所有版本）
+   * @param options 卸载选项
+   */
+  @action
+  async removeMaterial(
+    packageName: string,
+    version?: string,
+    options?: { force?: boolean },
+  ): Promise<{ success: boolean; reason?: string }> {
+    // 收集要删除的缓存键
+    const keysToRemove: string[] = []
+
+    if (version) {
+      const cacheKey = `${packageName}@${version}`
+      if (this.remoteMaterialPackages.has(cacheKey)) {
+        keysToRemove.push(cacheKey)
+      }
+    } else {
+      // 删除所有版本
+      for (const key of this.remoteMaterialPackages.keys()) {
+        if (key.startsWith(`${packageName}@`)) {
+          keysToRemove.push(key)
+        }
+      }
+    }
+
+    if (keysToRemove.length === 0) {
+      return { success: false, reason: '物料未找到' }
+    }
+
+    const errors: string[] = []
+
+    for (const key of keysToRemove) {
+      const cached = this.remoteMaterialPackages.get(key)
+      if (!cached) continue
+
+      const componentName = cached.meta.componentName
+
+      try {
+        // 检查是否可以安全卸载
+        if (!options?.force && !materials.registry.canUnload(componentName)) {
+          errors.push(`${componentName} 正在使用中`)
+          continue
+        }
+
+        // 从 core materials 中卸载
+        const unloaded = await materials.registry.unload(componentName, { force: options?.force })
+
+        if (unloaded) {
+          runInAction(() => {
+            this.remoteMaterialPackages.delete(key)
+          })
+        } else {
+          errors.push(`卸载 ${componentName} 失败`)
+        }
+      } catch (error) {
+        console.error(`[MaterialManager] Failed to remove material: ${key}`, error)
+        errors.push(`${componentName}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    // 刷新映射
+    materials.refreshComponentMetasMap()
+
+    if (errors.length > 0) {
+      return { success: false, reason: errors.join('; ') }
+    }
+
+    return { success: true }
+  }
 }
 
 /** 导出单例 */
