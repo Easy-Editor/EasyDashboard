@@ -3,9 +3,7 @@
  * 本地物料调试对话框 - 用于连接本地物料开发服务器
  */
 
-import { useState, useEffect, useCallback } from 'react'
-import { observer } from 'mobx-react'
-import { Plug, Unplug, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -14,10 +12,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { localLoader } from '@/editor/remote'
+import { AlertCircle, CheckCircle, Plug, RefreshCw, Unplug } from 'lucide-react'
+import { observer } from 'mobx-react'
+import { useCallback, useEffect, useState } from 'react'
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -147,14 +147,14 @@ export const LocalMaterialDebugDialog = observer(
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className='sm:max-w-md'>
           <DialogHeader>
-            <DialogTitle>Local Material Debug</DialogTitle>
-            <DialogDescription>Connect to a local material dev server for real-time debugging</DialogDescription>
+            <DialogTitle>本地物料调试</DialogTitle>
+            <DialogDescription>连接本地物料开发服务器进行实时调试</DialogDescription>
           </DialogHeader>
 
           <div className='space-y-4'>
             {/* 连接输入 */}
             <div className='space-y-2'>
-              <Label htmlFor='devServerUrl'>Dev Server URL</Label>
+              <Label htmlFor='devServerUrl'>开发服务器URL</Label>
               <div className='flex gap-2'>
                 <Input
                   id='devServerUrl'
@@ -189,14 +189,14 @@ export const LocalMaterialDebugDialog = observer(
             {status === 'connected' && !errorMessage && (
               <div className='flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800'>
                 <CheckCircle className='h-4 w-4' />
-                <span>Connected successfully!</span>
+                <span>连接成功！</span>
               </div>
             )}
 
             {/* 活动连接列表 */}
             {hasConnections && (
               <div className='space-y-2'>
-                <Label>Active Connections</Label>
+                <Label>活动连接</Label>
                 <div className='space-y-2'>
                   {connections.map(conn => (
                     <div key={conn.url} className='flex items-center justify-between rounded-md border bg-muted/50 p-2'>
@@ -232,13 +232,13 @@ export const LocalMaterialDebugDialog = observer(
 
             {/* 使用说明 */}
             <div className='rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground'>
-              <p className='font-medium'>Quick Start:</p>
+              <p className='font-medium'>快速开始：</p>
               <ol className='mt-1 list-inside list-decimal space-y-0.5'>
                 <li>
-                  Run <code className='rounded bg-muted px-1'>pnpm dev</code> in your material package
+                  在物料包中运行 <code className='rounded bg-muted px-1'>pnpm dev</code>
                 </li>
-                <li>Enter the dev server URL above</li>
-                <li>Click connect to start debugging</li>
+                <li>输入开发服务器URL</li>
+                <li>点击连接按钮开始调试</li>
               </ol>
             </div>
           </div>
@@ -246,7 +246,7 @@ export const LocalMaterialDebugDialog = observer(
           <DialogFooter>
             {hasConnections && (
               <Button variant='outline' onClick={handleDisconnectAll}>
-                Disconnect All
+                断开所有连接
               </Button>
             )}
           </DialogFooter>
