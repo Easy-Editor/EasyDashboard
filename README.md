@@ -1,6 +1,14 @@
 # EasyDashboard
 
+<div align="center">
+
+English | [简体中文](./README-zh_CN.md)
+
+</div>
+
 EasyDashboard is a data visualization dashboard solution developed based on the [EasyEditor](https://github.com/Easy-Editor/EasyEditor) low-code engine. This project demonstrates how to quickly build professional data visualization applications using EasyEditor's Dashboard plugin and React renderer.
+
+It ships with 20+ pre-built components, AI-powered design generation, multi-page support, and real-time preview — built with React 19, Tailwind CSS v4, and shadcn/ui.
 
 <div align="center">
   <img src=".github/assets/page.png" width='1000' />
@@ -8,13 +16,38 @@ EasyDashboard is a data visualization dashboard solution developed based on the 
 
 ## Features
 
-- **Rich Visualization Components**: Built-in various chart components and data display components, supporting custom extensions.
-- **Plug-and-Play**: Based on the EasyEditor plugin system, supporting drag-and-drop development of components.
-- **Modern Design**: Adopts a frosted glass design, supporting cool backgrounds and gradient effects.
-- **Responsive Layout**: Supports multiple screen sizes, defaulting to a resolution of 1920x1080.
-- **Real-Time Data**: Supports real-time data refresh and automatic update mechanisms.
-- **Enhanced Interactivity**: Supports full-screen display, data filtering, and other advanced interactive features.
-- **Out-of-the-Box**: Provides complete example templates and component configurations.
+### Design & Editing
+
+- **Drag-and-Drop Canvas** with multi-page support and configurable resolution (default 1920x1080)
+- **Real-Time Property Inspector** with 20+ setter types for fine-grained component configuration
+- **Keyboard Shortcuts** for copy, paste, undo/redo, alignment, grouping, layer ordering, and more
+- **Smart Guidelines** for automatic alignment and precise positioning
+- **Three Editing Modes**: Design Canvas, Code (JSON schema editor), and Preview
+
+### Components & Materials
+
+- **20 Pre-Built Components** across 7 categories:
+  - **Basic**: Text
+  - **Charts**: Bar, Line, Pie, Gauge, Radar, Scatter
+  - **Display**: Carousel, Number Flip, Progress, Scroll List
+  - **Media**: Audio, Video, Image, Filter
+  - **Interaction**: Button
+  - **Maps**: Fly Line, Geo Map
+- **On-Demand Remote Loading** — materials are fetched from npm CDN as needed
+- **Extensible Material System** — build and register your own components
+
+### Data & Interactivity
+
+- **Multiple Data Sources**: static data, REST API, and global shared data
+- **Dynamic Visibility Control** with JavaScript expressions
+- **Event Binding** to trigger actions and component methods
+
+### Developer Experience
+
+- **AI Assistant** — describe what you want in natural language, and the AI generates components directly on the canvas
+- **Auto-Save** — project schemas are automatically persisted to LocalStorage
+- **Dark Mode** with system preference detection
+- **Import/Export** project schemas as JSON
 
 ## Showcase
 
@@ -36,7 +69,7 @@ EasyDashboard is a data visualization dashboard solution developed based on the 
 
 There are many more features waiting for you to discover and explore.
 
-## Debug
+## Getting Started
 
 ### Environment Requirements
 
@@ -59,14 +92,16 @@ pnpm install
 pnpm dev
 ```
 
-### Build and Deployment
+### Available Scripts
 
 ```bash
-# Build the production version
-pnpm build
-
-# Preview the production build
-pnpm preview
+pnpm dev          # Start development server
+pnpm build        # Build for production (with type checking)
+pnpm build:prod   # Build for production (skip type checking)
+pnpm preview      # Preview production build
+pnpm lint         # Run code quality checks
+pnpm format       # Format code with Biome
+pnpm add:ui       # Add shadcn/ui components
 ```
 
 ## Contributing
