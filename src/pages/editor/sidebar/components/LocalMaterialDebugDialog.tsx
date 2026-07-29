@@ -72,7 +72,12 @@ export const LocalMaterialDebugDialog = observer(
         }
       }
 
-      const handleError = ({ error }: { error: Error }) => {
+      const handleError = (...args: unknown[]) => {
+        const event = args[0]
+        const error =
+          typeof event === 'object' && event !== null && 'error' in event && event.error instanceof Error
+            ? event.error
+            : new Error('Local material connection failed')
         setStatus('error')
         setErrorMessage(error.message)
       }

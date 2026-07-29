@@ -232,7 +232,7 @@ class LocalMaterialLoaderClass extends EventEmitter {
     }
 
     const delay = Math.min(
-      WS_RECONNECT_CONFIG.initialDelay * Math.pow(WS_RECONNECT_CONFIG.backoffFactor, connection.reconnect.retries),
+      WS_RECONNECT_CONFIG.initialDelay * WS_RECONNECT_CONFIG.backoffFactor ** connection.reconnect.retries,
       WS_RECONNECT_CONFIG.maxDelay,
     )
 

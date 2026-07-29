@@ -1,0 +1,22 @@
+{
+  "name": "@easy-dashboard/viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config vite.config.mts",
+    "build": "vite build --config vite.config.mts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "easy-dashboard": "workspace:*"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-decorators": "7.28.6",
+    "@babel/preset-typescript": "7.28.5",
+    "@tailwindcss/vite": "4.1.18",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "5.7.3",
+    "vite": "6.4.1"
+  }
+}

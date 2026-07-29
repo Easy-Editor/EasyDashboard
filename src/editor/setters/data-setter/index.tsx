@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
  * 3. 字段映射
  * 4. 数据预览
  */
-import { createDataSourceEngine } from '@easy-editor/plugin-datasource'
+import { type InterpretDataSource, createDataSourceEngine } from '@easy-editor/plugin-datasource'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataCodeView } from './DataCodeView'
 import { DataMappingTable } from './DataMappingTable'
@@ -54,22 +54,23 @@ const DataSetter = (props: DataSetterProps) => {
 
   // 获取数据源配置
   const dataSourceConfig = useMemo(() => {
+    void refreshKey
     if (!selected || !currentValue.datasourceId) return null
 
-    let dataSourceList: any[] = []
+    let dataSourceList: InterpretDataSource['list'] = []
 
     if (currentValue.sourceType === 'datasource') {
       // 组件级数据源
-      const dataSource = selected.getExtraPropValue('dataSource')
-      dataSourceList = dataSource?.list || []
+      const dataSource = selected.getExtraPropValue('dataSource') as InterpretDataSource | undefined
+      dataSourceList = dataSource?.list ?? []
     } else if (currentValue.sourceType === 'global') {
       // 全局数据源
       const rootNode = selected.document?.rootNode
-      const dataSource = rootNode?.getExtraPropValue('dataSource')
-      dataSourceList = dataSource?.list || []
+      const dataSource = rootNode?.getExtraPropValue('dataSource') as InterpretDataSource | undefined
+      dataSourceList = dataSource?.list ?? []
     }
 
-    return dataSourceList.find((d: any) => d.id === currentValue.datasourceId) || null
+    return dataSourceList.find(dataSource => dataSource.id === currentValue.datasourceId) ?? null
   }, [selected, currentValue.sourceType, currentValue.datasourceId, refreshKey])
 
   // 执行数据源请求

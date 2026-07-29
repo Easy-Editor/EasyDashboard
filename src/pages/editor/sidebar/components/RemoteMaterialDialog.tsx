@@ -3,9 +3,7 @@
  * 远程物料管理对话框 - 从 NPM/CDN 动态加载物料组件
  */
 
-import { useState, useCallback } from 'react'
-import { observer } from 'mobx-react'
-import { Plus, Trash2, Check, Package, Loader2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -14,15 +12,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { materialManager, remoteMaterialsConfig, RemoteLoadError } from '@/editor/remote'
+import { RemoteLoadError, materialManager, remoteMaterialsConfig } from '@/editor/remote'
 import type { RemoteMaterialConfig } from '@/editor/remote'
+import { Check, Loader2, Package, Plus, Trash2, X } from 'lucide-react'
+import { observer } from 'mobx-react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 
 interface RemoteMaterialDialogProps {

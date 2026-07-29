@@ -403,7 +403,7 @@ Sonner 通知组件 Sonner
 这些配置会帮助你自动生成和管理组件树，能够快速完成页面布局和功能设置。如果有其他特定需求，可以继续向我提供信息！
 `
 
-interface Suggestion {
+export interface Suggestion {
   id: string
   text: string
   category: string

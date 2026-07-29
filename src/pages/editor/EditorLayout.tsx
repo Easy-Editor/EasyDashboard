@@ -4,11 +4,8 @@ import { EditorModeProvider, useEditorMode } from '@/contexts/editor-mode-contex
 import { useEffect } from 'react'
 import { CodeView } from './canvas/CodeView'
 import { ConfigureSidebar } from './configure'
-import { AIChat } from './dialogs/AIChat'
 import { AppHeader } from './header'
 import { AppSidebar } from './sidebar'
-
-import '@/editor'
 
 function EditorContent({ children }: { children: React.ReactNode }) {
   const { mode } = useEditorMode()
@@ -83,7 +80,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           </main>
           <Toaster position='top-center' />
         </div>
-        <AIChat />
       </div>
     </EditorModeProvider>
   )

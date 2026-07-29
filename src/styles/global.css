@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../pages/preview/**/*.{ts,tsx}";
 
 @plugin "tailwindcss-animate";
 
@@ -24,7 +25,16 @@
 :root {
   /* ===== 字体系统 ===== */
   --font-sans: "Alibaba Sans", "Alibaba PuHuiTi", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Alibaba PuHuiTi", "Alibaba Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "SF Mono", "Consolas", "Monaco", monospace;
+
+  /* ===== EasyDashboard workbench ===== */
+  --workbench-canvas: #080a0d;
+  --workbench-rail: #0f1318;
+  --workbench-surface: #171d24;
+  --workbench-hairline: #2a333d;
+  --workbench-chalk: #f1f5f7;
+  --workbench-signal: #67c6d9;
 
   /* 主色调 - 黑白灰 */
   --primary: hsl(0 0% 9%);
@@ -299,6 +309,12 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-workbench-canvas: var(--workbench-canvas);
+  --color-workbench-rail: var(--workbench-rail);
+  --color-workbench-surface: var(--workbench-surface);
+  --color-workbench-hairline: var(--workbench-hairline);
+  --color-workbench-chalk: var(--workbench-chalk);
+  --color-workbench-signal: var(--workbench-signal);
 
   /* ===== 自定义颜色 ===== */
   --color-surface: var(--surface);
@@ -355,7 +371,7 @@
     font-synthesis-weight: none;
   }
 
-  @supports (font: -apple-system-body) and (-webkit-appearance: none) {
+  @supports (font-family: -apple-system-body, sans-serif) and (-webkit-appearance: none) {
     [data-wrapper] {
       @apply min-[1800px]:border-t;
     }

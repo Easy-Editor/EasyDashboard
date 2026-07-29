@@ -1,4 +1,7 @@
-import type { ProjectSchema, RootSchema } from '@easy-editor/core'
+import type { DataSource, ProjectSchema, RootSchema } from '@easy-editor/core'
+import type { InterpretDataSource } from '@easy-editor/plugin-datasource'
+
+const toSchemaDataSource = (dataSource: InterpretDataSource): DataSource => dataSource as unknown as DataSource
 
 export const defaultRootSchema: RootSchema = {
   fileName: 'home',
@@ -240,7 +243,7 @@ export const defaultProjectSchema: ProjectSchema = {
       //   },
       // ],
       children: [],
-      dataSource: {
+      dataSource: toSchemaDataSource({
         list: [
           {
             id: 'info',
@@ -256,7 +259,7 @@ export const defaultProjectSchema: ProjectSchema = {
               value: "function shouldFetch(options) { \n  console.log('should fetch.....');\n  return true; \n}",
             },
             dataHandler: {
-              type: 'JSExpression',
+              type: 'JSFunction',
               value: `function dataHandler(response) {
   console.log('info dataHandler', response, response.data.data.result);
   return response.data.data.result;
@@ -266,10 +269,10 @@ export const defaultProjectSchema: ProjectSchema = {
           {
             id: 'userApi',
             type: 'fetch',
+            isSync: true,
             options: {
               method: 'POST',
               uri: `${window.location.origin}/mock/user.json`,
-              isSync: true,
               timeout: 5000,
               isCors: true,
               params: {
@@ -286,7 +289,7 @@ export const defaultProjectSchema: ProjectSchema = {
               },
             },
             dataHandler: {
-              type: 'JSExpression',
+              type: 'JSFunction',
               value: `function dataHandler(response) {
   console.log('userApi dataHandler', response.data.data.result);
   return response.data.data.result;
@@ -294,7 +297,7 @@ export const defaultProjectSchema: ProjectSchema = {
             },
           },
         ],
-      },
+      }),
     },
     {
       ...defaultRootSchema,

@@ -148,7 +148,7 @@ export const VariableBind = observer((props: VariableBindProps) => {
               <div className='flex-1 flex flex-col gap-2'>
                 <div className='font-bold'>绑定</div>
                 <div className='relative w-full h-full'>
-                  <CodeEditor language='javascript' value={value} onChange={setValue} />
+                  <CodeEditor language='javascript' value={value} onChange={nextValue => setValue(nextValue ?? '')} />
                 </div>
               </div>
             </div>

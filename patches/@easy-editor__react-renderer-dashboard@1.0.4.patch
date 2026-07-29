@@ -1,0 +1,134 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -6506,6 +6506,7 @@
+   autoRender = (_init_extra__componentsMap(this), true);
+   autoRepaintNode = true;
+   _running = false;
++  _root;
+   host;
+   mount(host) {
+     this.host = host;
+@@ -6616,7 +6617,8 @@
+         container.id = containerId;
+       }
+     }
+-    client.createRoot(container).render(/*#__PURE__*/React3.createElement(SimulatorRendererView, {
++    this._root = client.createRoot(container);
++    this._root.render(/*#__PURE__*/React3.createElement(SimulatorRendererView, {
+       simulatorRenderer: this
+     }));
+     this.host.project.setRendererReady(this);
+@@ -6634,13 +6636,23 @@
+     this.autoRepaintNode = true;
+   }
+   dispose() {
+-    this.disposeFunctions.forEach(fn => fn());
++    this.disposeFunctions.splice(0).forEach(fn => fn());
++    this._root?.unmount();
++    this._root = undefined;
++    this._running = false;
+     this.documentInstances.forEach(docInst => docInst.dispose());
+-    mobx.untracked(() => {
++    mobx.runInAction(() => {
++      this._documentInstances = [];
++      this._layout = null;
++      this._libraryMap = {};
+       this._componentsMap = {};
+       this._components = null;
+       this._appContext = {};
+     });
++    if (this.host?.renderer === this) {
++      this.host.purge();
++      this.host.project.isRendererReady = false;
++    }
+   }
+ }
+ const getReactInternalFiber = el => {
+@@ -8463,6 +8475,7 @@
+   const {
+     viewport
+   } = host;
++  const [renderer] = React3.useState(() => new SimulatorRendererContainer());
+   const canvasRef = React3.useRef(null);
+   const viewportRef = React3.useRef(null);
+   const {
+@@ -8496,8 +8509,9 @@
+ 
+   React3.useEffect(() => {
+     viewport.mount(viewportRef.current);
+-    simulatorRenderer.mount(host);
+-  }, []);
++    renderer.mount(host);
++    return () => setTimeout(() => renderer.dispose(), 0);
++  }, [host, renderer, viewport]);
+   return /*#__PURE__*/jsxRuntime.jsx("div", {
+     ref: canvasRef,
+     className: classnames('lc-simulator-canvas', `lc-simulator-device-${host.device}`, host.deviceClassName),
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -6486,6 +6486,7 @@
+   autoRender = (_init_extra__componentsMap(this), true);
+   autoRepaintNode = true;
+   _running = false;
++  _root;
+   host;
+   mount(host) {
+     this.host = host;
+@@ -6596,7 +6597,8 @@
+         container.id = containerId;
+       }
+     }
+-    createRoot(container).render(/*#__PURE__*/createElement(SimulatorRendererView, {
++    this._root = createRoot(container);
++    this._root.render(/*#__PURE__*/createElement(SimulatorRendererView, {
+       simulatorRenderer: this
+     }));
+     this.host.project.setRendererReady(this);
+@@ -6614,13 +6616,23 @@
+     this.autoRepaintNode = true;
+   }
+   dispose() {
+-    this.disposeFunctions.forEach(fn => fn());
++    this.disposeFunctions.splice(0).forEach(fn => fn());
++    this._root?.unmount();
++    this._root = undefined;
++    this._running = false;
+     this.documentInstances.forEach(docInst => docInst.dispose());
+-    untracked(() => {
++    runInAction(() => {
++      this._documentInstances = [];
++      this._layout = null;
++      this._libraryMap = {};
+       this._componentsMap = {};
+       this._components = null;
+       this._appContext = {};
+     });
++    if (this.host?.renderer === this) {
++      this.host.purge();
++      this.host.project.isRendererReady = false;
++    }
+   }
+ }
+ const getReactInternalFiber = el => {
+@@ -8443,6 +8455,7 @@
+   const {
+     viewport
+   } = host;
++  const [renderer] = useState(() => new SimulatorRendererContainer());
+   const canvasRef = useRef(null);
+   const viewportRef = useRef(null);
+   const {
+@@ -8476,8 +8489,9 @@
+ 
+   useEffect(() => {
+     viewport.mount(viewportRef.current);
+-    simulatorRenderer.mount(host);
+-  }, []);
++    renderer.mount(host);
++    return () => setTimeout(() => renderer.dispose(), 0);
++  }, [host, renderer, viewport]);
+   return /*#__PURE__*/jsx("div", {
+     ref: canvasRef,
+     className: classnames('lc-simulator-canvas', `lc-simulator-device-${host.device}`, host.deviceClassName),

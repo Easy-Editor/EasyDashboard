@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { Bot, ChevronDown, ChevronUp, Lightbulb, Send, User, X } from 'lucide-react'
 import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { categorizedSuggestions, quickSuggestions, systemPrompt } from './prompt'
+import { type Suggestion, categorizedSuggestions, quickSuggestions, systemPrompt } from './prompt'
 import { useCustomChat } from './useCustomChat'
 import { executeAiOperations, filterMessageContent } from './utils'
 
@@ -62,6 +62,7 @@ export const AiChatDialog: React.FC<AiChatDialogProps> = ({ isOpen, onClose, cla
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isSuggestionsCollapsed, setIsSuggestionsCollapsed] = useState(true)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: message and loading changes intentionally trigger scrolling.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, isLoading])

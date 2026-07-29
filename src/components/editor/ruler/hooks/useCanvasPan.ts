@@ -1,5 +1,5 @@
 import { project } from '@easy-editor/core'
-import { useCallback, useEffect, useState, type RefObject } from 'react'
+import { type RefObject, useCallback, useEffect, useState } from 'react'
 
 interface CanvasPanState {
   /** 画布偏移量 */

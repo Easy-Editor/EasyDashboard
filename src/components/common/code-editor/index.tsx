@@ -1,7 +1,7 @@
 import { useDebounceFn } from '@/hooks/useDebounceFn'
 import type { EditorProps, OnChange, OnMount } from '@monaco-editor/react'
 import { Editor as MonacoEditor, loader } from '@monaco-editor/react'
-import { type FC, useState } from 'react'
+import type { FC } from 'react'
 import { libType } from './lib'
 
 loader.config({
@@ -37,8 +37,6 @@ const defaultOptions: EditorProps['options'] = {
 }
 
 export const CodeEditor: FC<EditorProps> = props => {
-  const [theme, setTheme] = useState('vs-dark')
-
   // 处理代码修改， args需要做一层透传来完善防抖，避免触发重复构建
   const { run: handleChange } = useDebounceFn<OnChange>(
     (...args) => {
@@ -64,7 +62,7 @@ export const CodeEditor: FC<EditorProps> = props => {
   return (
     <MonacoEditor
       loading={<span>loading</span>}
-      theme={theme}
+      theme='vs-dark'
       {...props}
       onChange={handleChange}
       onMount={onEditorMount}

@@ -6,7 +6,7 @@
 import { DataSourceEditorModal } from '@/components/common/datasource-editor'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { DataSource, Node } from '@easy-editor/core'
+import type { Node } from '@easy-editor/core'
 import type { InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
@@ -20,12 +20,17 @@ interface DatasourceSelectorProps {
   onRefresh?: () => void
 }
 
+interface EditableDataSource {
+  list?: InterpretDataSourceConfig[]
+}
+
 export const DatasourceSelector = (props: DatasourceSelectorProps) => {
   const { node, sourceType, datasourceId, onChange, onRefresh } = props
   // 获取全局数据源列表
-  const globalDataSourceList = (node?.document?.rootNode?.getExtraPropValue('dataSource') as DataSource)?.list || []
+  const globalDataSourceList =
+    (node?.document?.rootNode?.getExtraPropValue('dataSource') as EditableDataSource | undefined)?.list ?? []
   // 获取组件数据源列表
-  const componentDataSourceList = (node?.getExtraPropValue('dataSource') as DataSource)?.list || []
+  const componentDataSourceList = (node?.getExtraPropValue('dataSource') as EditableDataSource | undefined)?.list ?? []
   // 根据模式选择数据源列表
   const dataSourceList = sourceType === 'global' ? globalDataSourceList : componentDataSourceList
 
@@ -43,8 +48,8 @@ export const DatasourceSelector = (props: DatasourceSelectorProps) => {
   // 删除数据源
   const handleDelete = useCallback(() => {
     if (!datasourceId || !node) return
-    const dataSource = node.getExtraPropValue('dataSource') || { list: [] }
-    const newList = dataSource.list.filter((d: any) => d.id !== datasourceId)
+    const dataSource = (node.getExtraPropValue('dataSource') as EditableDataSource | undefined) ?? { list: [] }
+    const newList = (dataSource.list ?? []).filter(dataSourceItem => dataSourceItem.id !== datasourceId)
     node.setExtraPropValue('dataSource', { ...dataSource, list: newList })
     onChange('')
   }, [datasourceId, node, onChange])
@@ -54,17 +59,18 @@ export const DatasourceSelector = (props: DatasourceSelectorProps) => {
     (ds: InterpretDataSourceConfig) => {
       if (!node) return
 
-      const dataSource = node.getExtraPropValue('dataSource') || { list: [] }
-      const existingIndex = dataSource.list.findIndex((d: any) => d.id === ds.id)
+      const dataSource = (node.getExtraPropValue('dataSource') as EditableDataSource | undefined) ?? { list: [] }
+      const currentList = dataSource.list ?? []
+      const existingIndex = currentList.findIndex(dataSourceItem => dataSourceItem.id === ds.id)
 
       let newList: InterpretDataSourceConfig[]
       if (existingIndex >= 0) {
         // 编辑现有数据源
-        newList = [...dataSource.list]
+        newList = [...currentList]
         newList[existingIndex] = ds
       } else {
         // 新建数据源
-        newList = [...dataSource.list, ds]
+        newList = [...currentList, ds]
       }
 
       node.setExtraPropValue('dataSource', { ...dataSource, list: newList })
@@ -90,7 +96,7 @@ export const DatasourceSelector = (props: DatasourceSelectorProps) => {
   // 打开编辑弹窗
   const handleOpenEdit = useCallback(() => {
     if (!datasourceId) return
-    const ds = componentDataSourceList.find((d: any) => d.id === datasourceId)
+    const ds = componentDataSourceList.find(dataSourceItem => dataSourceItem.id === datasourceId)
     if (ds) {
       setEditingDataSource(ds)
       setModalOpen(true)
@@ -118,7 +124,7 @@ export const DatasourceSelector = (props: DatasourceSelectorProps) => {
               {dataSourceList.length === 0 ? (
                 <div className='px-3 py-2 text-xs text-muted-foreground text-center'>暂无数据源</div>
               ) : (
-                dataSourceList.map((ds: any) => (
+                dataSourceList.map(ds => (
                   <SelectItem key={ds.id} value={ds.id}>
                     {ds.id}
                   </SelectItem>

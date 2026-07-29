@@ -166,7 +166,6 @@ const OutlineTree = observer(({ node, depth = 0 }: { node: Node<NodeSchema>; dep
           data-hidden={node.isHidden}
           data-locked={node.isLocked}
           style={{ paddingLeft: `calc(${depth} * var(--outline-indent-size) + 0.5rem)` }}
-          tabIndex={0}
         >
           <div className={styles.nodeContent}>
             <CollapsibleTrigger asChild>

@@ -123,7 +123,9 @@ class SetterManagerClass {
         failed,
       }
     } finally {
-      this.isLoading = false
+      runInAction(() => {
+        this.isLoading = false
+      })
     }
   }
 

@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react'
  * DataTableView - 表格视图
  * 使用 react-data-grid 实现 Excel 风格的数据表格
  */
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { type Column, DataGrid, type RenderEditCellProps } from 'react-data-grid'
 import 'react-data-grid/lib/styles.css'
 import type { ExpectedField } from './types'
@@ -19,8 +19,15 @@ interface DataTableViewProps {
 
 // 自定义文本编辑器
 function TextEditor<TRow, TSummaryRow>({ row, column, onRowChange, onClose }: RenderEditCellProps<TRow, TSummaryRow>) {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
   return (
     <input
+      ref={inputRef}
       className='w-full h-full px-2 border-none outline-none bg-background text-foreground text-xs'
       value={(row as any)[column.key] ?? ''}
       onChange={e => onRowChange({ ...row, [column.key]: e.target.value })}
@@ -32,7 +39,6 @@ function TextEditor<TRow, TSummaryRow>({ row, column, onRowChange, onClose }: Re
           onClose(false)
         }
       }}
-      autoFocus
     />
   )
 }

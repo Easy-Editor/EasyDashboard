@@ -4,7 +4,6 @@ import { SidebarMenu, SidebarMenuItem, SidebarMenuSub } from '@/components/ui/si
 import { SidebarMenuExtra, SidebarMenuExtraItem } from '@/components/ui/sidebar-extra'
 import { defaultRootSchema } from '@/editor/const'
 import { loadRemoteMaterialsFromComponentsMap } from '@/editor/remote/util'
-import { getPageDataFromLocalStorage } from '@/lib/schema'
 import { cn } from '@/lib/utils'
 import { type Document, type RootSchema, project } from '@easy-editor/core'
 import { ChevronRight, CirclePlus, File, FilePenLine, Folder, Trash2 } from 'lucide-react'
@@ -129,17 +128,10 @@ const Page: React.FC<{
       return
     }
 
-    // 未加载，需要从 localStorage 加载
+    // 未加载页面仍存在于服务端草稿的 canonical componentsTree 中。
     setIsLoading(true)
     try {
-      const pageData = getPageDataFromLocalStorage(page.fileName)
-
-      // 加载该页面的远程物料
-      if (pageData?.componentsMap) {
-        await loadRemoteMaterialsFromComponentsMap(pageData.componentsMap)
-      }
-
-      // 打开页面（会从 componentsTree 中查找并创建 Document）
+      await loadRemoteMaterialsFromComponentsMap(project.export().componentsMap)
       project.open(page.fileName)
     } catch (error) {
       console.error('Failed to load page:', error)

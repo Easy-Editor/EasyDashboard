@@ -23,43 +23,6 @@ const configure: Configure = {
             },
             {
               type: 'group',
-              title: '画布设置',
-              setter: {
-                componentName: 'CollapseSetter',
-                props: {
-                  icon: false,
-                },
-              },
-              items: [
-                {
-                  name: '__resolution',
-                  title: '分辨率',
-                  setter: 'ResolutionSetter',
-                  extraProps: {
-                    label: false,
-                    getValue(target: any) {
-                      const node = target.top?.firstNode
-                      if (!node) return { width: 1920, height: 1080 }
-
-                      const rect = node.getExtraPropValue('$dashboard.rect')
-                      return {
-                        width: rect?.width ?? 1920,
-                        height: rect?.height ?? 1080,
-                      }
-                    },
-                    setValue(target: any, value: { width: number; height: number }) {
-                      const node = target.top?.firstNode
-                      if (!node || !value) return
-
-                      node.setExtraPropValue('$dashboard.rect.width', value.width)
-                      node.setExtraPropValue('$dashboard.rect.height', value.height)
-                    },
-                  },
-                },
-              ],
-            },
-            {
-              type: 'group',
               title: '全局属性',
               setter: {
                 componentName: 'CollapseSetter',

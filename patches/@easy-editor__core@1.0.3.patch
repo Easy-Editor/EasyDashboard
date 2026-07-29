@@ -1,0 +1,24 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -10843,7 +10843,7 @@
+     });
+   }
+   getPropValue(propName) {
+-    return this.first.getProp(propName.toString(), true)?.getValue();
++    return this.first.getProp(propName.toString(), false)?.getValue();
+   }
+   getExtraPropValue(propName) {
+     return this.first.getExtraProp(propName, false)?.getValue();
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -10841,7 +10841,7 @@
+     });
+   }
+   getPropValue(propName) {
+-    return this.first.getProp(propName.toString(), true)?.getValue();
++    return this.first.getProp(propName.toString(), false)?.getValue();
+   }
+   getExtraPropValue(propName) {
+     return this.first.getExtraProp(propName, false)?.getValue();

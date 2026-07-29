@@ -1,5 +1,5 @@
-import type { PropsWithChildren } from 'react'
 import type { InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
+import type { PropsWithChildren } from 'react'
 
 export interface DataSourceEditorModalProps extends PropsWithChildren {
   open: boolean

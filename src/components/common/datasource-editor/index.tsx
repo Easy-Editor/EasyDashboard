@@ -11,10 +11,10 @@ import { observer } from 'mobx-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { BasicInfoSection } from './BasicInfoSection'
-import { createDefaultFormData } from './constants'
-import { formDataToDataSourceConfig, parseDataSourceToFormData } from './formUtils'
 import { FunctionConfigSection } from './FunctionConfigSection'
 import { RequestConfigSection } from './RequestConfigSection'
+import { createDefaultFormData } from './constants'
+import { formDataToDataSourceConfig, parseDataSourceToFormData } from './formUtils'
 import type { DataSourceEditorModalProps, DataSourceFormData } from './types'
 
 export const DataSourceEditorModal = observer((props: DataSourceEditorModalProps) => {

@@ -1,11 +1,11 @@
 import { CodeEditor } from '@/components/common/code-editor'
+import { Button } from '@/components/ui/button'
+import { useEditorMode } from '@/contexts/editor-mode-context'
 import { useDebounceFn } from '@/hooks/useDebounceFn'
 import { project } from '@easy-editor/core'
 import { Code, X } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { useEffect, useState } from 'react'
-import { useEditorMode } from '@/contexts/editor-mode-context'
-import { Button } from '@/components/ui/button'
 
 export const CodeView = observer(() => {
   const schema = project.export()

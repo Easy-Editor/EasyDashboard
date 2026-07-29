@@ -62,5 +62,11 @@
     "parser": {
       "unsafeParameterDecoratorsEnabled": true
     }
+  },
+  "json": {
+    "parser": {
+      "allowComments": true,
+      "allowTrailingCommas": true
+    }
   }
 }

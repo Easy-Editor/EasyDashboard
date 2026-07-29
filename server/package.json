@@ -1,0 +1,31 @@
+{
+  "name": "@easy-dashboard/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../.env src/node.ts",
+    "start": "tsx --env-file-if-exists=../.env src/node.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.0.12",
+    "@supabase/supabase-js": "2.111.0",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.12.32",
+    "pg": "8.22.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.7",
+    "@types/pg": "8.20.0",
+    "tsx": "4.23.1",
+    "typescript": "5.7.3",
+    "vitest": "4.1.10"
+  }
+}

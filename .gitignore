@@ -13,6 +13,8 @@ lerna-debug.log*
 # Caches
 
 .cache
+.playwright-cli/
+output/
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 
@@ -119,6 +121,7 @@ out
 
 .nuxt
 dist
+dist-viewer/
 
 # Gatsby files
 
@@ -176,3 +179,4 @@ dist
 
 # turbo
 .turbo
+.vercel/

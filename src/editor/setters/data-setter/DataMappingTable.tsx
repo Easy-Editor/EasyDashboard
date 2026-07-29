@@ -1,10 +1,10 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 /**
  * DataMappingTable - 字段映射表
  * 用于配置组件字段与数据源字段的映射关系
  * 三列结构：字段 | 映射 | 说明
  */
 import { useCallback, useMemo } from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ExpectedField, FieldMapping } from './types'
 import { extractFieldsFromData } from './utils'
 

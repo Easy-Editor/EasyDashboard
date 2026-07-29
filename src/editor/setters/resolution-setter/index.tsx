@@ -1,18 +1,16 @@
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { project } from '@easy-editor/core'
-import { Monitor, Smartphone, Tablet, TvMinimal } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { useCallback, useEffect, useState } from 'react'
 
 // 常用分辨率预设
 const RESOLUTION_PRESETS = [
-  { label: 'HD', tooltip: '1280 x 720', value: '1280x720', width: 1280, height: 720, icon: Smartphone },
-  { label: 'FHD', tooltip: '1920 x 1080', value: '1920x1080', width: 1920, height: 1080, icon: Monitor },
-  { label: '2K', tooltip: '2560 x 1440', value: '2560x1440', width: 2560, height: 1440, icon: Tablet },
-  { label: '4K', tooltip: '3840 x 2160', value: '3840x2160', width: 3840, height: 2160, icon: TvMinimal },
+  { label: 'HD', value: '1280x720', width: 1280, height: 720 },
+  { label: 'FHD', value: '1920x1080', width: 1920, height: 1080 },
+  { label: '2K', value: '2560x1440', width: 2560, height: 1440 },
+  { label: '4K', value: '3840x2160', width: 3840, height: 2160 },
 ] as const
 
 interface ResolutionValue {
@@ -88,68 +86,62 @@ const ResolutionSetter = observer((props: ResolutionSetterProps) => {
     setSelectedPreset('')
   }
 
-  // 输入框失焦时应用自定义分辨率
-  const handleInputBlur = () => {
+  const applyCustomResolution = () => {
     if (customWidth !== currentWidth || customHeight !== currentHeight) {
       updateResolution(customWidth, customHeight)
     }
   }
 
+  // 在宽高输入之间切换时不提交，只在离开整组输入后应用一次
+  const handleInputGroupBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return
+    applyCustomResolution()
+  }
+
   // 回车键应用
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      if (customWidth !== currentWidth || customHeight !== currentHeight) {
-        updateResolution(customWidth, customHeight)
-      }
+      applyCustomResolution()
     }
   }
 
   return (
     <div className='flex flex-col gap-3'>
       {/* 预设快捷选择 */}
-      <TooltipProvider delayDuration={100}>
-        <ToggleGroup
-          type='single'
-          value={selectedPreset}
-          onValueChange={handlePresetChange}
-          className='grid grid-cols-4 gap-1 w-full'
-        >
-          {RESOLUTION_PRESETS.map(preset => {
-            const Icon = preset.icon
-            return (
-              <Tooltip key={preset.value}>
-                <TooltipTrigger asChild>
-                  <ToggleGroupItem
-                    value={preset.value}
-                    className={cn(
-                      'flex flex-col items-center justify-center gap-0.5 h-12 rounded-md border border-transparent',
-                      'hover:bg-accent/50 hover:border-accent',
-                      'data-[state=on]:bg-accent data-[state=on]:border-primary/50',
-                      'transition-all duration-150',
-                    )}
-                  >
-                    <Icon className='size-4 opacity-70' />
-                    <span className='text-[10px] font-medium'>{preset.label}</span>
-                  </ToggleGroupItem>
-                </TooltipTrigger>
-                <TooltipContent side='bottom' className='text-xs'>
-                  {preset.tooltip}
-                </TooltipContent>
-              </Tooltip>
-            )
-          })}
-        </ToggleGroup>
-      </TooltipProvider>
+      <ToggleGroup
+        type='single'
+        value={selectedPreset}
+        onValueChange={handlePresetChange}
+        className='grid w-full grid-cols-4 gap-1'
+      >
+        {RESOLUTION_PRESETS.map(preset => (
+          <ToggleGroupItem
+            key={preset.value}
+            value={preset.value}
+            aria-label={`${preset.label} ${preset.width} × ${preset.height}`}
+            className={cn(
+              'flex h-12 flex-col items-center justify-center gap-1 rounded-md border border-transparent',
+              'hover:border-accent hover:bg-accent/50',
+              'data-[state=on]:border-primary/50 data-[state=on]:bg-accent',
+              'transition-all duration-150',
+            )}
+          >
+            <span className='text-[10px] font-medium'>{preset.label}</span>
+            <span className='font-mono text-[8px] tabular-nums text-muted-foreground'>
+              {preset.width}×{preset.height}
+            </span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
 
       {/* 自定义输入 */}
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-2' onBlur={handleInputGroupBlur}>
         <div className='relative flex-1'>
           <Input
             type='number'
             min={1}
             value={customWidth}
             onChange={handleWidthChange}
-            onBlur={handleInputBlur}
             onKeyDown={handleKeyDown}
             className='h-8 pr-7 text-xs font-mono tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           />
@@ -164,7 +156,6 @@ const ResolutionSetter = observer((props: ResolutionSetterProps) => {
             min={1}
             value={customHeight}
             onChange={handleHeightChange}
-            onBlur={handleInputBlur}
             onKeyDown={handleKeyDown}
             className='h-8 pr-7 text-xs font-mono tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
           />

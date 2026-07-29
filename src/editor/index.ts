@@ -1,9 +1,8 @@
-import { getPageDataFromLocalStorage, getProjectSchemaFromLocalStorage } from '@/lib/schema'
-import { init, materials, plugins, project, setters } from '@easy-editor/core'
+import { type ProjectSchema, init, materials, plugins, project, setters } from '@easy-editor/core'
 import DashboardPlugin from '@easy-editor/plugin-dashboard'
 import DataSourcePlugin from '@easy-editor/plugin-datasource'
-import { defaultProjectSchema } from './const'
 import { componentMetaMap } from './materials'
+import { getViewportFromSchema } from './persistence/schema-viewport'
 import { pluginList } from './plugins'
 import { loadAllRemoteResources } from './remote'
 import { loadRemoteMaterialsFromComponentsMap } from './remote/util'
@@ -28,59 +27,90 @@ plugins.registerPlugins([
 materials.buildComponentMetasMap(Object.values(componentMetaMap))
 setters.registerSetter(setterMap)
 
-await init({
-  designMode: 'design',
-  appHelper: {
-    utils: {
-      test: 'test',
-    },
-  },
-})
+let editorInitialization: Promise<void> | null = null
+let editorTeardown: Promise<void> | null = null
+let lifecycleBound = false
 
-project.onSimulatorReady(simulator => {
-  // 从已加载的 schema 中读取分辨率
-  const projectSchema = getProjectSchemaFromLocalStorage()
-  const firstPage = projectSchema?.componentsTree?.[0] as any
-  const rect = firstPage?.$dashboard?.rect
-  const viewport = {
-    width: rect?.width ?? 1920,
-    height: rect?.height ?? 1080,
+function bindEditorLifecycle() {
+  if (lifecycleBound) return
+  lifecycleBound = true
+
+  project.onSimulatorReady(simulator => {
+    simulator.set('deviceStyle', {
+      viewport: getViewportFromSchema(project.export()),
+    })
+  })
+  project.onRendererReady(() => {
+    project.documents[0]?.rootNode?.select()
+  })
+}
+
+async function ensureEditorInitialized() {
+  if (editorTeardown) await editorTeardown
+  if (!editorInitialization) {
+    editorInitialization = init({
+      designMode: 'design',
+      appHelper: {
+        utils: {
+          test: 'test',
+        },
+      },
+    }).then(async () => {
+      bindEditorLifecycle()
+
+      try {
+        await loadAllRemoteResources()
+      } catch (error) {
+        console.error('[Remote] Failed to load resources:', error)
+      }
+    })
   }
-  simulator.set('deviceStyle', { viewport })
-})
 
-project.onRendererReady(() => {
-  project.documents[0]?.rootNode?.select()
-})
+  await editorInitialization
+}
 
-const initProjectSchema = async () => {
-  const projectSchema = getProjectSchemaFromLocalStorage()
+/**
+ * Initializes the editor runtime, then replaces the in-memory project with the
+ * canonical draft received from the API. No project data is read from browser
+ * storage.
+ */
+export async function initializeEditorProject(schema: ProjectSchema) {
+  await ensureEditorInitialized()
+  await loadRemoteMaterialsFromComponentsMap(schema.componentsMap)
+  project.load(schema, true)
 
-  if (projectSchema && projectSchema.componentsTree.length > 0) {
-    const firstPageFileName = projectSchema.componentsTree[0].fileName
-
-    // 尝试从页面级存储获取第一个页面的数据
-    const firstPageData = firstPageFileName ? getPageDataFromLocalStorage(firstPageFileName) : null
-
-    // 加载项目（只会创建第一个页面的 Document）
-    project.load(projectSchema, true)
-
-    // 只加载第一个页面的远程物料
-    if (firstPageData?.componentsMap) {
-      // 新格式：从页面级存储加载
-      loadRemoteMaterialsFromComponentsMap(firstPageData.componentsMap)
-    } else if (projectSchema.componentsMap) {
-      // 旧格式兼容：从项目级 componentsMap 加载
-      loadRemoteMaterialsFromComponentsMap(projectSchema.componentsMap)
-    }
-  } else {
-    project.load(defaultProjectSchema, true)
+  if (project.simulator) {
+    project.simulator.set('deviceStyle', {
+      viewport: getViewportFromSchema(schema),
+    })
   }
 }
 
-await initProjectSchema()
-
-// 异步加载远程资源
-loadAllRemoteResources().catch(error => {
-  console.error('[Remote] Failed to load resources:', error)
-})
+/**
+ * Releases the browser-owned simulator and model between route entries.
+ * The editor engine itself stays initialized so the next entry can reuse the
+ * registered plugins/materials, while the project document and renderer are
+ * rebuilt from the canonical draft.
+ */
+export function teardownEditorProject(): Promise<void> {
+  if (!editorTeardown) {
+    // The renderer owns a nested React root. Its effect cleanup runs in the
+    // next task, so wait one additional task before removing the document.
+    // Keeping the engine initialized is intentional: core@1.0.x cannot safely
+    // register the same plugin setters again after destroy()/init().
+    editorTeardown = new Promise<void>(resolve => {
+      window.setTimeout(() => window.setTimeout(resolve, 0), 0)
+    })
+      .then(() => {
+        project.simulator?.purge?.()
+        project.unload()
+      })
+      .catch(error => {
+        console.warn('[Editor] 释放项目失败', error)
+      })
+      .finally(() => {
+        editorTeardown = null
+      })
+  }
+  return editorTeardown
+}
