@@ -7,7 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "dev": "vite --config vite.config.mts",
+    "dev": "vite --host 127.0.0.1 --config vite.config.mts",
     "build": "vite build --config vite.config.mts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

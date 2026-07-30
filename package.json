@@ -13,7 +13,7 @@
     "format": "biome format --write .",
     "lint": "biome check .",
     "dev": "concurrently --kill-others-on-fail --names app,viewer,api --prefix-colors cyan,magenta,green \"pnpm dev:web\" \"pnpm dev:viewer\" \"pnpm dev:server\"",
-    "dev:web": "vite --port 5173 --strictPort",
+    "dev:web": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "dev:viewer": "pnpm --dir viewer dev",
     "dev:server": "pnpm --dir server dev",
     "build": "pnpm build:web && pnpm build:viewer && pnpm build:server",
