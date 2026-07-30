@@ -1,7 +1,5 @@
 import { MethodEditorModal, type MethodEditorModalProps } from '@/components/common/MethodEditorModal'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { Select } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { JSFunction, Node, RootSchema } from '@easy-editor/core'
 import { Plus } from 'lucide-react'
 import { observer } from 'mobx-react'
@@ -9,6 +7,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { genId } from '.'
 import { CardItem } from './CardItem'
+import { normalizeExtraPropRecord } from './utils'
 
 const lifeCycleOptions = [
   { name: 'componentDidMount', description: '组件挂载时' },
@@ -21,7 +20,9 @@ const lifeCycleOptions = [
 ]
 
 export const LifeCycleList = observer(({ rootNode }: { rootNode: Node<RootSchema> }) => {
-  const lifeCycles = rootNode.getExtraPropValue('lifeCycles') as Record<string, JSFunction>
+  const lifeCycles = normalizeExtraPropRecord(
+    rootNode.getExtraPropValue('lifeCycles') as Record<string, JSFunction> | null | undefined,
+  )
   const [open, setOpen] = useState(false)
   const [currentLifeCycle, setCurrentLifeCycle] = useState<JSFunction & { name: string; description?: string }>()
   const usedLifeCycles = Object.keys(lifeCycles)
@@ -72,44 +73,36 @@ export const LifeCycleList = observer(({ rootNode }: { rootNode: Node<RootSchema
 
   return (
     <MethodEditorModal open={open} method={currentLifeCycle} onClose={() => setOpen(false)} onConfirm={handleConfirm}>
-      {Object.keys(lifeCycles).length > 0 && (
-        <div className='space-y-4'>
-          <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
-            <span>生命周期方法</span>
-            <Select>
-              <HoverCard>
-                <HoverCardTrigger>
-                  <Plus className='w-4 h-4 cursor-pointer' />
-                </HoverCardTrigger>
-                <HoverCardContent>
-                  <ul className='space-y-2'>
-                    {lifeCycleOptions.map(option => (
-                      <li
-                        key={option.name}
-                        onClick={() => (usedLifeCycles?.includes(option.name) ? undefined : handleAdd(option.name))}
-                      >
-                        <a
-                          className={cn(
-                            'block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors',
-                            usedLifeCycles?.includes(option.name)
-                              ? 'bg-muted/50 text-muted-foreground/50 cursor-not-allowed pointer-events-none'
-                              : 'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
-                          )}
-                          aria-disabled={usedLifeCycles?.includes(option.name)}
-                        >
-                          <div className='text-xs font-medium leading-none normal-case'>{option.name}</div>
-                          <p className='line-clamp-2 text-xs leading-snug text-muted-foreground'>
-                            {option.description}
-                          </p>
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </HoverCardContent>
-              </HoverCard>
-            </Select>
-          </h3>
-          {Object.entries(lifeCycles).map(([key, value]) => (
+      <div className='space-y-4'>
+        <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
+          <span>生命周期方法</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type='button'
+                aria-label='新增生命周期方法'
+                className='inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+              >
+                <Plus className='size-4' aria-hidden='true' />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end' className='w-64'>
+              {lifeCycleOptions.map(option => (
+                <DropdownMenuItem
+                  key={option.name}
+                  disabled={usedLifeCycles.includes(option.name)}
+                  onSelect={() => handleAdd(option.name)}
+                  className='flex-col items-start gap-1 py-2'
+                >
+                  <span className='text-xs font-medium leading-none normal-case'>{option.name}</span>
+                  <span className='text-xs leading-snug text-muted-foreground'>{option.description}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </h3>
+        {Object.keys(lifeCycles).length > 0 ? (
+          Object.entries(lifeCycles).map(([key, value]) => (
             <CardItem
               key={key}
               name={key}
@@ -119,9 +112,11 @@ export const LifeCycleList = observer(({ rootNode }: { rootNode: Node<RootSchema
               onDelete={handleDelete(key)}
               disabled={{ copy: true }}
             />
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <p className='text-xs text-muted-foreground'>暂无生命周期方法，点击 + 新增。</p>
+        )}
+      </div>
     </MethodEditorModal>
   )
 })

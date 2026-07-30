@@ -1,15 +1,11 @@
-import type { ProjectSummary } from '@/api/contracts'
 import { useAuth } from '@/auth/useAuth'
 import { BrandMark } from '@/components/brand/BrandMark'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { listProjects } from '@/features/projects/project-api'
 import { getSettings } from '@/features/settings/settings-api'
 import { cn } from '@/lib/utils'
-import { FolderKanban, LayoutTemplate, LogOut, Menu, Plus, Settings } from 'lucide-react'
+import { FolderKanban, Home, LogOut, Plus, Settings, Trash2 } from 'lucide-react'
 import { type ComponentType, useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 
@@ -17,167 +13,74 @@ type NavItem = {
   label: string
   to: string
   icon: ComponentType<{ className?: string }>
+  end?: boolean
 }
 
-const workspaceItems: NavItem[] = [
-  { label: '我的项目', to: '/projects', icon: FolderKanban },
-  { label: '模板', to: '/templates', icon: LayoutTemplate },
+const navigationItems: NavItem[] = [
+  { label: '首页', to: '/', icon: Home, end: true },
+  { label: '所有项目', to: '/projects', icon: FolderKanban },
+  { label: '回收站', to: '/trash', icon: Trash2 },
 ]
 
-const systemItems: NavItem[] = [{ label: '设置', to: '/settings', icon: Settings }]
+const settingsItem: NavItem = { label: '设置', to: '/settings', icon: Settings }
 
-function NavigationItem({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
+function NavigationItem({ item }: { item: NavItem }) {
   const Icon = item.icon
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <NavLink
           to={item.to}
-          onClick={onNavigate}
+          end={item.end}
           className={({ isActive }) =>
             cn(
-              'relative flex min-h-11 items-center gap-3 rounded-[6px] px-3 text-sm text-[#87939D] transition-colors',
-              'hover:bg-[#171D24] hover:text-[#F1F5F7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#67C6D9] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F1318]',
-              'md:justify-center md:px-0 xl:justify-start xl:px-3',
+              'group/nav relative flex h-10 items-center gap-3 rounded-[8px] px-3 text-[13px] font-medium text-[var(--ed-ink-muted)] outline-none transition-colors',
+              'hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]',
               isActive &&
-                'bg-[#171D24] text-[#F1F5F7] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-[#67C6D9]',
+                'bg-[linear-gradient(90deg,color-mix(in_srgb,var(--ed-blue)_16%,transparent),transparent_88%)] text-[var(--ed-ink)]',
             )
           }
         >
-          <Icon className='size-4.5 shrink-0' />
-          <span className='md:hidden xl:inline'>{item.label}</span>
+          {({ isActive }) => (
+            <>
+              <span
+                className={cn(
+                  'absolute inset-y-2 left-0 w-0.5 rounded-full bg-transparent',
+                  isActive && 'bg-[var(--ed-cyan)] shadow-[0_0_10px_color-mix(in_srgb,var(--ed-cyan)_60%,transparent)]',
+                )}
+              />
+              <Icon
+                className={cn(
+                  'size-[17px] shrink-0 transition-colors',
+                  isActive ? 'text-[var(--ed-cyan)]' : 'text-[#738497] group-hover/nav:text-[#aebdca]',
+                )}
+              />
+              <span>{item.label}</span>
+            </>
+          )}
         </NavLink>
       </TooltipTrigger>
-      <TooltipContent side='right' className='hidden md:block xl:hidden'>
+      <TooltipContent side='right' className='xl:hidden'>
         {item.label}
       </TooltipContent>
     </Tooltip>
   )
 }
 
-function SidebarContent({
-  mobile = false,
-  onNavigate,
-  projects,
-  displayName,
-  email,
-  onSignOut,
-}: {
-  mobile?: boolean
-  onNavigate?: () => void
-  projects: ProjectSummary[]
-  displayName: string
-  email: string
-  onSignOut: () => void
-}) {
-  const initials = useMemo(() => {
-    const normalized = displayName.trim() || email
-    return normalized.slice(0, 2).toLocaleUpperCase()
-  }, [displayName, email])
-
-  return (
-    <div className='flex h-full flex-col bg-[#0F1318]'>
-      <div
-        className={cn('flex h-16 items-center px-4', !mobile && 'md:justify-center md:px-0 xl:justify-start xl:px-4')}
-      >
-        {mobile ? (
-          <BrandMark />
-        ) : (
-          <>
-            <BrandMark compact />
-            <span className='ml-2.5 hidden font-[Alibaba_PuHuiTi] text-[15px] font-semibold tracking-[0.01em] text-[#F1F5F7] xl:inline'>
-              EasyDashboard
-            </span>
-          </>
-        )}
-      </div>
-      <div className='px-3 md:px-2 xl:px-3'>
-        <Button asChild className='h-9 w-full rounded-[6px] bg-[#F1F5F7] text-[#080A0D] hover:bg-white md:px-0 xl:px-4'>
-          <Link to='/projects?create=1' onClick={onNavigate}>
-            <Plus />
-            <span className='md:hidden xl:inline'>新建项目</span>
-          </Link>
-        </Button>
-      </div>
-      <Separator className='my-4 bg-[#222B34]' />
-      <nav aria-label='工作区导航' className='space-y-1 px-3 md:px-2 xl:px-3'>
-        {workspaceItems.map(item => (
-          <NavigationItem key={item.to} item={item} onNavigate={onNavigate} />
-        ))}
-      </nav>
-      <div className={cn('mt-6 px-4', !mobile && 'hidden xl:block')}>
-        <p className='mb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[#586570]'>最近项目</p>
-        <div className='space-y-0.5'>
-          {projects.slice(0, 3).map(project => (
-            <Link
-              key={project.id}
-              to={`/projects/${project.id}/editor`}
-              onClick={onNavigate}
-              className='flex min-h-9 items-center gap-2 rounded-[6px] px-2 text-xs text-[#87939D] hover:bg-[#171D24] hover:text-[#F1F5F7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#67C6D9]'
-            >
-              <span className='size-1.5 shrink-0 border border-[#65717D]' />
-              <span className='truncate'>{project.name}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
-      <div className='mt-auto'>
-        <Separator className='bg-[#222B34]' />
-        <nav aria-label='系统导航' className='space-y-1 p-3 md:p-2 xl:p-3'>
-          {systemItems.map(item => (
-            <NavigationItem key={item.to} item={item} onNavigate={onNavigate} />
-          ))}
-        </nav>
-        <div
-          className={cn(
-            'flex items-center gap-3 border-t border-[#222B34] p-3',
-            !mobile && 'md:justify-center xl:justify-start',
-          )}
-        >
-          <Avatar className='size-8 border border-[#2A333D]'>
-            <AvatarFallback className='bg-[#171D24] font-mono text-[10px] text-[#B7C3CB]'>{initials}</AvatarFallback>
-          </Avatar>
-          <div className={cn('min-w-0', !mobile && 'md:hidden xl:block')}>
-            <p className='truncate text-xs font-medium text-[#F1F5F7]'>{displayName}</p>
-            <p className='truncate text-[10px] text-[#65717D]'>{email}</p>
-          </div>
-          <Button
-            type='button'
-            variant='ghost'
-            size='icon'
-            onClick={onSignOut}
-            className={cn(
-              'ml-auto min-h-11 min-w-11 text-[#71808B] hover:bg-[#171D24] hover:text-white',
-              !mobile && 'md:hidden xl:inline-flex',
-            )}
-            aria-label='退出登录'
-          >
-            <LogOut />
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function AppShell() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
-  const [recentProjects, setRecentProjects] = useState<ProjectSummary[]>([])
   const [displayName, setDisplayName] = useState('')
   const email = user?.email ?? '未设置邮箱'
 
   useEffect(() => {
-    void listProjects()
-      .then(response => setRecentProjects(response.projects))
-      .catch(() => setRecentProjects([]))
     void getSettings()
       .then(settings => setDisplayName(settings.displayName?.trim() ?? ''))
       .catch(() => setDisplayName(''))
   }, [])
 
   const resolvedDisplayName = displayName || user?.email?.split('@')[0] || 'Dashboard Maker'
+  const initials = useMemo(() => resolvedDisplayName.trim().slice(0, 2).toLocaleUpperCase(), [resolvedDisplayName])
 
   async function handleSignOut() {
     await signOut()
@@ -185,42 +88,63 @@ export function AppShell() {
   }
 
   return (
-    <div className='min-h-screen bg-[#080A0D] text-[#F1F5F7]'>
-      <aside className='fixed inset-y-0 left-0 z-30 hidden w-14 border-r border-[#222B34] md:block xl:w-[232px]'>
-        <SidebarContent
-          projects={recentProjects}
-          displayName={resolvedDisplayName}
-          email={email}
-          onSignOut={() => void handleSignOut()}
-        />
+    <div data-ed-shell='app' className='min-h-screen min-w-[1024px] bg-[var(--ed-canvas)] text-[var(--ed-ink)]'>
+      <aside className='fixed inset-y-0 left-0 z-30 flex w-[216px] flex-col border-r border-[var(--ed-line)] bg-[var(--ed-rail)]'>
+        <div className='flex h-[72px] items-center px-5'>
+          <BrandMark />
+        </div>
+
+        <div className='px-3'>
+          <Button
+            asChild
+            className='h-10 w-full rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] text-[#07111d] shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:bg-white'
+          >
+            <Link to='/projects?create=1'>
+              <Plus className='size-4' />
+              新建项目
+            </Link>
+          </Button>
+        </div>
+
+        <div className='mx-4 my-5 h-px bg-[var(--ed-line)]' />
+
+        <nav aria-label='主导航' className='space-y-1 px-3'>
+          {navigationItems.map(item => (
+            <NavigationItem key={item.to} item={item} />
+          ))}
+        </nav>
+
+        <div className='mt-auto'>
+          <nav aria-label='系统导航' className='px-3 pb-3'>
+            <NavigationItem item={settingsItem} />
+          </nav>
+          <div className='border-t border-[var(--ed-line)] p-3'>
+            <div className='flex items-center gap-2.5 rounded-[8px] border border-transparent px-2 py-2 hover:border-[var(--ed-line)] hover:bg-[var(--ed-panel)]'>
+              <Avatar className='size-8 rounded-[8px] border border-[var(--ed-line-strong)]'>
+                <AvatarFallback className='rounded-[7px] bg-[var(--ed-panel-raised)] font-mono text-[10px] text-[var(--ed-ink-soft)]'>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className='min-w-0 flex-1'>
+                <p className='truncate text-xs font-medium text-[var(--ed-ink)]'>{resolvedDisplayName}</p>
+                <p className='mt-0.5 truncate text-[10px] text-[var(--ed-ink-faint)]'>{email}</p>
+              </div>
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                onClick={() => void handleSignOut()}
+                className='size-8 rounded-[6px] text-[var(--ed-ink-faint)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+                aria-label='退出登录'
+              >
+                <LogOut className='size-3.5' />
+              </Button>
+            </div>
+          </div>
+        </div>
       </aside>
-      <header className='sticky top-0 z-20 flex h-14 items-center justify-between border-b border-[#222B34] bg-[#0F1318]/95 px-4 backdrop-blur md:hidden'>
-        <BrandMark />
-        <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant='ghost'
-              size='icon'
-              className='min-h-11 min-w-11 text-[#A5B0B9] hover:bg-[#171D24] hover:text-white'
-              aria-label='打开导航'
-            >
-              <Menu />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side='left' className='w-[280px] border-[#2A333D] bg-[#0F1318] p-0'>
-            <SheetTitle className='sr-only'>应用导航</SheetTitle>
-            <SidebarContent
-              mobile
-              projects={recentProjects}
-              displayName={resolvedDisplayName}
-              email={email}
-              onSignOut={() => void handleSignOut()}
-              onNavigate={() => setMobileNavigationOpen(false)}
-            />
-          </SheetContent>
-        </Sheet>
-      </header>
-      <main className='min-h-screen md:ml-14 xl:ml-[232px]'>
+
+      <main className='min-h-screen pl-[216px]'>
         <Outlet />
       </main>
     </div>

@@ -29,8 +29,8 @@ export interface PageModalProps extends PropsWithChildren {
 export const PageModal = observer((props: PageModalProps) => {
   const { data, open, onConfirm, onClose, children } = props
   const isEdit = !!data
-  const [fileName, setFileName] = useState(data?.fileName)
-  const [fileDesc, setFileDesc] = useState(data?.fileDesc)
+  const [fileName, setFileName] = useState(data?.fileName ?? '')
+  const [fileDesc, setFileDesc] = useState(data?.fileDesc ?? '')
 
   const handleConfirm = () => {
     if (!fileName) {
@@ -51,8 +51,8 @@ export const PageModal = observer((props: PageModalProps) => {
   }
 
   useEffect(() => {
-    setFileName(data?.fileName)
-    setFileDesc(data?.fileDesc)
+    setFileName(data?.fileName ?? '')
+    setFileDesc(data?.fileDesc ?? '')
   }, [data])
 
   return (
@@ -61,7 +61,10 @@ export const PageModal = observer((props: PageModalProps) => {
       <DialogContent className='!max-w-[500px]'>
         <DialogHeader>
           <DialogTitle>页面{isEdit ? `编辑 - ${data.fileName}` : '新增'}</DialogTitle>
-          <DialogDescription className='flex flex-col gap-4 h-[1test00px] mt-2'>
+          <DialogDescription className='sr-only'>
+            {isEdit ? '修改页面名称。' : '填写页面名称和唯一的页面标识。'}
+          </DialogDescription>
+          <div className='mt-2 flex flex-col gap-4'>
             <div className='flex items-center space-x-2'>
               <Label htmlFor='fileDesc' className='text-xs basis-15 text-right'>
                 页面名称:
@@ -87,7 +90,7 @@ export const PageModal = observer((props: PageModalProps) => {
                 disabled={isEdit}
               />
             </div>
-          </DialogDescription>
+          </div>
         </DialogHeader>
         <DialogFooter>
           <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>

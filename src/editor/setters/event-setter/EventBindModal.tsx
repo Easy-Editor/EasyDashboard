@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { normalizeExtraPropRecord } from '@/editor/extra-prop-record'
 import { cn } from '@/lib/utils'
 import type { JSFunction } from '@easy-editor/core'
 import { observer } from 'mobx-react'
@@ -42,7 +43,7 @@ const builtinMethods: Record<string, JSFunction> = {
 const defaultExtendParam = '{\n  "name": "test" \n}'
 
 export interface EventBindModalProps extends PropsWithChildren {
-  methods: Record<string, JSFunction>
+  methods?: Record<string, JSFunction> | null
   open: boolean
   setOpen: (open: boolean) => void
   onConfirm?: (param: { kind: Tab; event: string; method: JSFunction; extendParam?: string }) => void
@@ -60,7 +61,7 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
     if (tab === Tab.BUILTIN) {
       return builtinMethods
     }
-    return methods
+    return normalizeExtraPropRecord(methods)
   }, [tab, methods])
 
   const handleConfirm = () => {
@@ -130,7 +131,7 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
                         onClick={() => setEvent(key)}
                       >
                         <span className='text-xs font-medium text-foreground'>{key}</span>
-                        {value.description && (
+                        {value?.description && (
                           <span className='text-[11px] text-muted-foreground mt-0.5'>{value.description}</span>
                         )}
                       </div>

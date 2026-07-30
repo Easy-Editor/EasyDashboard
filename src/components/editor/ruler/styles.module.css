@@ -6,7 +6,9 @@
   user-select: none;
   cursor: crosshair;
   flex-shrink: 0;
-  font-feature-settings: "tnum" 1;
+  font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .ruler.horizontal {
@@ -20,6 +22,7 @@
 /* 刻度样式 */
 .tick {
   position: absolute;
+  opacity: 1;
 }
 
 .tick[data-type="large"] {
@@ -47,7 +50,7 @@
   position: absolute;
   font-size: 9px;
   font-weight: 500;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: inherit;
   color: var(--ruler-text);
   line-height: 1;
   white-space: nowrap;
@@ -73,7 +76,6 @@
   pointer-events: none;
   z-index: 10;
   background-color: var(--ruler-cursor);
-  box-shadow: 0 0 4px var(--ruler-cursor-glow);
 }
 
 /* ========================================
@@ -115,11 +117,12 @@
   margin-top: 4px;
   font-size: 10px;
   font-weight: 500;
-  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
   color: var(--ruler-coords-color);
   background: var(--ruler-coords-bg);
   padding: 2px 6px;
-  border-radius: 3px;
+  border: 1px solid var(--ruler-border);
+  border-radius: 2px;
   white-space: nowrap;
   pointer-events: none;
   z-index: 100;
@@ -169,6 +172,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  background-repeat: repeat;
   background-image: linear-gradient(var(--ruler-grid-color-major) 1px, transparent 1px),
     linear-gradient(90deg, var(--ruler-grid-color-major) 1px, transparent 1px),
     linear-gradient(var(--ruler-grid-color) 1px, transparent 1px),

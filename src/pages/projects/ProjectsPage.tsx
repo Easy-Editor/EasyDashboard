@@ -1,6 +1,5 @@
 import { ApiError } from '@/api/client'
-import type { ProjectSummary, TemplateSummary } from '@/api/contracts'
-import { ProjectCard } from '@/components/project/ProjectCard'
+import { ProjectCard, type ProjectCardProject } from '@/components/project/ProjectCard'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,42 +13,45 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { defaultProjectSchema } from '@/editor/const'
-import { getViewportFromSchema } from '@/editor/persistence/schema-viewport'
-import { createProject, listProjects, listTemplates } from '@/features/projects/project-api'
+import {
+  createProject,
+  duplicateProject,
+  listProjects,
+  restoreProject,
+  setProjectFavorite,
+  trashProject,
+} from '@/features/projects/project-api'
 import { PageFrame } from '@/layouts/PageFrame'
-import type { ProjectSchema } from '@easy-editor/core'
-import { LayoutDashboard, Plus, Search, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Grid2X2, LayoutDashboard, List, Plus, Search, X } from 'lucide-react'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
+import { toast } from 'sonner'
 
-const projectGridClassName = 'grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
-const defaultViewport = getViewportFromSchema(defaultProjectSchema)
-const defaultViewportLabel = `${defaultViewport.width} × ${defaultViewport.height}`
+type ProjectView = 'grid' | 'list'
+
+function loadPreferredView(): ProjectView {
+  return window.localStorage.getItem('easy-dashboard-project-view') === 'list' ? 'list' : 'grid'
+}
 
 export function ProjectsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
-  const [templates, setTemplates] = useState<TemplateSummary<ProjectSchema>[]>([])
+  const [projects, setProjects] = useState<ProjectCardProject[] | null>(null)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
+  const [view, setView] = useState<ProjectView>(loadPreferredView)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
-  const templateId = searchParams.get('template')
-  const createOpen = searchParams.get('create') === '1' || Boolean(templateId)
-  const selectedTemplate = templates.find(template => template.id === templateId)
+  const createOpen = searchParams.get('create') === '1'
 
   const load = useCallback(async () => {
     setLoadError(null)
     try {
-      const [{ projects: nextProjects }, { templates: nextTemplates }] = await Promise.all([
-        listProjects(),
-        listTemplates(),
-      ])
-      setProjects(nextProjects)
-      setTemplates(nextTemplates)
+      const response = await listProjects()
+      setProjects(response.projects)
     } catch (reason) {
       setLoadError(reason instanceof ApiError ? reason.message : '项目列表加载失败')
       setProjects([])
@@ -63,15 +65,25 @@ export function ProjectsPage() {
   const filteredProjects = useMemo(() => {
     if (!projects) return []
     const normalizedQuery = query.trim().toLocaleLowerCase()
-    return projects.filter(project => {
-      const matchesQuery =
-        !normalizedQuery ||
-        project.name.toLocaleLowerCase().includes(normalizedQuery) ||
-        project.description.toLocaleLowerCase().includes(normalizedQuery)
-      const matchesStatus = status === 'all' || project.state === status
-      return matchesQuery && matchesStatus
-    })
+    return projects
+      .filter(project => {
+        const matchesQuery =
+          !normalizedQuery ||
+          project.name.toLocaleLowerCase().includes(normalizedQuery) ||
+          project.description.toLocaleLowerCase().includes(normalizedQuery)
+        const matchesStatus = status === 'all' || project.state === status
+        return matchesQuery && matchesStatus
+      })
+      .sort((first, second) => {
+        if (first.isFavorite !== second.isFavorite) return first.isFavorite ? -1 : 1
+        return new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime()
+      })
   }, [projects, query, status])
+
+  function setPreferredView(nextView: ProjectView) {
+    setView(nextView)
+    window.localStorage.setItem('easy-dashboard-project-view', nextView)
+  }
 
   function clearFilters() {
     setQuery('')
@@ -83,9 +95,51 @@ export function ProjectsPage() {
     setSearchParams(previous => {
       const next = new URLSearchParams(previous)
       next.delete('create')
-      next.delete('template')
       return next
     })
+  }
+
+  async function handleToggleFavorite(project: ProjectCardProject) {
+    const nextFavorite = !project.isFavorite
+    setProjects(
+      current => current?.map(item => (item.id === project.id ? { ...item, isFavorite: nextFavorite } : item)) ?? null,
+    )
+    try {
+      await setProjectFavorite(project.id, nextFavorite)
+    } catch {
+      setProjects(
+        current =>
+          current?.map(item => (item.id === project.id ? { ...item, isFavorite: project.isFavorite } : item)) ?? null,
+      )
+      toast.error('收藏状态更新失败')
+    }
+  }
+
+  async function handleDuplicate(project: ProjectCardProject) {
+    try {
+      const duplicate = await duplicateProject(project.id)
+      setProjects(current => (current ? [duplicate, ...current] : [duplicate]))
+      toast.success(`已创建“${duplicate.name}”`)
+    } catch {
+      toast.error('创建副本失败')
+    }
+  }
+
+  async function handleTrash(project: ProjectCardProject) {
+    try {
+      await trashProject(project.id)
+      setProjects(current => current?.filter(item => item.id !== project.id) ?? null)
+      toast.success(`“${project.name}”已移入回收站`, {
+        action: {
+          label: '撤销',
+          onClick: () => {
+            void restoreProject(project.id).then(load)
+          },
+        },
+      })
+    } catch {
+      toast.error('移入回收站失败')
+    }
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -94,11 +148,10 @@ export function ProjectsPage() {
     setCreating(true)
     setCreateError(null)
     try {
-      const schema = structuredClone(selectedTemplate?.schema ?? defaultProjectSchema)
       const project = await createProject({
         name: String(form.get('name') ?? '').trim(),
         description: String(form.get('description') ?? '').trim(),
-        schema,
+        schema: structuredClone(defaultProjectSchema),
       })
       closeCreateDialog()
       navigate(`/projects/${project.id}/editor`)
@@ -112,59 +165,90 @@ export function ProjectsPage() {
   return (
     <>
       <PageFrame
-        eyebrow='项目管理'
-        title='我的项目'
-        description='创建和管理你的数据大屏。'
+        eyebrow='Workspace / Projects'
+        title='所有项目'
+        description='集中查看草稿与已发布的大屏。'
         action={
           <Button
             type='button'
             onClick={() => setSearchParams({ create: '1' })}
-            className='h-11 rounded-[6px] bg-[#F1F5F7] px-5 text-[#080A0D] hover:bg-white'
+            className='h-10 rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] px-4 text-[#07111d] hover:bg-white'
           >
             <Plus />
             新建项目
           </Button>
         }
       >
-        <div className='mt-10 flex flex-col gap-3 border-y border-[#222B34] py-4 sm:flex-row sm:items-center'>
-          <div className='relative w-full sm:max-w-sm'>
-            <Search className='pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#5E6B76]' />
+        <div className='mt-5 flex h-12 items-center gap-3 border-b border-[var(--ed-line)]'>
+          <div className='relative w-[280px]'>
+            <Search className='pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--ed-ink-faint)]' />
             <Input
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder='搜索项目'
+              placeholder='搜索名称或说明'
               aria-label='搜索项目'
-              className='h-9 rounded-[6px] border-[#2A333D] bg-[#0F1318] pl-9 text-sm text-[#F1F5F7] placeholder:text-[#596671] focus-visible:border-[#67C6D9] focus-visible:ring-[#67C6D9]/30'
+              className='h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] pl-8 text-xs text-[var(--ed-ink)] placeholder:text-[var(--ed-ink-faint)] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[var(--ed-cyan)]/25'
             />
           </div>
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger
-              className='w-full rounded-[6px] border-[#2A333D] bg-[#0F1318] text-[#D6DDE2] sm:w-[136px]'
+              className='h-8 w-[120px] rounded-[6px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-xs text-[var(--ed-ink-soft)]'
               aria-label='按发布状态筛选'
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className='border-[#2A333D] bg-[#0F1318] text-[#F1F5F7]'>
+            <SelectContent className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] text-[var(--ed-ink)]'>
               <SelectItem value='all'>全部状态</SelectItem>
               <SelectItem value='draft'>草稿</SelectItem>
               <SelectItem value='published'>已发布</SelectItem>
             </SelectContent>
           </Select>
-          <p className='text-xs text-[#65717D] sm:ml-auto'>
-            {projects
-              ? query || status !== 'all'
-                ? `显示 ${filteredProjects.length} 个，共 ${projects.length} 个项目`
-                : `共 ${projects.length} 个项目`
-              : '正在加载项目…'}
+          <p className='text-[11px] text-[var(--ed-ink-faint)]'>
+            {projects ? `${filteredProjects.length} / ${projects.length}` : '加载中'}
           </p>
+          <div className='ml-auto flex items-center rounded-[6px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)] p-0.5'>
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              onClick={() => setPreferredView('grid')}
+              className={cn(
+                'size-7 rounded-[4px] text-[var(--ed-ink-faint)]',
+                view === 'grid' && 'bg-[var(--ed-panel-raised)] text-[var(--ed-cyan)]',
+              )}
+              aria-label='网格视图'
+              aria-pressed={view === 'grid'}
+            >
+              <Grid2X2 className='size-3.5' />
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              onClick={() => setPreferredView('list')}
+              className={cn(
+                'size-7 rounded-[4px] text-[var(--ed-ink-faint)]',
+                view === 'list' && 'bg-[var(--ed-panel-raised)] text-[var(--ed-cyan)]',
+              )}
+              aria-label='列表视图'
+              aria-pressed={view === 'list'}
+            >
+              <List className='size-3.5' />
+            </Button>
+          </div>
         </div>
 
         {loadError ? (
-          <div className='mt-7 flex items-center justify-between gap-4 border border-[#4B3030] bg-[#171112] px-4 py-3'>
-            <p role='alert' className='text-sm text-[#E6A0A0]'>
+          <div className='mt-6 flex items-center justify-between gap-4 border-l-2 border-[#ff7f8a] bg-[#35161d]/45 px-4 py-3'>
+            <p role='alert' className='text-xs text-[#ffabb2]'>
               {loadError}
             </p>
-            <Button type='button' variant='outline' onClick={() => void load()}>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => void load()}
+              className='h-8 rounded-[6px] border-[#67404a] bg-transparent text-xs text-[#ffc3c8]'
+            >
               重试
             </Button>
           </div>
@@ -172,60 +256,73 @@ export function ProjectsPage() {
 
         {projects ? (
           projects.length === 0 && !loadError ? (
-            <div className='mx-auto mt-14 max-w-[560px] text-center'>
-              <div className='mx-auto grid aspect-video max-w-[420px] place-items-center rounded-[10px] border border-[#2A333D] bg-[#0A0D11]'>
-                <div className='grid size-14 place-items-center rounded-[8px] border border-[#26313A] bg-[#11171D]'>
-                  <LayoutDashboard className='size-6 text-[#71808B]' />
-                </div>
+            <div className='mx-auto mt-20 max-w-[420px] text-center'>
+              <div className='ed-empty-canvas mx-auto grid aspect-video w-[340px] place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[#080d15]'>
+                <LayoutDashboard className='size-6 text-[#61778c]' />
               </div>
-              <h2 className='mt-6 font-[Alibaba_PuHuiTi] text-xl font-medium text-[#F1F5F7]'>还没有项目</h2>
-              <p className='mt-2 text-sm text-[#71808B]'>新建空白项目，或先从一个模板开始。</p>
-              <div className='mt-6 flex justify-center gap-3'>
-                <Button type='button' onClick={() => setSearchParams({ create: '1' })}>
-                  新建空白项目
-                </Button>
-                <Button type='button' variant='outline' onClick={() => navigate('/templates')}>
-                  从模板开始
-                </Button>
-              </div>
+              <h2 className='mt-6 font-[var(--font-display)] text-lg font-medium text-[var(--ed-ink)]'>
+                创建第一块画布
+              </h2>
+              <p className='mt-2 text-xs leading-5 text-[var(--ed-ink-muted)]'>从空白项目开始，直接进入编辑器。</p>
+              <Button
+                type='button'
+                onClick={() => setSearchParams({ create: '1' })}
+                className='mt-5 h-9 rounded-[8px] bg-[#eef7ff] text-[#07111d]'
+              >
+                <Plus />
+                新建项目
+              </Button>
             </div>
           ) : filteredProjects.length > 0 ? (
-            <div className={`mt-7 ${projectGridClassName}`}>
+            <div
+              className={cn(
+                'mt-6',
+                view === 'grid'
+                  ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,304px))] items-start gap-5'
+                  : 'border-t border-[var(--ed-line)]',
+              )}
+            >
               {filteredProjects.map((project, index) => (
                 <div
                   key={project.id}
                   className='animate-in fade-in-0 slide-in-from-bottom-1 duration-200 motion-reduce:animate-none'
-                  style={{ animationDelay: `${index * 40}ms`, animationFillMode: 'both' }}
+                  style={{ animationDelay: `${index * 30}ms`, animationFillMode: 'both' }}
                 >
-                  <ProjectCard project={project} />
+                  <ProjectCard
+                    project={project}
+                    view={view}
+                    onToggleFavorite={item => void handleToggleFavorite(item)}
+                    onDuplicate={item => void handleDuplicate(item)}
+                    onTrash={item => void handleTrash(item)}
+                  />
                 </div>
               ))}
             </div>
           ) : (
-            <div className='mx-auto mt-16 max-w-lg text-center'>
-              <div className='mx-auto grid size-12 place-items-center rounded-[6px] border border-[#2A333D] bg-[#0F1318]'>
-                <X className='size-4 text-[#65717D]' />
+            <div className='mx-auto mt-20 max-w-md text-center'>
+              <div className='mx-auto grid size-11 place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'>
+                <X className='size-4 text-[var(--ed-ink-faint)]' />
               </div>
-              <h2 className='mt-5 font-[Alibaba_PuHuiTi] text-lg font-medium text-[#F1F5F7]'>
-                没有匹配“{query || '当前筛选'}”的项目
+              <h2 className='mt-4 font-[var(--font-display)] text-base font-medium text-[var(--ed-ink)]'>
+                没有匹配的项目
               </h2>
-              <p className='mt-2 text-sm text-[#71808B]'>项目仍然保留，清除筛选即可重新查看。</p>
+              <p className='mt-2 text-xs text-[var(--ed-ink-muted)]'>调整关键词或清除当前筛选。</p>
               <Button
                 type='button'
                 variant='outline'
                 onClick={clearFilters}
-                className='mt-5 rounded-[6px] border-[#2A333D] bg-transparent text-[#D6DDE2] hover:bg-[#171D24] hover:text-white'
+                className='mt-5 h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-transparent text-xs text-[var(--ed-ink-soft)]'
               >
                 清除筛选
               </Button>
             </div>
           )
         ) : (
-          <div className={`mt-7 ${projectGridClassName}`}>
-            {Array.from({ length: 3 }, (_, index) => (
+          <div className='mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,304px))] gap-5'>
+            {Array.from({ length: 4 }, (_, index) => (
               <div
                 key={index}
-                className='aspect-[1.25] animate-pulse rounded-[10px] border border-[#222B34] bg-[#0F1318]'
+                className='aspect-[1.15] animate-pulse rounded-[8px] border border-[var(--ed-line)] bg-[var(--ed-panel)]'
               />
             ))}
           </div>
@@ -233,46 +330,55 @@ export function ProjectsPage() {
       </PageFrame>
 
       <Dialog open={createOpen} onOpenChange={open => !open && closeCreateDialog()}>
-        <DialogContent className='border-[#2A333D] bg-[#0F1318] text-[#F1F5F7]'>
+        <DialogContent className='rounded-[12px] border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] text-[var(--ed-ink)] shadow-2xl'>
           <DialogHeader>
-            <DialogTitle>{selectedTemplate ? `使用“${selectedTemplate.name}”` : '新建项目'}</DialogTitle>
-            <DialogDescription className='text-[#7F8B95]'>
-              {selectedTemplate
-                ? '模板会复制为一份可独立编辑的草稿。'
-                : `空白项目默认使用 ${defaultViewportLabel} 画布，可在编辑器底部调整。`}
+            <DialogTitle className='font-[var(--font-display)] text-lg'>新建项目</DialogTitle>
+            <DialogDescription className='text-xs leading-5 text-[var(--ed-ink-muted)]'>
+              创建后将直接进入编辑器。
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className='space-y-4'>
             <div className='space-y-2'>
-              <Label htmlFor='project-name'>项目名称</Label>
+              <Label htmlFor='project-name' className='text-xs text-[var(--ed-ink-soft)]'>
+                项目名称
+              </Label>
               <Input
                 id='project-name'
                 name='name'
                 required
                 maxLength={120}
                 autoFocus
-                defaultValue={selectedTemplate ? `${selectedTemplate.name} 副本` : ''}
+                placeholder='例如：城市运营驾驶舱'
+                className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
               />
             </div>
             <div className='space-y-2'>
-              <Label htmlFor='project-description'>说明</Label>
+              <Label htmlFor='project-description' className='text-xs text-[var(--ed-ink-soft)]'>
+                说明
+              </Label>
               <Input
                 id='project-description'
                 name='description'
                 maxLength={1000}
-                defaultValue={selectedTemplate?.description ?? ''}
+                placeholder='可选'
+                className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
               />
             </div>
             {createError ? (
-              <p role='alert' className='text-sm text-[#E98D8D]'>
+              <p role='alert' className='text-xs text-[#ffabb2]'>
                 {createError}
               </p>
             ) : null}
             <DialogFooter>
-              <Button type='button' variant='outline' onClick={closeCreateDialog}>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={closeCreateDialog}
+                className='rounded-[8px] border-[var(--ed-line-strong)] bg-transparent'
+              >
                 取消
               </Button>
-              <Button type='submit' disabled={creating}>
+              <Button type='submit' disabled={creating} className='rounded-[8px] bg-[#eef7ff] text-[#07111d]'>
                 {creating ? '正在创建…' : '创建并打开'}
               </Button>
             </DialogFooter>

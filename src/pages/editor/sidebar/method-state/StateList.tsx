@@ -1,18 +1,28 @@
 import { StateEditorModal, type StateEditorModalProps } from '@/components/common/StateEditorModal'
 import type { JSExpression, Node, RootSchema } from '@easy-editor/core'
 import { Plus } from 'lucide-react'
+import { observer } from 'mobx-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { genId } from '.'
 import { CardItem } from './CardItem'
+import { normalizeExtraPropRecord } from './utils'
 
-export const StateList = ({ rootNode }: { rootNode: Node<RootSchema> }) => {
-  const state = rootNode.getExtraPropValue('state') as Record<string, JSExpression>
+export const StateList = observer(({ rootNode }: { rootNode: Node<RootSchema> }) => {
+  const state = normalizeExtraPropRecord(
+    rootNode.getExtraPropValue('state') as Record<string, JSExpression> | null | undefined,
+  )
   const [open, setOpen] = useState(false)
   const [currentState, setCurrentState] = useState<JSExpression & { name: string }>()
 
   const handleAdd = () => {
+    setCurrentState(undefined)
     setOpen(true)
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+    setCurrentState(undefined)
   }
 
   const handleEdit = (key: string) => () => {
@@ -55,14 +65,16 @@ export const StateList = ({ rootNode }: { rootNode: Node<RootSchema> }) => {
   }
 
   return (
-    <StateEditorModal open={open} state={currentState} onClose={() => setOpen(false)} onConfirm={handleEditConfirm}>
-      {Object.keys(state).length > 0 && (
-        <div className='space-y-4'>
-          <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
-            <span>状态</span>
-            <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd} />
-          </h3>
-          {Object.entries(state).map(([key, value]) => (
+    <StateEditorModal open={open} state={currentState} onClose={handleClose} onConfirm={handleEditConfirm}>
+      <div className='space-y-4'>
+        <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
+          <span>状态</span>
+          <button type='button' aria-label='新增状态' className='cursor-pointer' onClick={handleAdd}>
+            <Plus className='w-4 h-4' />
+          </button>
+        </h3>
+        {Object.keys(state).length > 0 ? (
+          Object.entries(state).map(([key, value]) => (
             <CardItem
               key={key}
               name={key}
@@ -71,9 +83,11 @@ export const StateList = ({ rootNode }: { rootNode: Node<RootSchema> }) => {
               onDelete={() => handleDelete(key)}
               onCopy={() => handleCopy(key)}
             />
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <p className='text-xs text-muted-foreground'>暂无状态，点击 + 新增。</p>
+        )}
+      </div>
     </StateEditorModal>
   )
-}
+})

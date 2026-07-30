@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { ApiError, readJson } from '../http.js'
 import type { AppVariables } from '../middleware/auth.js'
@@ -8,6 +8,7 @@ import { ValidationError, assertSchemaBudget, projectIdSchema, projectSchemaSche
 const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000).nullable().optional(),
+  coverUrl: z.string().url().max(2048).nullable().optional(),
   schema: projectSchemaSchema,
 })
 
@@ -15,6 +16,7 @@ const updateProjectSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
     description: z.string().trim().max(1000).nullable().optional(),
+    coverUrl: z.string().url().max(2048).nullable().optional(),
   })
   .refine(value => Object.keys(value).length > 0, 'At least one field is required')
 
@@ -29,6 +31,43 @@ const publishSchema = z.object({
 })
 
 const rollbackSchema = z.object({ revisionId: z.uuid() })
+const restoreSchema = z.object({ expectedVersion: z.number().int().positive() })
+const restorePointSchema = z.object({ label: z.string().trim().min(1).max(120).nullable().optional() })
+const projectViewSchema = z.enum(['active', 'trash']).default('active')
+const thumbnailUploadSchema = z
+  .object({
+    draftVersion: z.number().int().positive(),
+    mode: z.enum(['auto', 'custom']),
+    source: z.enum(['renderer', 'blueprint', 'custom']),
+    contentType: z.enum(['image/webp', 'image/svg+xml']),
+    size: z
+      .number()
+      .int()
+      .positive()
+      .max(10 * 1024 * 1024),
+  })
+  .refine(
+    input =>
+      (input.mode === 'auto' &&
+        ((input.source === 'renderer' && input.contentType === 'image/webp') ||
+          (input.source === 'blueprint' && input.contentType === 'image/svg+xml'))) ||
+      (input.mode === 'custom' && input.source === 'custom' && input.contentType === 'image/webp'),
+    'Thumbnail mode, source, and content type do not match',
+  )
+const thumbnailCompleteSchema = z.object({
+  draftVersion: z.number().int().positive(),
+  path: z.string().min(1).max(512),
+})
+const thumbnailFailureSchema = z.object({
+  draftVersion: z.number().int().positive(),
+  path: z.string().min(1).max(512),
+  errorCode: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+})
 
 function idFrom(c: { req: { param(name: string): string } }): string {
   const result = projectIdSchema.safeParse(c.req.param('projectId'))
@@ -48,7 +87,13 @@ function assertBudget(schema: Record<string, unknown>): void {
 export function createProjectRoutes(repository: Repository) {
   const routes = new Hono<{ Variables: AppVariables }>()
 
-  routes.get('/', async c => c.json({ projects: await repository.listProjects(c.get('actorId')) }))
+  routes.get('/', async c => {
+    const view = projectViewSchema.safeParse(c.req.query('view'))
+    if (!view.success) throw new ApiError(400, 'INVALID_PROJECT_VIEW', 'Project view must be active or trash')
+    return c.json({
+      projects: await repository.listProjects(c.get('actorId'), view.data === 'trash' ? 'trashed' : 'active'),
+    })
+  })
 
   routes.post('/', async c => {
     const input = await readJson(c, createProjectSchema)
@@ -70,19 +115,138 @@ export function createProjectRoutes(repository: Repository) {
     return c.json({ project })
   })
 
+  routes.put('/:projectId/favorite', async c => {
+    const project = await repository.setProjectFavorite(c.get('actorId'), idFrom(c), true)
+    if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json({ project })
+  })
+
+  routes.delete('/:projectId/favorite', async c => {
+    const project = await repository.setProjectFavorite(c.get('actorId'), idFrom(c), false)
+    if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.body(null, 204)
+  })
+
+  routes.post('/:projectId/duplicate', async c => {
+    const project = await repository.duplicateProject(c.get('actorId'), idFrom(c))
+    if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json({ project }, 201)
+  })
+
+  routes.delete('/:projectId', async c => {
+    const trashed = await repository.trashProject(c.get('actorId'), c.get('accessToken'), idFrom(c))
+    if (!trashed) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.body(null, 204)
+  })
+
+  routes.post('/:projectId/restore', async c => {
+    const project = await repository.restoreProject(c.get('actorId'), idFrom(c))
+    if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json({ project })
+  })
+
+  routes.post('/:projectId/thumbnail/upload', async c => {
+    const input = await readJson(c, thumbnailUploadSchema)
+    const result = await repository.createThumbnailUpload(c.get('actorId'), c.get('accessToken'), idFrom(c), input)
+    if (result === 'conflict') throw new ApiError(409, 'THUMBNAIL_VERSION_CONFLICT', 'Draft version changed')
+    if (!result) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json({ upload: result }, 201)
+  })
+
+  routes.post('/:projectId/thumbnail/complete', async c => {
+    const input = await readJson(c, thumbnailCompleteSchema)
+    const result = await repository.completeThumbnailUpload(c.get('actorId'), c.get('accessToken'), idFrom(c), input)
+    if (result === 'conflict') throw new ApiError(409, 'THUMBNAIL_VERSION_CONFLICT', 'Draft version changed')
+    if (result === 'invalid') throw new ApiError(422, 'THUMBNAIL_UPLOAD_INVALID', 'Uploaded thumbnail is invalid')
+    if (!result) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json({ project: result })
+  })
+
+  routes.post('/:projectId/thumbnail/fail', async c => {
+    const input = await readJson(c, thumbnailFailureSchema)
+    const result = await repository.failThumbnailUpload(c.get('actorId'), c.get('accessToken'), idFrom(c), input)
+    if (result === 'conflict') throw new ApiError(409, 'THUMBNAIL_VERSION_CONFLICT', 'Draft version changed')
+    if (!result) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.body(null, 204)
+  })
+
+  routes.post('/:projectId/thumbnail/reconcile', async c => {
+    const result = await repository.reconcileThumbnailArtifacts(c.get('actorId'), c.get('accessToken'), idFrom(c))
+    if (!result) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json({ cleanup: result })
+  })
+
+  routes.get('/:projectId/thumbnail/content', async c => {
+    const signedUrl = await repository.getThumbnailDownloadUrl(c.get('actorId'), c.get('accessToken'), idFrom(c))
+    if (!signedUrl) throw new ApiError(404, 'THUMBNAIL_NOT_FOUND', 'Thumbnail not found')
+    c.header('Cache-Control', 'private, no-store')
+    return c.redirect(signedUrl, 302)
+  })
+
   routes.put('/:projectId/draft', async c => {
     const input = await readJson(c, draftSchema)
     assertBudget(input.schema)
     const result = await repository.saveDraft(c.get('actorId'), idFrom(c), input.expectedVersion, input.schema)
     if (result === 'conflict') throw new ApiError(409, 'DRAFT_CONFLICT', 'The saved draft has changed')
     if (!result) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
-    return c.json({ project: result })
+    return c.json({ project: result, savedAt: result.updatedAt })
   })
 
-  routes.get('/:projectId/revisions', async c => {
+  const listRestorePoints = async (c: Context<{ Variables: AppVariables }>) => {
     const revisions = await repository.listRevisions(c.get('actorId'), idFrom(c))
     if (!revisions) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
-    return c.json({ revisions })
+    return c.json({
+      revisions: revisions.map(({ id, projectId, revisionNumber, kind, label, sourceDraftVersion, createdAt }) => ({
+        id,
+        projectId,
+        revisionNumber,
+        kind,
+        label,
+        sourceDraftVersion,
+        createdAt,
+      })),
+    })
+  }
+
+  routes.get('/:projectId/revisions', listRestorePoints)
+  routes.get('/:projectId/restore-points', listRestorePoints)
+
+  routes.get('/:projectId/releases', async c => {
+    const releases = await repository.listReleases(c.get('actorId'), idFrom(c))
+    if (!releases) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json({
+      releases: releases.map(({ slug, ...release }) => {
+        const stableUrl = slug ? `/api/public/projects/${slug}` : null
+        return {
+          ...release,
+          stableUrl,
+          versionUrl: stableUrl ? `${stableUrl}/versions/${release.releaseNumber}` : null,
+        }
+      }),
+    })
+  })
+
+  routes.post('/:projectId/restore-points', async c => {
+    const input = await readJson(c, restorePointSchema)
+    const revision = await repository.createRestorePoint(c.get('actorId'), idFrom(c), 'manual', input.label)
+    if (!revision) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    const { id, projectId, revisionNumber, kind, label, sourceDraftVersion, createdAt } = revision
+    return c.json({ revision: { id, projectId, revisionNumber, kind, label, sourceDraftVersion, createdAt } }, 201)
+  })
+
+  routes.post('/:projectId/restore-points/:revisionId/restore', async c => {
+    const revisionId = rollbackSchema.safeParse({ revisionId: c.req.param('revisionId') })
+    if (!revisionId.success) throw new ApiError(404, 'REVISION_NOT_FOUND', 'Restore point not found')
+    const input = await readJson(c, restoreSchema)
+    const project = await repository.restoreRevision(
+      c.get('actorId'),
+      idFrom(c),
+      revisionId.data.revisionId,
+      input.expectedVersion,
+    )
+    if (project === 'conflict') throw new ApiError(409, 'DRAFT_CONFLICT', 'The saved draft has changed')
+    if (!project) throw new ApiError(404, 'REVISION_NOT_FOUND', 'Restore point not found')
+    return c.json({ project, savedAt: project.updatedAt })
   })
 
   routes.post('/:projectId/publish', async c => {
@@ -90,7 +254,18 @@ export function createProjectRoutes(repository: Repository) {
     const result = await repository.publish(c.get('actorId'), idFrom(c), input)
     if (result === 'conflict') throw new ApiError(409, 'DRAFT_CONFLICT', 'Publish requires the current saved draft')
     if (!result) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
-    return c.json({ publication: result }, 201)
+    const stableUrl = `/api/public/projects/${result.slug}`
+    const versionUrl = `${stableUrl}/versions/${result.releaseNumber}`
+    return c.json(
+      {
+        publication: {
+          ...result,
+          stableUrl,
+          versionUrl,
+        },
+      },
+      201,
+    )
   })
 
   routes.post('/:projectId/rollback', async c => {

@@ -4,9 +4,11 @@ import DataSourcePlugin from '@easy-editor/plugin-datasource'
 import { componentMetaMap } from './materials'
 import { getViewportFromSchema } from './persistence/schema-viewport'
 import { pluginList } from './plugins'
+import { bindDashboardProjectLifecycle } from './project-lifecycle'
+import { applyDashboardSimulatorTheme } from './project-theme-style'
 import { loadAllRemoteResources } from './remote'
 import { loadRemoteMaterialsFromComponentsMap } from './remote/util'
-import { setterMap } from './setters'
+import { setterMap, setterOverrides } from './setters'
 
 import './overrides.css'
 
@@ -34,15 +36,7 @@ let lifecycleBound = false
 function bindEditorLifecycle() {
   if (lifecycleBound) return
   lifecycleBound = true
-
-  project.onSimulatorReady(simulator => {
-    simulator.set('deviceStyle', {
-      viewport: getViewportFromSchema(project.export()),
-    })
-  })
-  project.onRendererReady(() => {
-    project.documents[0]?.rootNode?.select()
-  })
+  bindDashboardProjectLifecycle(project, schema => getViewportFromSchema(schema as ProjectSchema))
 }
 
 async function ensureEditorInitialized() {
@@ -62,6 +56,10 @@ async function ensureEditorInitialized() {
         await loadAllRemoteResources()
       } catch (error) {
         console.error('[Remote] Failed to load resources:', error)
+      } finally {
+        for (const [name, setter] of Object.entries(setterOverrides)) {
+          setters.registerSetter(name, setter, { overwrite: true })
+        }
       }
     })
   }
@@ -80,7 +78,7 @@ export async function initializeEditorProject(schema: ProjectSchema) {
   project.load(schema, true)
 
   if (project.simulator) {
-    project.simulator.set('deviceStyle', {
+    applyDashboardSimulatorTheme(project.simulator, schema, project.currentDocument?.fileName, {
       viewport: getViewportFromSchema(schema),
     })
   }

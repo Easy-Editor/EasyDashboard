@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@vercel/functions": "3.7.6",
     "easy-dashboard": "workspace:*"
   },
   "devDependencies": {

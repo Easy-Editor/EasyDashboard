@@ -1,25 +1,41 @@
 import { Button } from '@/components/ui/button'
 import { useEditorSession } from '@/contexts/editor-session-context'
-import { getPublishedProjectUrl } from '@/features/projects/public-viewer'
 import { cn } from '@/lib/utils'
-import { ExternalLink } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { ConflictResolutionDialog } from './ConflictResolutionDialog'
 import { EditorModeTabs } from './EditorModeTabs'
 import { HistoryButtons } from './HistoryButtons'
 import { MainNav } from './Nav'
+import { PublishShareDialog } from './PublishShareDialog'
+import { formatEditorSaveStatus } from './save-status'
 
 export function AppHeader({ className }: { className?: string }) {
-  const { flush, projectId, projectName, projectSlug, publish: publishProject, saveState } = useEditorSession()
-  const [publishedSlug, setPublishedSlug] = useState<string | null>(projectSlug)
+  const {
+    closeConflictResolution,
+    conflictResolutionOpen,
+    downloadLocalDraft,
+    flush,
+    isPublished,
+    openConflictResolution,
+    projectId,
+    projectName,
+    publish: publishProject,
+    reloadServerDraft,
+    saveState,
+  } = useEditorSession()
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false)
+  const [publicationActive, setPublicationActive] = useState(isPublished)
 
   useEffect(() => {
-    setPublishedSlug(projectSlug)
-  }, [projectSlug])
-
-  const publishedHref = publishedSlug ? getPublishedProjectUrl(publishedSlug) : null
+    setPublicationActive(isPublished)
+  }, [isPublished])
 
   const save = async () => {
+    if (saveState.status === 'conflict') {
+      openConflictResolution()
+      return
+    }
     try {
       await flush()
       toast.success('草稿已保存')
@@ -29,65 +45,41 @@ export function AppHeader({ className }: { className?: string }) {
   }
 
   const preview = async () => {
+    if (saveState.status === 'conflict') {
+      openConflictResolution()
+      return
+    }
     const previewWindow = window.open('', '_blank')
+    if (!previewWindow) {
+      toast.error('浏览器阻止了新标签页，请允许弹出窗口后重试')
+      return
+    }
+    previewWindow.opener = null
+
     try {
       await flush()
       const href = `/projects/${encodeURIComponent(projectId)}/preview`
-      if (previewWindow) {
-        previewWindow.location.href = href
-      } else {
-        window.location.href = href
-      }
+      previewWindow.location.href = href
     } catch (error) {
-      previewWindow?.close()
+      previewWindow.close()
       toast.error(error instanceof Error ? error.message : '保存项目失败，无法预览')
     }
   }
 
-  const publish = async () => {
-    try {
-      const publication = await publishProject()
-      setPublishedSlug(publication.slug)
-      const href = getPublishedProjectUrl(publication.slug)
-      if (!href) {
-        toast.success('发布成功', {
-          description: '公开页面已更新，但当前没有可用的公开访问地址',
-        })
-        return
-      }
-      toast.success('发布成功', {
-        description: '公开页面已更新',
-        action: {
-          label: '查看发布页',
-          onClick: () => window.open(href, '_blank', 'noopener,noreferrer'),
-        },
-      })
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '发布失败')
-    }
-  }
-
-  const saveLabel = {
-    idle: '已保存',
-    dirty: '有未保存更改',
-    saving: '保存中…',
-    saved: '已保存',
-    error: '保存失败',
-    conflict: '版本冲突',
-  }[saveState.status]
+  const saveLabel = formatEditorSaveStatus(saveState)
 
   return (
     <header
       className={cn(
-        'h-[57px] w-full',
-        'bg-background/80 backdrop-blur-xl',
-        'border-b border-border/60',
+        'h-12 w-full',
+        'bg-[var(--ed-rail)]/95 backdrop-blur-xl',
+        'border-b border-[var(--ed-line)]',
         'sticky top-0 z-50',
         'transition-all duration-200',
         className,
       )}
     >
-      <div className='grid h-full w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 sm:gap-3 sm:px-4'>
+      <div className='grid h-full w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 sm:gap-3 sm:px-3'>
         <MainNav projectName={projectName} saveStatus={saveLabel} />
         <div className='min-w-0'>
           <EditorModeTabs />
@@ -100,55 +92,55 @@ export function AppHeader({ className }: { className?: string }) {
           <Button
             variant='ghost'
             size='sm'
-            className='hidden h-8 gap-2 text-[#B7C3CB] hover:bg-[#171D24] hover:text-white lg:inline-flex'
+            className='hidden h-7 gap-2 text-[12px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] lg:inline-flex'
             onClick={() => void preview()}
           >
             预览草稿
           </Button>
-          {publishedHref ? (
-            <>
-              <Button
-                asChild
-                variant='ghost'
-                size='icon'
-                className='size-8 text-[#B7C3CB] hover:bg-[#171D24] hover:text-white lg:hidden'
-              >
-                <a href={publishedHref} target='_blank' rel='noreferrer' aria-label='查看发布页'>
-                  <ExternalLink className='size-4' />
-                </a>
-              </Button>
-              <Button
-                asChild
-                variant='ghost'
-                size='sm'
-                className='hidden h-8 gap-1.5 text-[#B7C3CB] hover:bg-[#171D24] hover:text-white lg:inline-flex'
-              >
-                <a href={publishedHref} target='_blank' rel='noreferrer'>
-                  查看发布页
-                  <ExternalLink className='size-3.5' />
-                </a>
-              </Button>
-            </>
-          ) : null}
           <Button
             size='sm'
             variant='outline'
-            className='hidden h-8 gap-2 xl:inline-flex'
+            className='hidden h-7 gap-2 border-[var(--ed-line-strong)] bg-transparent text-[12px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] xl:inline-flex'
             disabled={saveState.status === 'saving'}
             onClick={() => void save()}
           >
             保存
           </Button>
+          {saveState.status === 'conflict' ? (
+            <Button
+              size='sm'
+              variant='outline'
+              className='h-7 border-[#D99A4E] bg-[#2A1E12] text-[12px] text-[#FFD39A] hover:bg-[#382718]'
+              onClick={openConflictResolution}
+            >
+              解决冲突
+            </Button>
+          ) : null}
           <Button
             size='sm'
-            className='h-8 gap-2 bg-[#F1F5F7] text-[#080A0D] hover:bg-white'
+            className='h-7 gap-2 bg-[var(--ed-ink)] px-3 text-[12px] text-[var(--ed-canvas)] hover:bg-white'
             disabled={saveState.status === 'saving' || saveState.status === 'conflict'}
-            onClick={() => void publish()}
+            onClick={() => setPublishDialogOpen(true)}
           >
-            {publishedSlug ? '发布更新' : '发布'}
+            {publicationActive ? '发布与分享' : '发布'}
           </Button>
         </div>
       </div>
+      <PublishShareDialog
+        open={publishDialogOpen}
+        onOpenChange={setPublishDialogOpen}
+        projectId={projectId}
+        projectName={projectName}
+        initiallyPublished={publicationActive}
+        publish={publishProject}
+        onPublicationChange={release => setPublicationActive(release !== null)}
+      />
+      <ConflictResolutionDialog
+        open={conflictResolutionOpen}
+        onOpenChange={open => (open ? openConflictResolution() : closeConflictResolution())}
+        onDownloadLocal={downloadLocalDraft}
+        onReloadServer={reloadServerDraft}
+      />
     </header>
   )
 }

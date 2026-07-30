@@ -15,17 +15,19 @@ export function MainNav({
         asChild
         variant='ghost'
         size='sm'
-        className='h-9 shrink-0 gap-1.5 px-2 text-[#A5B0B9] hover:bg-[#171D24] hover:text-[#F1F5F7]'
+        className='h-7 shrink-0 gap-1.5 px-1.5 text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
       >
         <Link to='/projects' aria-label='返回我的项目'>
           <ArrowLeft className='size-4' />
           <span className='hidden lg:inline'>我的项目</span>
         </Link>
       </Button>
-      <div className='h-5 w-px shrink-0 bg-[#28313A]' />
+      <div className='h-5 w-px shrink-0 bg-[var(--ed-line)]' />
       <div className='hidden min-w-0 sm:block'>
-        <p className='max-w-28 truncate text-xs font-medium text-[#F1F5F7] sm:max-w-40 lg:max-w-56'>{projectName}</p>
-        <p className='mt-0.5 hidden text-[10px] leading-none text-[#71808B] sm:block'>{saveStatus}</p>
+        <p className='max-w-28 truncate text-[11px] font-medium text-[var(--ed-ink)] sm:max-w-40 lg:max-w-56'>
+          {projectName}
+        </p>
+        <p className='mt-0.5 hidden text-[10px] leading-none text-[var(--ed-ink-faint)] sm:block'>{saveStatus}</p>
       </div>
     </div>
   )

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
  * 4. 数据预览
  */
 import { type InterpretDataSource, createDataSourceEngine } from '@easy-editor/plugin-datasource'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { DataCodeView } from './DataCodeView'
 import { DataMappingTable } from './DataMappingTable'
 import { DataTableView } from './DataTableView'
@@ -28,6 +28,8 @@ const DEFAULT_VALUE: DataSetterValue = {
   staticData: [],
   fieldMappings: [],
 }
+
+const PREVIEW_VIEW_ORDER: PreviewViewType[] = ['table', 'code']
 
 const DataSetter = (props: DataSetterProps) => {
   const { value, onChange, selected, expectedFields = [], previewLimit = 10 } = props
@@ -163,6 +165,30 @@ const DataSetter = (props: DataSetterProps) => {
     [updateValue],
   )
 
+  const handlePreviewViewKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, currentView: PreviewViewType) => {
+      const currentIndex = PREVIEW_VIEW_ORDER.indexOf(currentView)
+      let nextView: PreviewViewType | null = null
+
+      if (event.key === 'ArrowRight') {
+        nextView = PREVIEW_VIEW_ORDER[(currentIndex + 1) % PREVIEW_VIEW_ORDER.length]
+      } else if (event.key === 'ArrowLeft') {
+        nextView = PREVIEW_VIEW_ORDER[(currentIndex - 1 + PREVIEW_VIEW_ORDER.length) % PREVIEW_VIEW_ORDER.length]
+      } else if (event.key === 'Home') {
+        nextView = PREVIEW_VIEW_ORDER[0]
+      } else if (event.key === 'End') {
+        nextView = PREVIEW_VIEW_ORDER[PREVIEW_VIEW_ORDER.length - 1]
+      }
+
+      if (!nextView) return
+
+      event.preventDefault()
+      setPreviewView(nextView)
+      document.getElementById(`data-view-tab-${nextView}`)?.focus()
+    },
+    [],
+  )
+
   return (
     <div className='flex flex-col gap-4 w-full'>
       {/* 1. 数据源类型选择 */}
@@ -214,25 +240,47 @@ const DataSetter = (props: DataSetterProps) => {
               <span className='text-[11px] font-normal text-muted-foreground animate-pulse'> 加载中...</span>
             )}
           </span>
-          <div className='flex bg-muted rounded p-0.5'>
+          <div
+            role='tablist'
+            aria-label='数据视图'
+            className='flex h-7 items-center rounded-md border border-[var(--ed-line)] bg-[var(--ed-panel-raised)] p-0.5'
+          >
             <button
+              id='data-view-tab-table'
               type='button'
-              className={`px-2.5 py-1 text-[11px] font-medium text-muted-foreground bg-transparent border-none rounded-sm cursor-pointer transition-all hover:text-foreground ${previewView === 'table' ? 'bg-background text-foreground shadow-sm' : ''}`}
+              role='tab'
+              aria-selected={previewView === 'table'}
+              aria-controls='data-view-panel-table'
+              tabIndex={previewView === 'table' ? 0 : -1}
+              className={`h-[22px] cursor-pointer rounded border-none bg-transparent px-2.5 text-[11px] font-medium text-[var(--ed-ink-muted)] outline-none transition-colors hover:text-[var(--ed-ink)] focus-visible:ring-1 focus-visible:ring-[var(--ed-cyan)] ${previewView === 'table' ? 'bg-[var(--ed-canvas)] text-[var(--ed-ink)]' : ''}`}
               onClick={() => setPreviewView('table')}
+              onKeyDown={event => handlePreviewViewKeyDown(event, 'table')}
             >
               表格
             </button>
             <button
+              id='data-view-tab-code'
               type='button'
-              className={`px-2.5 py-1 text-[11px] font-medium text-muted-foreground bg-transparent border-none rounded-sm cursor-pointer transition-all hover:text-foreground ${previewView === 'code' ? 'bg-background text-foreground shadow-sm' : ''}`}
+              role='tab'
+              aria-selected={previewView === 'code'}
+              aria-controls='data-view-panel-code'
+              tabIndex={previewView === 'code' ? 0 : -1}
+              className={`h-[22px] cursor-pointer rounded border-none bg-transparent px-2.5 text-[11px] font-medium text-[var(--ed-ink-muted)] outline-none transition-colors hover:text-[var(--ed-ink)] focus-visible:ring-1 focus-visible:ring-[var(--ed-cyan)] ${previewView === 'code' ? 'bg-[var(--ed-canvas)] text-[var(--ed-ink)]' : ''}`}
               onClick={() => setPreviewView('code')}
+              onKeyDown={event => handlePreviewViewKeyDown(event, 'code')}
             >
               代码
             </button>
           </div>
         </div>
-        <div className='border border-border rounded-md overflow-hidden'>
-          {previewView === 'table' ? (
+        <div
+          id='data-view-panel-table'
+          role='tabpanel'
+          aria-labelledby='data-view-tab-table'
+          hidden={previewView !== 'table'}
+          className='overflow-hidden rounded-md border border-[var(--ed-line)] bg-[var(--ed-panel)]'
+        >
+          {previewView === 'table' && (
             <DataTableView
               data={previewData}
               editable={isStaticMode}
@@ -240,7 +288,16 @@ const DataSetter = (props: DataSetterProps) => {
               expectedFields={expectedFields}
               onChange={isStaticMode ? handleStaticDataChange : undefined}
             />
-          ) : (
+          )}
+        </div>
+        <div
+          id='data-view-panel-code'
+          role='tabpanel'
+          aria-labelledby='data-view-tab-code'
+          hidden={previewView !== 'code'}
+          className='overflow-hidden rounded-md border border-[var(--ed-line)] bg-[var(--ed-panel)]'
+        >
+          {previewView === 'code' && (
             <DataCodeView
               data={previewData}
               editable={isStaticMode}

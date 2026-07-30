@@ -56,17 +56,21 @@ export function SettingsPage() {
   }
 
   return (
-    <PageFrame eyebrow='System / Settings' title='设置' description='管理个人资料和编辑偏好。'>
-      <form onSubmit={handleSave} className='mt-10 max-w-3xl divide-y divide-[#222B34] border-y border-[#222B34]'>
-        <section className='grid gap-6 py-7 md:grid-cols-[190px_1fr]'>
+    <PageFrame eyebrow='System / Settings' title='设置' description='个人资料、编辑偏好与当前会话。'>
+      <form
+        onSubmit={handleSave}
+        className='mt-7 max-w-[860px] divide-y divide-[var(--ed-line)] border-y border-[var(--ed-line)]'
+      >
+        <section className='grid grid-cols-[220px_1fr] gap-10 py-8'>
           <div>
-            <h2 className='text-sm font-medium text-[#F1F5F7]'>个人资料</h2>
-            <p className='mt-1 text-xs leading-5 text-[#71808B]'>显示名称保存在你的工作区设置中。</p>
+            <p className='font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ed-blue)]'>01 / Profile</p>
+            <h2 className='mt-2 text-[13px] font-semibold text-[var(--ed-ink)]'>个人资料</h2>
+            <p className='mt-1.5 text-[11px] leading-5 text-[var(--ed-ink-muted)]'>用于工作区内的身份显示。</p>
           </div>
-          <div className='space-y-4'>
+          <div className='max-w-[440px] space-y-4'>
             <div className='space-y-2'>
-              <Label htmlFor='settings-name' className='text-[#C7D0D6]'>
-                名称
+              <Label htmlFor='settings-name' className='text-xs text-[var(--ed-ink-soft)]'>
+                显示名称
               </Label>
               <Input
                 id='settings-name'
@@ -74,11 +78,11 @@ export function SettingsPage() {
                 onChange={event => setSettings(current => ({ ...current, displayName: event.target.value }))}
                 disabled={loading}
                 maxLength={80}
-                className='h-9 rounded-[6px] border-[#2A333D] bg-[#0F1318] text-[#F1F5F7] focus-visible:border-[#67C6D9] focus-visible:ring-[#67C6D9]/30'
+                className='h-9 rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-xs text-[var(--ed-ink)] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[var(--ed-cyan)]/25'
               />
             </div>
             <div className='space-y-2'>
-              <Label htmlFor='settings-email' className='text-[#C7D0D6]'>
+              <Label htmlFor='settings-email' className='text-xs text-[var(--ed-ink-soft)]'>
                 邮箱
               </Label>
               <Input
@@ -86,24 +90,25 @@ export function SettingsPage() {
                 type='email'
                 value={user?.email ?? ''}
                 readOnly
-                className='h-9 rounded-[6px] border-[#2A333D] bg-[#0F1318] text-[#87939D]'
+                className='h-9 rounded-[8px] border-[var(--ed-line)] bg-[#0a0f16] text-xs text-[var(--ed-ink-faint)]'
               />
             </div>
           </div>
         </section>
 
-        <section className='grid gap-6 py-7 md:grid-cols-[190px_1fr]'>
+        <section className='grid grid-cols-[220px_1fr] gap-10 py-8'>
           <div>
-            <h2 className='text-sm font-medium text-[#F1F5F7]'>编辑偏好</h2>
-            <p className='mt-1 text-xs leading-5 text-[#71808B]'>设置编辑项目时的工作习惯。</p>
+            <p className='font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ed-blue)]'>02 / Editor</p>
+            <h2 className='mt-2 text-[13px] font-semibold text-[var(--ed-ink)]'>编辑偏好</h2>
+            <p className='mt-1.5 text-[11px] leading-5 text-[var(--ed-ink-muted)]'>设置编辑项目时的工作习惯。</p>
           </div>
-          <div className='space-y-4'>
-            <div className='flex min-h-11 items-center justify-between gap-5'>
+          <div className='max-w-[440px] space-y-5'>
+            <div className='flex min-h-12 items-center justify-between gap-5 rounded-[8px] border border-[var(--ed-line)] bg-[var(--ed-panel)] px-3.5'>
               <div>
-                <Label htmlFor='autosave' className='text-[#C7D0D6]'>
+                <Label htmlFor='autosave' className='text-xs text-[var(--ed-ink-soft)]'>
                   自动保存
                 </Label>
-                <p className='mt-1 text-xs text-[#71808B]'>编辑停止后保存当前草稿。</p>
+                <p className='mt-1 text-[10px] text-[var(--ed-ink-faint)]'>编辑停止后保存当前草稿。</p>
               </div>
               <Switch
                 id='autosave'
@@ -113,24 +118,33 @@ export function SettingsPage() {
                 aria-label='自动保存'
               />
             </div>
-            {message ? <output className='block text-sm text-[#8FA0AA]'>{message}</output> : null}
-            <Button type='submit' disabled={loading || saving} className='rounded-[6px] bg-[#F1F5F7] text-[#080A0D]'>
+            {message ? (
+              <output className='block border-l-2 border-[var(--ed-cyan)] px-3 text-xs text-[var(--ed-ink-muted)]'>
+                {message}
+              </output>
+            ) : null}
+            <Button
+              type='submit'
+              disabled={loading || saving}
+              className='h-9 rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] text-xs text-[#07111d] hover:bg-white'
+            >
               {saving ? '正在保存…' : '保存设置'}
             </Button>
           </div>
         </section>
 
-        <section className='grid gap-6 py-7 md:grid-cols-[190px_1fr]'>
+        <section className='grid grid-cols-[220px_1fr] gap-10 py-8'>
           <div>
-            <h2 className='text-sm font-medium text-[#F1F5F7]'>会话</h2>
-            <p className='mt-1 text-xs leading-5 text-[#71808B]'>结束当前浏览器中的登录状态。</p>
+            <p className='font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--ed-blue)]'>03 / Session</p>
+            <h2 className='mt-2 text-[13px] font-semibold text-[var(--ed-ink)]'>会话</h2>
+            <p className='mt-1.5 text-[11px] leading-5 text-[var(--ed-ink-muted)]'>结束当前浏览器中的登录状态。</p>
           </div>
           <div>
             <Button
               type='button'
               variant='outline'
               onClick={() => void handleSignOut()}
-              className='rounded-[6px] border-[#3A3333] bg-transparent text-[#D6DDE2] hover:bg-[#211719] hover:text-white'
+              className='h-9 rounded-[8px] border-[#49323a] bg-transparent text-xs text-[#e1bec3] hover:bg-[#28171c] hover:text-white'
             >
               退出登录
             </Button>

@@ -12,7 +12,7 @@ export function RequireSession({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to='/login' replace state={{ from: location.pathname }} />
+    return <Navigate to='/login' replace state={{ from: `${location.pathname}${location.search}${location.hash}` }} />
   }
 
   return children
@@ -26,7 +26,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   }
 
   if (user) {
-    return <Navigate to='/projects' replace />
+    return <Navigate to='/' replace />
   }
 
   return children

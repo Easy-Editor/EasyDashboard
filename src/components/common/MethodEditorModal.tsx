@@ -26,9 +26,9 @@ export interface MethodEditorModalProps extends PropsWithChildren {
 
 export const MethodEditorModal = observer((props: MethodEditorModalProps) => {
   const { method, open, onConfirm, onClose, children } = props
-  const [name, setName] = useState(method?.name)
-  const [description, setDescription] = useState(method?.description)
-  const [code, setCode] = useState(method?.value)
+  const [name, setName] = useState(method?.name ?? '')
+  const [description, setDescription] = useState(method?.description ?? '')
+  const [code, setCode] = useState(method?.value ?? '')
 
   const isEdit = !!method?.name
 
@@ -53,12 +53,17 @@ export const MethodEditorModal = observer((props: MethodEditorModalProps) => {
   }
 
   useEffect(() => {
-    if (method) {
-      setName(method?.name)
-      setDescription(method?.description)
-      setCode(method?.value)
+    if (!open) {
+      setName('')
+      setDescription('')
+      setCode('')
+      return
     }
-  }, [method])
+
+    setName(method?.name ?? '')
+    setDescription(method?.description ?? '')
+    setCode(method?.value ?? '')
+  }, [method, open])
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -66,41 +71,42 @@ export const MethodEditorModal = observer((props: MethodEditorModalProps) => {
       <DialogContent className='!max-w-[1000px]'>
         <DialogHeader>
           <DialogTitle>方法{isEdit ? `编辑 - ${name}` : '新增'}</DialogTitle>
-          <DialogDescription className='flex flex-col gap-4 h-[600px] mt-2'>
-            <div className='flex items-center space-x-2'>
-              <Label htmlFor='name' className='text-xs basis-15 text-right'>
-                名称:
-              </Label>
-              <Input
-                id='name'
-                placeholder='请输入方法名称'
-                className='h-8 !text-xs px-2 py-[5px]'
-                value={name}
-                onChange={e => setName(e.target.value)}
-                // 如果方法名称已存在，则禁用输入
-                disabled={isEdit}
-              />
-            </div>
-            <div className='flex items-center space-x-2'>
-              <Label htmlFor='description' className='text-xs basis-15 text-right'>
-                描述:
-              </Label>
-              <Input
-                id='description'
-                placeholder='请输入方法描述'
-                className='h-8 !text-xs px-2 py-[5px]'
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-              />
-            </div>
-            <div className='flex space-x-2 flex-1'>
-              <Label htmlFor='code' className='text-xs basis-15 text-right'>
-                代码:
-              </Label>
-              <CodeEditor language='javascript' value={code} onChange={e => setCode(e)} />
-            </div>
-          </DialogDescription>
+          <DialogDescription>配置方法名称、描述和 JavaScript 代码。</DialogDescription>
         </DialogHeader>
+        <div className='flex flex-col gap-4 h-[600px] mt-2'>
+          <div className='flex items-center space-x-2'>
+            <Label htmlFor='name' className='text-xs basis-15 text-right'>
+              名称:
+            </Label>
+            <Input
+              id='name'
+              placeholder='请输入方法名称'
+              className='h-8 !text-xs px-2 py-[5px]'
+              value={name}
+              onChange={e => setName(e.target.value)}
+              // 如果方法名称已存在，则禁用输入
+              disabled={isEdit}
+            />
+          </div>
+          <div className='flex items-center space-x-2'>
+            <Label htmlFor='description' className='text-xs basis-15 text-right'>
+              描述:
+            </Label>
+            <Input
+              id='description'
+              placeholder='请输入方法描述'
+              className='h-8 !text-xs px-2 py-[5px]'
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+            />
+          </div>
+          <div className='flex space-x-2 flex-1'>
+            <Label htmlFor='code' className='text-xs basis-15 text-right'>
+              代码:
+            </Label>
+            <CodeEditor language='javascript' value={code} onChange={value => setCode(value ?? '')} />
+          </div>
+        </div>
         <DialogFooter>
           <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>
             确定

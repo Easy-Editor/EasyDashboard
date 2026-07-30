@@ -10,14 +10,14 @@ type PageFrameProps = {
 
 export function PageFrame({ eyebrow, title, description, action, children }: PageFrameProps) {
   return (
-    <div className='mx-auto w-full max-w-[1440px] px-5 py-8 sm:px-8 md:px-10 md:py-10 xl:px-12'>
-      <header className='flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between'>
+    <div className='mx-auto w-full max-w-[1600px] px-10 py-9 xl:px-12'>
+      <header className='flex min-h-[76px] items-end justify-between gap-8 border-b border-[var(--ed-line)] pb-6'>
         <div>
-          <p className='font-mono text-[10px] uppercase tracking-[0.16em] text-[#67C6D9]'>{eyebrow}</p>
-          <h1 className='mt-3 font-[Alibaba_PuHuiTi] text-2xl font-medium tracking-[-0.02em] text-[#F1F5F7] sm:text-[30px]'>
+          <p className='font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--ed-cyan)]'>{eyebrow}</p>
+          <h1 className='mt-2 font-[var(--font-display)] text-[28px] leading-none font-medium tracking-[-0.035em] text-[var(--ed-ink)]'>
             {title}
           </h1>
-          <p className='mt-2 max-w-2xl text-sm leading-6 text-[#7F8B95]'>{description}</p>
+          <p className='mt-2 max-w-2xl text-[13px] leading-5 text-[var(--ed-ink-muted)]'>{description}</p>
         </div>
         {action}
       </header>

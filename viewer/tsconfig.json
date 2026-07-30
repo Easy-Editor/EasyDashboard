@@ -3,5 +3,5 @@
   "compilerOptions": {
     "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.viewer.tsbuildinfo"
   },
-  "include": ["./main.tsx", "../src"]
+  "include": ["./main.tsx", "./middleware.ts", "./public-access-gate.ts", "../src"]
 }

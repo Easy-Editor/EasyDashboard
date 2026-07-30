@@ -4,9 +4,8 @@ import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 type ViewerBuildAsset = { type: 'asset'; fileName: string; source: string | Uint8Array }
-type ViewerBuildOutput = {
-  output: Array<ViewerBuildAsset | { type: 'chunk'; fileName: string }>
-}
+type ViewerBuildChunk = { type: 'chunk'; fileName: string; code: string }
+type ViewerBuildOutput = { output: Array<ViewerBuildAsset | ViewerBuildChunk> }
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(currentDirectory, '../../..')
@@ -43,5 +42,14 @@ describe('standalone Viewer stylesheet', () => {
 
       expect(rule, `${contract.className} is required by ProjectSchemaRenderer`).toContain(contract.declaration)
     }
+
+    const javascript = outputs
+      .flatMap(output => output.output)
+      .filter((output): output is ViewerBuildChunk => output.type === 'chunk')
+      .map(output => output.code)
+      .join('\n')
+
+    expect(javascript).not.toMatch(/\/api\/auth\/|\/api\/projects\//i)
+    expect(javascript).toMatch(/credentials\s*:\s*["']omit/i)
   }, 15_000)
 })

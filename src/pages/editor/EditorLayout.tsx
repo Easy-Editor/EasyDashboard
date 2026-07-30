@@ -1,23 +1,25 @@
 import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar'
 import { Toaster } from '@/components/ui/sonner'
 import { EditorModeProvider, useEditorMode } from '@/contexts/editor-mode-context'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { CodeView } from './canvas/CodeView'
 import { ConfigureSidebar } from './configure'
+import { getSidebarOpenForModeTransition } from './editor-sidebar-mode'
 import { AppHeader } from './header'
 import { AppSidebar } from './sidebar'
 
 function EditorContent({ children }: { children: React.ReactNode }) {
   const { mode } = useEditorMode()
   const { setOpen } = useSidebar()
+  const previousMode = useRef<typeof mode | undefined>(undefined)
 
   // 根据模式控制左侧侧边栏
   useEffect(() => {
-    if (mode === 'preview' || mode === 'code') {
-      setOpen(false)
-    } else if (mode === 'canvas') {
-      setOpen(true)
+    const nextOpen = getSidebarOpenForModeTransition(previousMode.current, mode)
+    if (nextOpen !== undefined) {
+      setOpen(nextOpen)
     }
+    previousMode.current = mode
   }, [mode, setOpen])
 
   // Canvas 和 Preview 模式显示配置面板
@@ -28,8 +30,8 @@ function EditorContent({ children }: { children: React.ReactNode }) {
       <AppSidebar
         style={
           {
-            height: 'calc(100vh - 57px)',
-            top: '57px',
+            height: 'calc(100vh - 48px)',
+            top: '48px',
           } as React.CSSProperties
         }
       />
@@ -48,8 +50,9 @@ function EditorContent({ children }: { children: React.ReactNode }) {
         <ConfigureSidebar
           style={
             {
-              height: 'calc(100vh - 57px)',
-              top: '57px',
+              height: 'calc(100vh - 48px)',
+              top: '48px',
+              width: '304px',
             } as React.CSSProperties
           }
         />
@@ -61,17 +64,22 @@ function EditorContent({ children }: { children: React.ReactNode }) {
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <EditorModeProvider>
-      <div className='h-full relative flex flex-col bg-background'>
+      <div
+        data-ed-shell='editor'
+        data-editor-workbench
+        className='relative flex h-full flex-col bg-[var(--ed-canvas)] text-[var(--ed-ink)]'
+      >
         <div className='h-full border-grid flex flex-1 flex-col'>
-          <AppHeader className='flex h-[57px]' />
+          <AppHeader className='flex h-12' />
           <main className='flex flex-1 flex-col'>
             <SidebarProvider
-              defaultOpen={false}
+              defaultOpen
               defaultFixed={false}
               style={
                 {
-                  '--sidebar-width': '350px',
-                  '--header-height': '57px',
+                  '--sidebar-width': '308px',
+                  '--sidebar-width-icon': '44px',
+                  '--header-height': '48px',
                 } as React.CSSProperties
               }
             >

@@ -1,0 +1,4 @@
+project_id = "easy-dashboard"
+
+[functions.thumbnail-cleanup]
+verify_jwt = false

@@ -48,11 +48,14 @@ export const RulerWrapper = observer(
         height: deviceViewport?.height ?? 1080,
       }
 
-      const onScaleChange = (newScale: number) => {
-        if (viewport) {
-          viewport.scale = newScale
-        }
-      }
+      const onScaleChange = useCallback(
+        (newScale: number) => {
+          if (viewport) {
+            viewport.scale = newScale
+          }
+        },
+        [viewport],
+      )
 
       const wrapperRef = useRef<HTMLDivElement>(null)
       const canvasAreaRef = useRef<HTMLDivElement>(null)
@@ -180,14 +183,13 @@ export const RulerWrapper = observer(
         [designer],
       )
 
-      // 网格样式
-      const gridStyle: React.CSSProperties = showGrid
-        ? ({
-            '--scale': scale,
-            '--offset-x': canvasOrigin.x,
-            '--offset-y': canvasOrigin.y,
-          } as React.CSSProperties)
-        : {}
+      // Keep the canvas scale available to every descendant. The renderer uses
+      // it to draw a screen-pixel page boundary even when the page is zoomed.
+      const canvasWorldStyle = {
+        '--scale': scale,
+        '--offset-x': canvasOrigin.x,
+        '--offset-y': canvasOrigin.y,
+      } as React.CSSProperties
 
       if (!showRuler) {
         return <div className={styles.canvasArea}>{children}</div>
@@ -234,11 +236,12 @@ export const RulerWrapper = observer(
           <div
             ref={canvasAreaRef}
             className={`${styles.canvasArea} ${isSpacePressed ? styles.panMode : ''} ${isPanning ? styles.panning : ''}`}
+            style={canvasWorldStyle}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
             {/* 网格背景 */}
-            {showGrid && <div className={styles.canvasGrid} style={gridStyle} />}
+            {showGrid && <div className={styles.canvasGrid} />}
 
             {/* 画布内容 */}
             <div className={styles.canvasContent} style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}>

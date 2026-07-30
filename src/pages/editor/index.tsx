@@ -1,4 +1,5 @@
 import { EditorSessionProvider } from '@/contexts/editor-session-context'
+import { EditorThumbnailProvider } from '@/features/thumbnails/EditorThumbnailProvider'
 import { Suspense } from 'react'
 import { useParams } from 'react-router'
 import AppLayout from './EditorLayout'
@@ -13,11 +14,13 @@ export default function Editor() {
 
   return (
     <EditorSessionProvider key={projectId} projectId={projectId}>
-      <Suspense fallback={<div className='w-full h-screen flex items-center justify-center'>初始化编辑器中...</div>}>
-        <AppLayout>
-          <Renderer />
-        </AppLayout>
-      </Suspense>
+      <EditorThumbnailProvider>
+        <Suspense fallback={<div className='w-full h-screen flex items-center justify-center'>初始化编辑器中...</div>}>
+          <AppLayout>
+            <Renderer />
+          </AppLayout>
+        </Suspense>
+      </EditorThumbnailProvider>
     </EditorSessionProvider>
   )
 }

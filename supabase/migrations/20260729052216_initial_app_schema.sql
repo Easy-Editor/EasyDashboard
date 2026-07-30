@@ -83,7 +83,8 @@ create table app.project_revisions (
   project_id uuid not null references app.projects(id) on delete cascade,
   revision_number integer not null check (revision_number > 0),
   schema jsonb not null check (jsonb_typeof(schema) = 'object'),
-  created_by uuid not null references auth.users(id) on delete restrict,
+  -- Preserve immutable historical attribution even if the auth user is removed.
+  created_by uuid not null,
   created_at timestamptz not null default now(),
   unique (project_id, revision_number),
   unique (id, project_id)
@@ -102,9 +103,10 @@ create table app.project_publications (
   revision_id uuid not null,
   published_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint project_publications_revision_project_fkey
   foreign key (revision_id, project_id)
     references app.project_revisions(id, project_id)
-    on delete restrict,
+    on delete cascade,
   foreign key (project_id, owner_id)
     references app.projects(id, owner_id)
     on delete cascade
@@ -136,6 +138,17 @@ security invoker
 set search_path = ''
 as $$
 begin
+  -- Direct revision mutation is forbidden. PostgreSQL invokes this trigger at
+  -- depth > 1 for the project FK cascade; allow only that parent-deletion path
+  -- so a user can remove their account and owned projects.
+  if tg_op = 'DELETE'
+    and pg_trigger_depth() > 1
+    and not exists (
+      select 1 from app.projects project where project.id = old.project_id
+    )
+  then
+    return old;
+  end if;
   raise exception 'project revisions are immutable' using errcode = '55000';
 end
 $$;

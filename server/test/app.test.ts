@@ -10,8 +10,22 @@ const project: ProjectRecord = {
   id: projectId,
   name: 'Dashboard',
   description: null,
+  coverUrl: null,
   draftSchema: { componentsTree: [] },
   draftVersion: 2,
+  isFavorite: false,
+  pageCount: 1,
+  canvasWidth: 1920,
+  canvasHeight: 1080,
+  startPageId: null,
+  draftSavedAt: now,
+  thumbnailMode: 'auto',
+  thumbnailStatus: 'queued',
+  thumbnailPath: null,
+  thumbnailUrl: null,
+  thumbnailDraftVersion: null,
+  thumbnailErrorCode: null,
+  deletedAt: null,
   createdAt: now,
   updatedAt: now,
 }
@@ -35,6 +49,23 @@ function auth(overrides: Partial<AuthService> = {}): AuthService {
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
       user: actor,
     }),
+    startOAuth: async provider => ({
+      url: `https://example.supabase.co/auth/v1/authorize?provider=${provider}`,
+      codeVerifier: 'oauth-verifier',
+    }),
+    exchangeCode: async () => ({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      user: actor,
+    }),
+    requestPasswordReset: async () => ({ codeVerifier: 'recovery-verifier' }),
+    updatePassword: async () => ({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      user: actor,
+    }),
     refresh: async () => {
       throw new Error('not refreshable')
     },
@@ -47,16 +78,31 @@ function auth(overrides: Partial<AuthService> = {}): AuthService {
 function repository(overrides: Partial<Repository> = {}): Repository {
   return {
     ping: async () => undefined,
+    ensurePersonalSpace: async () => '33333333-3333-4333-8333-333333333333',
     listProjects: async () => [project],
     createProject: async () => project,
     getProject: async () => project,
     updateProject: async () => project,
+    setProjectFavorite: async () => project,
+    duplicateProject: async () => project,
+    trashProject: async () => true,
+    restoreProject: async () => project,
     saveDraft: async () => project,
     listRevisions: async () => [],
+    listReleases: async () => [],
+    createRestorePoint: async () => null,
+    restoreRevision: async () => null,
     publish: async () => null,
     rollback: async () => null,
     unpublish: async () => false,
+    isPublicProjectAvailable: async () => false,
     getPublicProject: async () => null,
+    getPublicProjectVersion: async () => null,
+    createThumbnailUpload: async () => null,
+    completeThumbnailUpload: async () => null,
+    failThumbnailUpload: async () => false,
+    reconcileThumbnailArtifacts: async () => ({ deleted: 0, retryPending: 0 }),
+    getThumbnailDownloadUrl: async () => null,
     listTemplates: async () => [],
     getSettings: async () => ({}),
     updateSettings: async (_actorId, settings) => settings,
@@ -86,14 +132,24 @@ describe('EasyDashboard API', () => {
     await expect(response.json()).resolves.toEqual({ status: 'ok' })
   })
 
-  it('fails readiness when the database cannot be reached', async () => {
+  it('reports readiness when the required database schema is available', async () => {
+    const app = createApp({ env, auth: auth(), repository: repository() })
+    const response = await app.request('/api/health/ready')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ status: 'ready' })
+  })
+
+  it('fails readiness when the database or required schema is unavailable', async () => {
     const app = createApp({
       env,
       auth: auth(),
-      repository: repository({ ping: async () => Promise.reject(new Error('offline')) }),
+      repository: repository({
+        ping: async () => Promise.reject(new Error('relation "app.project_releases" does not exist')),
+      }),
     })
     const response = await app.request('/api/health/ready')
     expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({ status: 'unavailable' })
   })
 
   it('rejects mutations from a different origin', async () => {

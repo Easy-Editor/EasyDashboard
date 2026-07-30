@@ -29,7 +29,7 @@ postgresql://easy_dashboard_runtime.<PROJECT_REF>:<url-encoded-password>@aws-0-a
 ```
 
 Do not use the transaction-mode URL for migrations. Do not use the `postgres`
-or `service_role` credential as the application runtime identity. The runtime
+or Supabase service credential as the database runtime identity. The runtime
 pool is intentionally small and Drizzle queries must not use named prepared
 statements.
 

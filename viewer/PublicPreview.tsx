@@ -1,10 +1,21 @@
-import { PreviewState } from '@/pages/preview/PreviewState'
 import { ProjectSchemaRenderer } from '@/pages/preview/ProjectSchemaRenderer'
 import { useEffect, useState } from 'react'
 import { createCookieLessDataSourceEngine } from './data-source-engine'
-import { getPublishedProject } from './public-project-api'
+import { PublicProjectNotFoundError, getPublishedProject } from './public-project-api'
 
-export function PublicPreview({ slug }: { slug: string }) {
+function ViewerMessage({ children }: { children: React.ReactNode }) {
+  return <output className='grid min-h-screen place-items-center bg-black p-6 text-sm text-white'>{children}</output>
+}
+
+export function PublicPreview({
+  slug,
+  releaseNumber,
+  pageId,
+}: {
+  slug: string
+  releaseNumber: number | null
+  pageId: string | null
+}) {
   const [projectDetail, setProjectDetail] = useState<Awaited<ReturnType<typeof getPublishedProject>> | null>(null)
   const [error, setError] = useState<Error | null>(null)
 
@@ -16,7 +27,7 @@ export function PublicPreview({ slug }: { slug: string }) {
       setError(null)
 
       try {
-        const detail = await getPublishedProject(slug)
+        const detail = await getPublishedProject(slug, releaseNumber)
         if (!cancelled) setProjectDetail(detail)
       } catch (reason) {
         if (!cancelled) {
@@ -29,15 +40,25 @@ export function PublicPreview({ slug }: { slug: string }) {
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [releaseNumber, slug])
 
   if (error) {
-    return <PreviewState title='无法加载公开预览' detail={error.message} />
+    return (
+      <ViewerMessage>
+        {error instanceof PublicProjectNotFoundError ? '404 · 该发布地址不存在或已下线。' : '公开大屏暂时无法加载。'}
+      </ViewerMessage>
+    )
   }
 
   if (!projectDetail) {
-    return <PreviewState title='正在读取已发布项目…' />
+    return <ViewerMessage>正在加载…</ViewerMessage>
   }
 
-  return <ProjectSchemaRenderer project={projectDetail} createDataSourceEngine={createCookieLessDataSourceEngine} />
+  return (
+    <ProjectSchemaRenderer
+      project={projectDetail}
+      requestedPageId={pageId}
+      createDataSourceEngine={createCookieLessDataSourceEngine}
+    />
+  )
 }

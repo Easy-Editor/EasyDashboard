@@ -6,15 +6,16 @@ import { requestSecurity } from './middleware/security.js'
 import { createAuthRoutes } from './routes/auth.js'
 import { createPrivateMiscRoutes, createPublicRoutes } from './routes/misc.js'
 import { createProjectRoutes } from './routes/projects.js'
-import type { AuthService, Repository } from './types.js'
+import type { AuthService, PersonalSpaceProvisioner, Repository } from './types.js'
 
 export interface AppDependencies {
   env: AppEnv
   auth: AuthService
   repository: Repository
+  provisionPersonalSpace?: PersonalSpaceProvisioner
 }
 
-export function createApp({ env, auth, repository }: AppDependencies) {
+export function createApp({ env, auth, repository, provisionPersonalSpace }: AppDependencies) {
   const app = new Hono<{ Variables: AppVariables }>().basePath('/api')
 
   app.use('*', requestSecurity(env))
@@ -28,7 +29,7 @@ export function createApp({ env, auth, repository }: AppDependencies) {
     }
   })
 
-  app.route('/auth', createAuthRoutes(auth))
+  app.route('/auth', createAuthRoutes(auth, { appOrigin: env.APP_ORIGIN, provisionPersonalSpace }))
   app.route('/public', createPublicRoutes(repository, env))
 
   app.use('/projects/*', requireAuth(auth))

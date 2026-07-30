@@ -94,7 +94,12 @@ describe('DraftSync', () => {
   })
 
   it('advances the expected CAS version after each successful save', async () => {
-    const save = vi.fn().mockResolvedValueOnce({ draftVersion: 12 }).mockResolvedValueOnce({ draftVersion: 15 })
+    const firstSavedAt = '2026-07-30T04:05:06.000Z'
+    const secondSavedAt = '2026-07-30T04:06:07.000Z'
+    const save = vi
+      .fn()
+      .mockResolvedValueOnce({ draftVersion: 12, savedAt: firstSavedAt })
+      .mockResolvedValueOnce({ draftVersion: 15, savedAt: secondSavedAt })
     const sync = new DraftSync({
       initialVersion: 10,
       autoSave: false,
@@ -109,7 +114,58 @@ describe('DraftSync', () => {
 
     expect(save).toHaveBeenNthCalledWith(1, { stable: true }, 10)
     expect(save).toHaveBeenNthCalledWith(2, { stable: true }, 12)
-    expect(sync.getSnapshot()).toMatchObject({ status: 'saved', version: 15 })
+    expect(sync.getSnapshot()).toMatchObject({
+      status: 'saved',
+      version: 15,
+      savedAt: secondSavedAt,
+    })
+  })
+
+  it('keeps the last server-confirmed save time while a later save fails', async () => {
+    const savedAt = '2026-07-30T04:05:06.000Z'
+    const save = vi
+      .fn()
+      .mockResolvedValueOnce({ draftVersion: 2, savedAt })
+      .mockRejectedValueOnce(new Error('network unavailable'))
+    const sync = new DraftSync({
+      initialVersion: 1,
+      initialSavedAt: null,
+      autoSave: false,
+      exportSchema: () => ({ stable: true }),
+      save,
+    })
+
+    sync.markDirty()
+    await sync.flush()
+    expect(sync.getSnapshot()).toMatchObject({ status: 'saved', version: 2, savedAt })
+
+    sync.markDirty()
+    await sync.flush()
+    expect(sync.getSnapshot()).toMatchObject({
+      status: 'error',
+      version: 2,
+      savedAt,
+    })
+  })
+
+  it('accepts a server-restored draft as the new clean baseline', () => {
+    const sync = new DraftSync({
+      initialVersion: 3,
+      initialSavedAt: '2026-07-30T03:00:00.000Z',
+      autoSave: false,
+      exportSchema: () => ({ stable: true }),
+      save: vi.fn(),
+    })
+
+    sync.markDirty()
+    sync.acceptReloadedVersion(9, '2026-07-30T09:00:00.000Z')
+
+    expect(sync.getSnapshot()).toEqual({
+      status: 'saved',
+      version: 9,
+      savedAt: '2026-07-30T09:00:00.000Z',
+      error: null,
+    })
   })
 
   it('stops subsequent saves after a 409 conflict', async () => {
@@ -135,6 +191,45 @@ describe('DraftSync', () => {
     await sync.flush()
 
     expect(save).toHaveBeenCalledOnce()
+  })
+
+  it('preserves the losing local schema until a two-instance CAS conflict is explicitly resolved', async () => {
+    let serverVersion = 1
+    let serverSchema = { title: 'initial' }
+    const save = async (schema: { title: string }, expectedVersion: number) => {
+      if (expectedVersion !== serverVersion) {
+        throw Object.assign(new Error('draft version conflict'), { status: 409 })
+      }
+      serverVersion += 1
+      serverSchema = schema
+      return { draftVersion: serverVersion, savedAt: '2026-07-30T10:00:00.000Z' }
+    }
+    const first = new DraftSync({
+      initialVersion: 1,
+      autoSave: false,
+      exportSchema: () => ({ title: 'first tab' }),
+      save,
+    })
+    const second = new DraftSync({
+      initialVersion: 1,
+      autoSave: false,
+      exportSchema: () => ({ title: 'second tab local work' }),
+      save,
+    })
+
+    first.markDirty()
+    await first.flush()
+    second.markDirty()
+    await second.flush()
+
+    expect(serverSchema).toEqual({ title: 'first tab' })
+    expect(second.getSnapshot().status).toBe('conflict')
+    expect(second.getConflictSchema()).toEqual({ title: 'second tab local work' })
+
+    second.acceptReloadedVersion(serverVersion, '2026-07-30T10:00:00.000Z')
+
+    expect(second.getSnapshot().status).toBe('saved')
+    expect(second.getConflictSchema()).toBeUndefined()
   })
 
   it('flushes a pending autosave before disposal', async () => {

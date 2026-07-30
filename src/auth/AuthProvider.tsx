@@ -15,12 +15,17 @@ type SignUpResponse = SessionResponse & {
   authenticated: boolean
 }
 
+export type OAuthProvider = 'github' | 'google'
+
 type AuthContextValue = {
   user: SessionUser | null
   loading: boolean
   refreshSession: () => Promise<SessionUser | null>
   signIn: (credentials: Credentials) => Promise<void>
   signUp: (credentials: Credentials) => Promise<SignUpResult>
+  startOAuth: (provider: OAuthProvider, returnTo?: string) => void
+  requestPasswordReset: (email: string) => Promise<void>
+  resetPassword: (password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -108,6 +113,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applySession],
   )
 
+  const startOAuth = useCallback((provider: OAuthProvider, returnTo = '/projects') => {
+    const safeReturnTo = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/projects'
+    window.location.assign(`/api/auth/oauth/${provider}?returnTo=${encodeURIComponent(safeReturnTo)}`)
+  }, [])
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    if (demoMode) return
+    await apiRequest<{ accepted: true }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: jsonBody({ email }),
+    })
+  }, [])
+
+  const resetPassword = useCallback(async (password: string) => {
+    if (demoMode) return
+    await apiRequest<void>('/api/auth/reset-password', {
+      method: 'POST',
+      body: jsonBody({ password }),
+    })
+  }, [])
+
   const signOut = useCallback(async () => {
     if (!demoMode) {
       try {
@@ -130,9 +156,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshSession,
       signIn,
       signUp,
+      startOAuth,
+      requestPasswordReset,
+      resetPassword,
       signOut,
     }),
-    [loading, refreshSession, signIn, signOut, signUp, user],
+    [loading, refreshSession, requestPasswordReset, resetPassword, signIn, signOut, signUp, startOAuth, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

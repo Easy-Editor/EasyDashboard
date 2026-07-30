@@ -1,10 +1,18 @@
-import type { PublishResponse } from '@/api/contracts'
+import type { ProjectRevision } from '@/api/contracts'
 import { initializeEditorProject, teardownEditorProject } from '@/editor'
+import { buildLocalDraftExport, getBlockedNavigationAction } from '@/editor/persistence/conflict-resolution'
 import type { DraftSyncSnapshot } from '@/editor/persistence/draft-sync'
 import { DraftSync } from '@/editor/persistence/draft-sync'
 import { EDITOR_SAVE_REQUEST_EVENT } from '@/editor/persistence/editor-events'
 import { bindProjectMutations } from '@/editor/persistence/mutation-bridge'
-import { getProject, publishProject, saveProjectDraft } from '@/features/projects/project-api'
+import { restoreProjectDraft } from '@/editor/persistence/restore-draft'
+import {
+  createProjectRestorePoint,
+  getProject,
+  restoreProjectRevision,
+  saveProjectDraft,
+} from '@/features/projects/project-api'
+import { type PublishedProjectRelease, publishProjectRelease } from '@/features/releases/release-api'
 import { getSettings } from '@/features/settings/settings-api'
 import { type ProjectSchema, TRANSFORM_STAGE, project } from '@easy-editor/core'
 import {
@@ -26,8 +34,15 @@ type EditorSessionValue = {
   projectSlug: string | null
   isPublished: boolean
   saveState: DraftSyncSnapshot
+  conflictResolutionOpen: boolean
+  openConflictResolution: () => void
+  closeConflictResolution: () => void
+  downloadLocalDraft: () => void
+  reloadServerDraft: () => Promise<void>
   flush: () => Promise<DraftSyncSnapshot>
-  publish: () => Promise<PublishResponse>
+  publish: () => Promise<PublishedProjectRelease>
+  createRestorePoint: () => Promise<ProjectRevision<ProjectSchema | undefined>>
+  restoreRevision: (revisionId: string) => Promise<void>
 }
 
 const EditorSessionContext = createContext<EditorSessionValue | null>(null)
@@ -38,6 +53,7 @@ function EditorSessionReady({
   projectSlug,
   isPublished,
   draftVersion,
+  draftSavedAt,
   autoSave,
   children,
 }: {
@@ -46,6 +62,7 @@ function EditorSessionReady({
   projectSlug: string | null
   isPublished: boolean
   draftVersion: number
+  draftSavedAt: string
   autoSave: boolean
   children: ReactNode
 }) {
@@ -53,12 +70,14 @@ function EditorSessionReady({
     () =>
       new DraftSync<ProjectSchema>({
         initialVersion: draftVersion,
+        initialSavedAt: draftSavedAt,
         autoSave,
         exportSchema: () => project.export(TRANSFORM_STAGE.SAVE),
         save: (schema, expectedVersion) => saveProjectDraft(projectId, schema, expectedVersion),
       }),
   )
   const saveState = useSyncExternalStore(sync.subscribe, sync.getSnapshot)
+  const [conflictResolutionOpen, setConflictResolutionOpen] = useState(false)
 
   const flush = useCallback(async () => {
     await sync.flush()
@@ -83,6 +102,12 @@ function EditorSessionReady({
   useEffect(() => {
     if (blocker.state !== 'blocked') return
 
+    if (getBlockedNavigationAction(saveState.status) === 'resolve-conflict') {
+      blocker.reset()
+      setConflictResolutionOpen(true)
+      return
+    }
+
     let active = true
     const { proceed, reset } = blocker
 
@@ -93,20 +118,51 @@ function EditorSessionReady({
       .catch(error => {
         if (!active) return
         reset()
-        toast.error('草稿保存失败，已留在编辑器', {
-          description: error instanceof Error ? error.message : '请检查网络后重试',
-        })
+        if (sync.getSnapshot().status === 'conflict') {
+          setConflictResolutionOpen(true)
+          toast.error('检测到草稿版本冲突，已保留当前本地修改')
+        } else {
+          toast.error('草稿保存失败，已留在编辑器', {
+            description: error instanceof Error ? error.message : '请检查网络后重试',
+          })
+        }
       })
 
     return () => {
       active = false
     }
-  }, [blocker, flush])
+  }, [blocker, flush, saveState.status, sync])
+
+  const downloadLocalDraft = useCallback(() => {
+    const schema = sync.getConflictSchema()
+    if (!schema) {
+      toast.error('没有可导出的本地冲突副本')
+      return
+    }
+    const backup = buildLocalDraftExport(schema, projectName)
+    const url = URL.createObjectURL(new Blob([backup.content], { type: 'application/json;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = backup.filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+    toast.success('本地草稿副本已下载')
+  }, [projectName, sync])
+
+  const reloadServerDraft = useCallback(async () => {
+    const detail = await getProject(projectId)
+    await initializeEditorProject(detail.schema)
+    sync.acceptReloadedVersion(detail.draftVersion, detail.savedAt)
+    setConflictResolutionOpen(false)
+    toast.success('已重新加载服务端草稿', {
+      description: '当前内存中的冲突修改已明确丢弃',
+    })
+  }, [projectId, sync])
 
   const publish = useCallback(async () => {
     const snapshot = await flush()
     try {
-      return await publishProject(projectId, snapshot.version)
+      return await publishProjectRelease(projectId, snapshot.version)
     } catch (error) {
       if (error instanceof Error && 'status' in error && error.status === 409) {
         sync.reportConflict(error)
@@ -114,6 +170,34 @@ function EditorSessionReady({
       throw error
     }
   }, [flush, projectId, sync])
+
+  const createRestorePoint = useCallback(async () => {
+    await flush()
+    return createProjectRestorePoint(projectId)
+  }, [flush, projectId])
+
+  const restoreRevision = useCallback(
+    async (revisionId: string) => {
+      const snapshot = await flush()
+      try {
+        await restoreProjectDraft({
+          projectId,
+          revisionId,
+          expectedVersion: snapshot.version,
+          restore: restoreProjectRevision,
+          load: getProject,
+          reloadEditor: initializeEditorProject,
+          acceptBaseline: sync.acceptReloadedVersion,
+        })
+      } catch (error) {
+        if (error instanceof Error && 'status' in error && error.status === 409) {
+          sync.reportConflict(error)
+        }
+        throw error
+      }
+    },
+    [flush, projectId, sync],
+  )
 
   useEffect(() => {
     const handleSaveRequest = () => {
@@ -142,10 +226,30 @@ function EditorSessionReady({
       projectSlug,
       isPublished,
       saveState,
+      conflictResolutionOpen,
+      openConflictResolution: () => setConflictResolutionOpen(true),
+      closeConflictResolution: () => setConflictResolutionOpen(false),
+      downloadLocalDraft,
+      reloadServerDraft,
       flush,
       publish,
+      createRestorePoint,
+      restoreRevision,
     }),
-    [flush, isPublished, projectId, projectName, projectSlug, publish, saveState],
+    [
+      conflictResolutionOpen,
+      createRestorePoint,
+      downloadLocalDraft,
+      flush,
+      isPublished,
+      projectId,
+      projectName,
+      projectSlug,
+      publish,
+      reloadServerDraft,
+      restoreRevision,
+      saveState,
+    ],
   )
 
   return <EditorSessionContext.Provider value={value}>{children}</EditorSessionContext.Provider>
@@ -163,6 +267,7 @@ export function EditorSessionProvider({
     projectSlug: string | null
     isPublished: boolean
     draftVersion: number
+    draftSavedAt: string
     autoSave: boolean
   } | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -187,6 +292,7 @@ export function EditorSessionProvider({
             projectSlug: detail.slug,
             isPublished: detail.state === 'published',
             draftVersion: detail.draftVersion,
+            draftSavedAt: detail.savedAt,
             autoSave: settings.autosave !== false,
           })
         }
@@ -230,6 +336,7 @@ export function EditorSessionProvider({
       projectSlug={session.projectSlug}
       isPublished={session.isPublished}
       draftVersion={session.draftVersion}
+      draftSavedAt={session.draftSavedAt}
       autoSave={session.autoSave}
     >
       {children}

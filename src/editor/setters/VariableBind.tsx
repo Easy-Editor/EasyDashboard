@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { normalizeExtraPropRecord } from '@/editor/extra-prop-record'
 import { cn } from '@/lib/utils'
 import type { JSExpression, SettingField } from '@easy-editor/core'
 import { SquareCode } from 'lucide-react'
@@ -40,7 +41,10 @@ export interface VariableBindProps {
 export const VariableBind = observer((props: VariableBindProps) => {
   const { field } = props
   const originValue = field.getValue() as boolean | JSExpression
-  const state = field.designer?.currentDocument?.rootNode?.getExtraPropValue('state') as Record<string, JSExpression>
+  const state = field.designer?.currentDocument?.rootNode?.getExtraPropValue('state') as
+    | Record<string, JSExpression>
+    | null
+    | undefined
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>(Tab.STATE)
   const [value, setValue] = useState('')
@@ -49,7 +53,7 @@ export const VariableBind = observer((props: VariableBindProps) => {
     if (tab === Tab.BUILTIN) {
       return builtinState
     }
-    return state
+    return normalizeExtraPropRecord(state)
   }, [tab, state])
 
   const addVariable = (key: string) => {

@@ -84,9 +84,16 @@ export const DataSourceList: React.FC<{ rootNode: Node }> = observer(({ rootNode
       onConfirm={handleEditConfirm}
     >
       <div className='space-y-4'>
-        <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase flex justify-end items-center m-0'>
-          <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd} />
-        </h3>
+        <div className='flex items-center justify-end'>
+          <button
+            type='button'
+            aria-label='新增数据源'
+            onClick={handleAdd}
+            className='inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          >
+            <Plus className='size-4' aria-hidden='true' />
+          </button>
+        </div>
         {dataSourceList.length > 0 ? (
           dataSourceList.map(dataSourceConfig => (
             <CardItem

@@ -5,14 +5,23 @@ import { observer } from 'mobx-react'
 import { useState } from 'react'
 import { genId } from '.'
 import { CardItem } from './CardItem'
+import { normalizeExtraPropRecord } from './utils'
 
 export const MethodList = observer(({ rootNode }: { rootNode: Node<RootSchema> }) => {
-  const methods = rootNode.getExtraPropValue('methods') as Record<string, JSFunction>
+  const methods = normalizeExtraPropRecord(
+    rootNode.getExtraPropValue('methods') as Record<string, JSFunction> | null | undefined,
+  )
   const [open, setOpen] = useState(false)
   const [currentMethod, setCurrentMethod] = useState<JSFunction & { name: string; description?: string }>()
 
   const handleAdd = () => {
+    setCurrentMethod(undefined)
     setOpen(true)
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+    setCurrentMethod(undefined)
   }
 
   const handleEdit = (key: string) => () => {
@@ -44,14 +53,16 @@ export const MethodList = observer(({ rootNode }: { rootNode: Node<RootSchema> }
   }
 
   return (
-    <MethodEditorModal open={open} method={currentMethod} onClose={() => setOpen(false)} onConfirm={handleConfirm}>
-      {Object.keys(methods).length > 0 && (
-        <div className='space-y-4'>
-          <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
-            <span>普通方法</span>
-            <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd} />
-          </h3>
-          {Object.entries(methods).map(([key, value]) => (
+    <MethodEditorModal open={open} method={currentMethod} onClose={handleClose} onConfirm={handleConfirm}>
+      <div className='space-y-4'>
+        <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase mt-6 mb-4 flex justify-between items-center'>
+          <span>普通方法</span>
+          <button type='button' aria-label='新增普通方法' className='cursor-pointer' onClick={handleAdd}>
+            <Plus className='w-4 h-4' />
+          </button>
+        </h3>
+        {Object.keys(methods).length > 0 ? (
+          Object.entries(methods).map(([key, value]) => (
             <CardItem
               key={key}
               name={key}
@@ -60,9 +71,11 @@ export const MethodList = observer(({ rootNode }: { rootNode: Node<RootSchema> }
               onCopy={handleCopy(key)}
               onDelete={handleDelete(key)}
             />
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <p className='text-xs text-muted-foreground'>暂无普通方法，点击 + 新增。</p>
+        )}
+      </div>
     </MethodEditorModal>
   )
 })

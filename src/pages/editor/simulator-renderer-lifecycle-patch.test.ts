@@ -30,6 +30,34 @@ const lifecycleContracts: LifecycleContract[] = [
       /this\.host\.project\.isRendererReady = false/,
     ],
   },
+  {
+    name: 'document instances follow live Document identities',
+    patterns: [
+      /const staleDocumentInstances = \[\]/,
+      /const nextDocumentInstanceMap = new Map\(\)/,
+      /const cachedInstance = documentInstanceMap\.get\(document\.id\)/,
+      /cachedInstance\?\.document === document/,
+      /staleDocumentInstances\.push\(cachedInstance\)/,
+      /!nextDocumentInstanceMap\.has\(documentId\)/,
+      /documentInstanceMap\.clear\(\)/,
+      /staleDocumentInstances\.forEach\(documentInstance => documentInstance\.dispose\(\)\)/,
+    ],
+  },
+  {
+    name: 'a stable document route with visible stale-path fallback',
+    patterns: [
+      /path: ['"]\*['"]/,
+      /const DocumentRoute = (?:mobxReact\.)?observer/,
+      /const currentDocumentId = host\.currentDocument\?\.id/,
+      /documentInstances\.find\(instance => instance\.path === pathname\)/,
+      /documentInstances\.find\(instance => instance\.document\.id === currentDocumentId\)/,
+      /documentInstances\[0\]/,
+    ],
+  },
+  {
+    name: 'internal document route synchronization replaces history',
+    patterns: [/this\.history\.replace\(path\)/],
+  },
 ]
 
 function assertLifecycleContracts(source: string) {
@@ -89,6 +117,22 @@ describe('patched simulator renderer lifecycle', () => {
     {
       contract: 'React root unmount',
       remove: /this\._root\?\.unmount\(\);/,
+    },
+    {
+      contract: 'Document identity replacement',
+      remove: /cachedInstance\?\.document === document/,
+    },
+    {
+      contract: 'removed Document instance cleanup',
+      remove: /!nextDocumentInstanceMap\.has\(documentId\)/,
+    },
+    {
+      contract: 'visible stale-path fallback',
+      remove: /documentInstances\.find\(instance => instance\.document\.id === currentDocumentId\)/,
+    },
+    {
+      contract: 'history replacement',
+      remove: /this\.history\.replace\(path\)/,
     },
   ])('fails when $contract is removed from the installed bundle', async ({ remove }) => {
     const installedBundle = await readFile(installedCjsPath, 'utf8')

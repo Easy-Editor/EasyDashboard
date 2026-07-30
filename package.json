@@ -20,10 +20,11 @@
     "build:web": "tsc -b && vite build",
     "build:viewer": "pnpm --dir viewer build",
     "build:server": "pnpm --dir server build",
-    "build:prod": "vite build",
+    "build:prod": "pnpm build",
     "typecheck": "tsc -b && pnpm --dir viewer typecheck && pnpm --dir server typecheck",
-    "test": "pnpm test:unit && pnpm --dir server test",
+    "test": "pnpm test:unit && pnpm test:viewer && pnpm --dir server test",
     "test:unit": "vitest run src",
+    "test:viewer": "vitest run viewer",
     "preview": "vite preview",
     "add:ui": "pnpm dlx shadcn@canary add"
   },

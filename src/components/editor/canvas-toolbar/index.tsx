@@ -61,9 +61,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, min
   }
 
   return (
-    <div className='grid h-9 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-border/70 bg-background px-2'>
-      <span aria-hidden='true' />
-
+    <div className='absolute bottom-3 left-1/2 z-20 flex h-8 -translate-x-1/2 items-center gap-1 rounded-[7px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)]/95 px-1 shadow-[0_8px_28px_rgba(0,0,0,0.38)] backdrop-blur'>
       <Popover>
         <PopoverTrigger asChild>
           <Button
@@ -71,7 +69,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, min
             variant='ghost'
             size='sm'
             disabled={!rootNode}
-            className='h-7 gap-2 rounded-[5px] px-2.5 font-mono text-[11px] tabular-nums text-muted-foreground hover:bg-accent/60 hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground'
+            className='h-6 gap-1.5 rounded-[4px] px-2 font-mono text-[10px] tabular-nums text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] data-[state=open]:bg-[var(--ed-panel-raised)] data-[state=open]:text-[var(--ed-ink)]'
             aria-label={`设置画布分辨率，当前 ${resolution.width} × ${resolution.height}`}
           >
             <Monitor className='size-3.5' />
@@ -82,20 +80,22 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, min
           </Button>
         </PopoverTrigger>
         <PopoverContent
+          data-ed-shell='editor'
           side='top'
           align='center'
           sideOffset={8}
-          className='w-[300px] rounded-[8px] border-[#2A333D] bg-[#0F1318] p-3 text-[#F1F5F7] shadow-2xl'
+          className='w-[300px] rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] p-3 text-[var(--ed-ink)] shadow-2xl'
         >
-          <div className='mb-3 border-b border-[#252D35] pb-3'>
-            <p className='text-xs font-medium text-[#E7ECEF]'>画布分辨率</p>
-            <p className='mt-1 text-[11px] leading-4 text-[#73808A]'>设置当前大屏的设计尺寸。</p>
+          <div className='mb-3 border-b border-[var(--ed-line)] pb-3'>
+            <p className='text-xs font-medium text-[var(--ed-ink)]'>画布分辨率</p>
+            <p className='mt-1 text-[11px] leading-4 text-[var(--ed-ink-faint)]'>设置当前大屏的设计尺寸。</p>
           </div>
           <ResolutionSetter value={resolution} onChange={handleResolutionChange} />
         </PopoverContent>
       </Popover>
 
-      <div className='flex items-center justify-self-end gap-2'>
+      <div className='h-4 w-px bg-[var(--ed-line-strong)]' />
+      <div className='flex items-center gap-1.5'>
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -103,7 +103,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, min
                 type='button'
                 variant='ghost'
                 size='icon'
-                className='h-6 w-6'
+                className='size-6 text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
                 onClick={onFitWidth}
                 aria-label='自适应画布'
               >
@@ -117,7 +117,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, min
         </TooltipProvider>
 
         <div
-          className='w-24'
+          className='w-20'
           onPointerDown={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
           onContextMenu={e => e.stopPropagation()}
@@ -133,7 +133,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, min
           />
         </div>
 
-        <span className='min-w-10 text-center text-xs tabular-nums text-muted-foreground'>
+        <span className='min-w-9 text-center font-mono text-[10px] tabular-nums text-[var(--ed-ink-muted)]'>
           {Math.round(scale * 100)}%
         </span>
       </div>

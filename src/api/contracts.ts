@@ -14,7 +14,19 @@ export type SessionResponse = {
   user: SessionUser | null
 }
 
-export type ProjectState = 'draft' | 'published'
+export type ProjectState = 'draft' | 'published' | 'trashed'
+
+export type ProjectThumbnailMode = 'auto' | 'custom'
+
+export type ProjectThumbnailStatus = 'queued' | 'rendering' | 'ready' | 'failed'
+
+export type ProjectThumbnail = {
+  mode: ProjectThumbnailMode
+  status: ProjectThumbnailStatus
+  url: string | null
+  draftVersion: number | null
+  errorCode: string | null
+}
 
 export type ProjectSummary = {
   id: string
@@ -27,6 +39,12 @@ export type ProjectSummary = {
     width: number
     height: number
   }
+  pageCount: number
+  startPageId: string | null
+  isFavorite: boolean
+  thumbnail: ProjectThumbnail
+  savedAt: string
+  deletedAt: string | null
   updatedAt: string
 }
 
@@ -37,6 +55,7 @@ export type ProjectDetail<TSchema = unknown> = ProjectSummary & {
 export type ProjectRevision<TSchema = unknown> = {
   id: string
   revision: number
+  kind: 'auto' | 'manual' | 'pre_restore' | 'publish'
   schema: TSchema
   createdAt: string
 }
@@ -63,6 +82,7 @@ export type TemplateListResponse<TSchema = unknown> = {
 
 export type SaveDraftResponse = {
   draftVersion: number
+  savedAt: string
   updatedAt: string
 }
 
@@ -70,6 +90,9 @@ export type PublishResponse = {
   projectId: string
   revisionId: string
   revision: number
+  releaseNumber: number
   slug: string
+  stablePath: string
+  versionPath: string
   publishedAt: string
 }

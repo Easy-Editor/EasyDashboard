@@ -616,6 +616,250 @@
   --alpha-pointer-box-shadow: transparent 0px 1px 4px 0px !important;
 }
 
+/* ===== EasyDashboard product shell: Precision Canvas ===== */
+[data-ed-shell] {
+  --ed-canvas: #070a0f;
+  --ed-rail: #0a0e14;
+  --ed-panel: #0d131b;
+  --ed-panel-raised: #121b26;
+  --ed-line: #1c2936;
+  --ed-line-strong: #2a3b4c;
+  --ed-ink: #edf5fa;
+  --ed-ink-soft: #bdcad4;
+  --ed-ink-muted: #8b9ca9;
+  --ed-ink-faint: #748695;
+  --ed-blue: #4f8cff;
+  --ed-cyan: #6ddcf3;
+  --radius: 0.5rem;
+
+  color-scheme: dark;
+  background: var(--ed-canvas);
+  font-family: var(--font-sans);
+  font-feature-settings: "kern" 1, "ss01" 1;
+}
+
+[data-ed-shell] ::selection {
+  color: #f8fcff;
+  background: rgb(79 140 255 / 0.38);
+}
+
+[data-ed-shell] button,
+[data-ed-shell] input,
+[data-ed-shell] [role="button"] {
+  font-family: inherit;
+}
+
+[data-editor-workbench],
+[data-ed-shell="editor"] {
+  /*
+   * The editor is a single calibrated instrument: the canvas world is deepest,
+   * fixed rails sit above it, and both persistent side panels share one surface.
+   * The second selector is intentional: remote setters mount their portals
+   * under body, so they need the same semantic aliases without relying on
+   * inheritance from the workbench root.
+   */
+  --background: var(--ed-canvas);
+  --foreground: var(--ed-ink);
+  --surface: var(--ed-panel);
+  --surface-hover: var(--ed-panel-raised);
+  --card: var(--ed-panel);
+  --card-foreground: var(--ed-ink);
+  --popover: var(--ed-panel);
+  --popover-foreground: var(--ed-ink);
+  --primary: var(--ed-ink);
+  --primary-foreground: var(--ed-canvas);
+  --secondary: var(--ed-panel-raised);
+  --secondary-foreground: var(--ed-ink-soft);
+  --accent: var(--ed-panel-raised);
+  --accent-foreground: var(--ed-ink);
+  --muted: var(--ed-panel-raised);
+  --muted-foreground: var(--ed-ink-muted);
+  --border: var(--ed-line);
+  --border-strong: var(--ed-line-strong);
+  --input: var(--ed-line);
+  --ring: var(--ed-cyan);
+  --sidebar: var(--ed-panel);
+  --sidebar-foreground: var(--ed-ink);
+  --sidebar-primary: var(--ed-ink);
+  --sidebar-primary-foreground: var(--ed-canvas);
+  --sidebar-accent: var(--ed-panel-raised);
+  --sidebar-accent-foreground: var(--ed-ink);
+  --sidebar-border: var(--ed-line);
+  --sidebar-ring: var(--ed-cyan);
+
+  --ruler-bg: var(--ed-rail);
+  --ruler-border: var(--ed-line);
+  --ruler-tick-major: var(--ed-ink-muted);
+  --ruler-tick-medium: color-mix(in srgb, var(--ed-ink-faint) 62%, transparent);
+  --ruler-tick-minor: color-mix(in srgb, var(--ed-ink-faint) 38%, transparent);
+  --ruler-text: var(--ed-ink-faint);
+  --ruler-cursor: var(--ed-cyan);
+  --ruler-cursor-glow: color-mix(in srgb, var(--ed-cyan) 28%, transparent);
+  --ruler-corner-bg: var(--ed-rail);
+  --ruler-corner-border: var(--ed-line);
+  --ruler-coords-color: var(--ed-ink-muted);
+  --ruler-coords-bg: color-mix(in srgb, var(--ed-panel) 92%, transparent);
+  --ruler-canvas-bg: var(--ed-canvas);
+  --ruler-grid-color: color-mix(in srgb, var(--ed-line) 42%, transparent);
+  --ruler-grid-color-major: color-mix(in srgb, var(--ed-line-strong) 58%, transparent);
+}
+
+/*
+ * The settings renderer is loaded as a remote package and still ships neutral
+ * zinc surfaces. Bridge its structural controls back onto the editor chassis
+ * so the inspector does not read as a separate theme.
+ */
+[data-editor-configure] [role="tablist"] {
+  background: var(--ed-panel-raised) !important;
+  border: 1px solid var(--ed-line) !important;
+}
+
+[data-editor-configure] [role="tab"] {
+  color: var(--ed-ink-muted) !important;
+}
+
+[data-editor-configure] [role="tab"][aria-selected="true"] {
+  color: var(--ed-ink) !important;
+}
+
+[data-editor-configure] [class*="styles-module-indicator-"] {
+  background: var(--ed-canvas) !important;
+}
+
+[data-editor-configure] [class*="styles-module-header-"] {
+  color: var(--ed-ink-soft) !important;
+  background: var(--ed-panel-raised) !important;
+  border-color: var(--ed-line) !important;
+}
+
+[data-editor-configure] .ed-data-grid {
+  --rdg-selection-width: 1px;
+  --rdg-selection-color: var(--ed-blue);
+  --rdg-font-size: 12px;
+  --rdg-cell-frozen-box-shadow: 1px 0 var(--ed-line);
+  --rdg-border-width: 1px;
+  --rdg-color: var(--ed-ink-soft);
+  --rdg-border-color: var(--ed-line);
+  --rdg-summary-border-color: var(--ed-line-strong);
+  --rdg-background-color: var(--ed-panel);
+  --rdg-header-background-color: var(--ed-panel-raised);
+  --rdg-header-draggable-background-color: color-mix(in srgb, var(--ed-blue) 10%, var(--ed-panel-raised));
+  --rdg-row-hover-background-color: color-mix(in srgb, var(--ed-blue) 6%, var(--ed-panel));
+  --rdg-row-selected-background-color: color-mix(in srgb, var(--ed-blue) 12%, var(--ed-panel));
+  --rdg-row-selected-hover-background-color: color-mix(in srgb, var(--ed-blue) 16%, var(--ed-panel));
+  --rdg-checkbox-focus-color: var(--ed-cyan);
+  color-scheme: dark;
+}
+
+[data-editor-configure] .ed-data-grid [role="columnheader"] {
+  color: var(--ed-ink-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+[data-editor-configure] .ed-data-grid [role="gridcell"] {
+  padding-inline: 8px;
+}
+
+[data-editor-configure] .ed-data-grid [role="gridcell"][aria-selected="true"] {
+  background: color-mix(in srgb, var(--ed-blue) 10%, var(--ed-panel));
+}
+
+[data-editor-configure] .ed-data-grid-editor {
+  color: var(--ed-ink);
+  background: var(--ed-panel-raised);
+  box-shadow: inset 0 0 0 1px var(--ed-cyan);
+}
+
+.ed-auth-grid {
+  background-image: linear-gradient(rgb(109 220 243 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(109 220 243 / 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+.ed-auth-chart-grid,
+.ed-thumbnail-grid {
+  background-image: linear-gradient(rgb(100 154 206 / 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(100 154 206 / 0.09) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.ed-auth-orbit {
+  box-shadow: 0 0 0 26px rgb(79 140 255 / 0.025), 0 0 0 72px rgb(79 140 255 / 0.015);
+}
+
+.ed-auth-scene {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.ed-auth-page {
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  animation: ed-canvas-float 8s var(--ease-smooth) infinite alternate;
+}
+
+.ed-auth-page-back {
+  transform: rotateX(5deg) rotateY(-9deg) translate3d(24px, -2px, -70px);
+  animation-delay: -5s;
+}
+
+.ed-auth-page-mid {
+  transform: rotateX(5deg) rotateY(-8deg) translate3d(0, 0, 0);
+  animation-delay: -2.5s;
+}
+
+.ed-auth-page-front {
+  transform: rotateX(4deg) rotateY(-8deg) translate3d(0, 0, 82px);
+}
+
+.ed-auth-form {
+  animation: ed-auth-enter 520ms var(--ease-smooth) both;
+}
+
+.ed-project-thumbnail::after,
+.ed-empty-canvas::after,
+.ed-trash-empty::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(118deg, transparent 24%, rgb(109 220 243 / 0.035) 49%, transparent 72%);
+}
+
+.ed-empty-canvas,
+.ed-trash-empty {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(rgb(100 154 206 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(100 154 206 / 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@keyframes ed-canvas-float {
+  from {
+    translate: 0 0;
+  }
+
+  to {
+    translate: 0 -7px;
+  }
+}
+
+@keyframes ed-auth-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ===== 尊重用户的减少动效偏好 ===== */
 @media (prefers-reduced-motion: reduce) {
   *,

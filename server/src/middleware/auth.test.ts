@@ -12,6 +12,18 @@ describe('requireAuth', () => {
       signIn: async () => {
         throw new Error('unused')
       },
+      startOAuth: async () => {
+        throw new Error('unused')
+      },
+      exchangeCode: async () => {
+        throw new Error('unused')
+      },
+      requestPasswordReset: async () => {
+        throw new Error('unused')
+      },
+      updatePassword: async () => {
+        throw new Error('unused')
+      },
       refresh: async () => {
         throw new Error('unused')
       },
@@ -32,7 +44,7 @@ describe('requireAuth', () => {
     })
     const app = new Hono<{ Variables: AppVariables }>()
     app.use('/projects', requireAuth(auth))
-    app.get('/projects', c => c.json({ actorId: c.get('actorId') }))
+    app.get('/projects', c => c.json({ actorId: c.get('actorId'), accessToken: c.get('accessToken') }))
 
     const response = await app.request('/projects', {
       headers: {
@@ -43,6 +55,7 @@ describe('requireAuth', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(response.headers.getSetCookie().join('\n')).toContain('__Host-ed-access-token=new-access')
+    await expect(response.json()).resolves.toMatchObject({ accessToken: 'new-access' })
   })
 
   it('marks an authenticated response private even when no refresh is needed', async () => {
