@@ -197,6 +197,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^19.8.1
         version: 19.8.1
+      '@playwright/test':
+        specifier: 1.62.0
+        version: 1.62.0
       '@types/node':
         specifier: ^22.19.7
         version: 22.19.7
@@ -221,6 +224,12 @@ importers:
       lint-staged:
         specifier: ^15.5.2
         version: 15.5.2
+      only-allow:
+        specifier: 1.2.2
+        version: 1.2.2
+      supabase:
+        specifier: 2.110.0
+        version: 2.110.0
       typescript:
         specifier: ~5.7.3
         version: 5.7.3
@@ -692,6 +701,12 @@ packages:
     resolution: {integrity: sha512-3A9RelQhcjvI6aXYKNW0rOo73Yqt7ZkIzA97IPpP7q5EjRCQnhX8AJPcpcuuRWcaJZdGqFjWF60R1fosNzoEaw==}
     peerDependencies:
       '@easy-editor/core': ^1.0.3
+
+  '@ecies/ciphers@0.2.6':
+    resolution: {integrity: sha512-patgsRPKGkhhoBjETV4XxD0En4ui5fbX0hzayqI3M8tvNMGUoUvmyYAIWwlxBc1KX5cturfqByYdj5bYGRpN9g==}
+    engines: {bun: '>=1', deno: '>=2.7.10', node: '>=16'}
+    peerDependencies:
+      '@noble/ciphers': ^1.0.0
 
   '@esbuild/aix-ppc64@0.24.2':
     resolution: {integrity: sha512-thpVCb/rhxE/BnMLQ7GReQLLN8q9qbHmI55F4489/ByVg2aQaQ6kbcLb6FHkocZzQhxc4gx0sCk0tJkKBFzDhA==}
@@ -1217,6 +1232,18 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
+  '@noble/ciphers@1.3.0':
+    resolution: {integrity: sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/curves@1.9.7':
+    resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
+
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -1234,6 +1261,11 @@ packages:
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
+
+  '@playwright/test@1.62.0':
+    resolution: {integrity: sha512-9zOJ6ZQRAena31MpOH9VSzIz8Ou3YJ/wtY/eQm5T2uhfhG7/U3COrMS8xOtUrZrp9OgdmzEnIYODye3nY1VqzA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@preact/signals-core@1.12.2':
     resolution: {integrity: sha512-5Yf8h1Ke3SMHr15xl630KtwPTW4sYDFkkxS0vQ8UiQLWwZQnrF9IKaVG1mN5VcJz52EcWs2acsc/Npjha/7ysA==}
@@ -2131,6 +2163,50 @@ packages:
     resolution: {integrity: sha512-hbRLgyQZEX0SDyF4LYXpv94qOIQyFATfpT5SIs2V0SisHnisVRkYgiPQWzv80l4S2mO3qof78rmoH9j5zoFsYQ==}
     engines: {node: '>=22.0.0'}
 
+  '@supabase/cli-darwin-arm64@2.110.0':
+    resolution: {integrity: sha512-VC+3vipRUtLrZKVYuxfRtP1gUPwUa+oZSeOJTRPSjLYN1FlnXIFcVDp/Xe21tZLYbVZBx3zJmy50OG2vTeNL3Q==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@supabase/cli-darwin-x64@2.110.0':
+    resolution: {integrity: sha512-PtDmolyEXqm6hpsNOTBB15xWadhbFOelaKaxBTflk1TBJO1Hugrzw4xophbi8hg4vG9HXh4GNc7TY24BA93zqA==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@supabase/cli-linux-arm64-musl@2.110.0':
+    resolution: {integrity: sha512-RyPgJr7hAdyhlxwUR36+s6P6rENupfN+meN+3+c/9XYT5cRwGuaJRnM4nsh9s1fs33lu7v22oy2N7IHZfgujew==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@supabase/cli-linux-arm64@2.110.0':
+    resolution: {integrity: sha512-FHSVK7sR5quvAfDqwoA850ci3EP0hu6tjL1MDMWokkSwvILaHYp2AWq6jzZwa78dk+/SGeVPl8andkfyvH2qeg==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@supabase/cli-linux-x64-musl@2.110.0':
+    resolution: {integrity: sha512-GLYhJhOhQmkkH3gygZy8x0VLmnGuLk0giSGAc19FtA12qfXdVsVeTiZWBzIEFvrJ4nK8NWqf0K4HIe2C4sBFqg==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@supabase/cli-linux-x64@2.110.0':
+    resolution: {integrity: sha512-mShXx1+8yQfpxEzVyBxH8plbrHoXE/6j/8jIzQXmzuOFbVyaJzJU3HMmuEUsptcgwj/FpWoE1HrI77TmzWrJ/w==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@supabase/cli-windows-arm64@2.110.0':
+    resolution: {integrity: sha512-gLiQLv9geh3TV3t/uAd2GhNfLMJW/l8jyBclc2sPiljM5wosIKsxm8Uf9e97mgVVHgGLrRR1igXtru1YU+n8AQ==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@supabase/cli-windows-x64@2.110.0':
+    resolution: {integrity: sha512-J4dXRahjAEQy3w0cTtJsvwCuoMY7OHAYPaR81Gxac0315HvSf+8Cf2cEpwAkUKpAhUpCE0pa1Gl3BrmKtd7qaw==}
+    cpu: [x64]
+    os: [win32]
+
   '@supabase/functions-js@2.111.0':
     resolution: {integrity: sha512-RW/OCsd6MO592zU8ifzP8/f8XzxxIdpb+Up5XaOtE26Fw+3zTp475WX7+GuuktiD1WF8pFUDe6khUPbMp77RCw==}
     engines: {node: '>=22.0.0'}
@@ -2832,6 +2908,10 @@ packages:
   echarts@5.6.0:
     resolution: {integrity: sha512-oTbVTsXfKuEhxftHqL5xprgLoc0k7uScAwtryCgWF6hPYFLRwOUHiFmHGCBKP5NPFNkDVopOieyUqYGH8Fa3kA==}
 
+  eciesjs@0.5.0:
+    resolution: {integrity: sha512-s0J9SEVYAEPg7J63GFMApLYzPH9VNIQIyC6s15JpnqVc0TqcKWdbgFlnAweEBRyMmko2dcs2sfC83Hj4J43tuA==}
+    engines: {bun: '>=1', deno: '>=2.7.10', node: '>=16'}
+
   electron-to-chromium@1.5.283:
     resolution: {integrity: sha512-3vifjt1HgrGW/h76UEeny+adYApveS9dH2h3p57JYzBSXJIKUJAvtmIytDKjcSCt9xHfrNCFJ7gts6vkhuq++w==}
 
@@ -3148,6 +3228,9 @@ packages:
   jose@5.10.0:
     resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
+  jose@6.2.5:
+    resolution: {integrity: sha512-2E5L2yRp03FnwreJLJX8/r7mHiZICCf8kG7fAsTWkSQTDAcc46NIZoQLKy+EJ8sPoJlxyS4OQR5H70LjIZZlIQ==}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -3457,6 +3540,10 @@ packages:
     resolution: {integrity: sha512-VXJjc87FScF88uafS3JllDgvAm+c/Slfz06lorj2uAY34rlUu0Nt+v8wreiImcrgAjjIHp1rXpTDlLOGw29WwQ==}
     engines: {node: '>=18'}
 
+  only-allow@1.2.2:
+    resolution: {integrity: sha512-uxyNYDsCh5YIJ780G7hC5OHjVUr9reHsbZNMM80L9tZlTpb3hUzb36KXgW4ZUGtJKQnGA3xegmWg1BxhWV0jJA==}
+    hasBin: true
+
   os-paths@4.4.0:
     resolution: {integrity: sha512-wrAwOeXp1RRMFfQY8Sy7VaGVmPocaLwSFOYCGKSyo8qmJ+/yaafCl5BCA1IQZWqFSRBrKDYFeR9d/VyQzfH/jg==}
     engines: {node: '>= 6.0'}
@@ -3585,9 +3672,19 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
+  playwright-core@1.62.0:
+    resolution: {integrity: sha512-nsNRyq0r2zsG8AcRHWknc9QRA5XCueC7gWMrs+Gx2tlZn9hcl8zudfh00lhJPY1DE7NmZ6bDsT9g2yey8mXljA==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   playwright@1.58.1:
     resolution: {integrity: sha512-+2uTZHxSCcxjvGc5C891LrS1/NlxglGxzrC4seZiVjcYVQfUa87wBL6rTDqzGjuoWNjnBzRqKmF6zRYGMvQUaQ==}
     engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.62.0:
+    resolution: {integrity: sha512-Z14dG305dgaLu6foB1TXQagFiW8JfSUIUaUuPaKQ6NtBPKF1P/qXcqfh6c6K/icPqdy37JmjbiBXf6JNg6Sylw==}
+    engines: {node: '>=20'}
     hasBin: true
 
   postcss@8.5.6:
@@ -3940,6 +4037,10 @@ packages:
     resolution: {integrity: sha512-dOESqjYr96iWYylGObzd39EuNTa5VJxyvVAEm5Jnh7KGo75V43Hk1odPQkNDyXNmUR6k+gEiDVXnjB8HJ3crXw==}
     engines: {node: '>=12'}
 
+  supabase@2.110.0:
+    resolution: {integrity: sha512-63QKsdLSVOFKTqABIAeOpg12daBZb9WYqc1NeMNimDP+gFGY8YsIh7VOJawUENXhIWWRlWNprHCOmafCc3LD7Q==}
+    hasBin: true
+
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
@@ -4154,6 +4255,10 @@ packages:
 
   webpack-virtual-modules@0.6.2:
     resolution: {integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==}
+
+  which-pm-runs@1.1.0:
+    resolution: {integrity: sha512-n1brCuqClxfFfq/Rb0ICg9giSZqCS+pLtccdag6C2HyufBrh3fBOiy9nb6ggRMvWOVH5GrdJskj5iGTZNxd7SA==}
+    engines: {node: '>=4'}
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -4801,6 +4906,10 @@ snapshots:
       '@easy-editor/core': 1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0)
       lodash-es: 4.17.23
 
+  '@ecies/ciphers@0.2.6(@noble/ciphers@1.3.0)':
+    dependencies:
+      '@noble/ciphers': 1.3.0
+
   '@esbuild/aix-ppc64@0.24.2':
     optional: true
 
@@ -5106,6 +5215,14 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
+  '@noble/ciphers@1.3.0': {}
+
+  '@noble/curves@1.9.7':
+    dependencies:
+      '@noble/hashes': 1.8.0
+
+  '@noble/hashes@1.8.0': {}
+
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
       '@nodelib/fs.stat': 2.0.5
@@ -5122,6 +5239,10 @@ snapshots:
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
+
+  '@playwright/test@1.62.0':
+    dependencies:
+      playwright: 1.62.0
 
   '@preact/signals-core@1.12.2': {}
 
@@ -5961,6 +6082,30 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@supabase/cli-darwin-arm64@2.110.0':
+    optional: true
+
+  '@supabase/cli-darwin-x64@2.110.0':
+    optional: true
+
+  '@supabase/cli-linux-arm64-musl@2.110.0':
+    optional: true
+
+  '@supabase/cli-linux-arm64@2.110.0':
+    optional: true
+
+  '@supabase/cli-linux-x64-musl@2.110.0':
+    optional: true
+
+  '@supabase/cli-linux-x64@2.110.0':
+    optional: true
+
+  '@supabase/cli-windows-arm64@2.110.0':
+    optional: true
+
+  '@supabase/cli-windows-x64@2.110.0':
+    optional: true
+
   '@supabase/functions-js@2.111.0':
     dependencies:
       tslib: 2.8.1
@@ -6556,6 +6701,13 @@ snapshots:
       tslib: 2.3.0
       zrender: 5.6.1
 
+  eciesjs@0.5.0:
+    dependencies:
+      '@ecies/ciphers': 0.2.6(@noble/ciphers@1.3.0)
+      '@noble/ciphers': 1.3.0
+      '@noble/curves': 1.9.7
+      '@noble/hashes': 1.8.0
+
   electron-to-chromium@1.5.283: {}
 
   embla-carousel-react@8.6.0(react@19.2.4):
@@ -6891,6 +7043,8 @@ snapshots:
 
   jose@5.10.0: {}
 
+  jose@6.2.5: {}
+
   js-tokens@4.0.0: {}
 
   js-yaml@3.14.2:
@@ -7132,6 +7286,10 @@ snapshots:
     dependencies:
       mimic-function: 5.0.1
 
+  only-allow@1.2.2:
+    dependencies:
+      which-pm-runs: 1.1.0
+
   os-paths@4.4.0: {}
 
   outdent@0.5.0: {}
@@ -7234,9 +7392,17 @@ snapshots:
 
   playwright-core@1.58.1: {}
 
+  playwright-core@1.62.0: {}
+
   playwright@1.58.1:
     dependencies:
       playwright-core: 1.58.1
+    optionalDependencies:
+      fsevents: 2.3.2
+
+  playwright@1.62.0:
+    dependencies:
+      playwright-core: 1.62.0
     optionalDependencies:
       fsevents: 2.3.2
 
@@ -7581,6 +7747,20 @@ snapshots:
 
   strip-final-newline@3.0.0: {}
 
+  supabase@2.110.0:
+    dependencies:
+      eciesjs: 0.5.0
+      jose: 6.2.5
+    optionalDependencies:
+      '@supabase/cli-darwin-arm64': 2.110.0
+      '@supabase/cli-darwin-x64': 2.110.0
+      '@supabase/cli-linux-arm64': 2.110.0
+      '@supabase/cli-linux-arm64-musl': 2.110.0
+      '@supabase/cli-linux-x64': 2.110.0
+      '@supabase/cli-linux-x64-musl': 2.110.0
+      '@supabase/cli-windows-arm64': 2.110.0
+      '@supabase/cli-windows-x64': 2.110.0
+
   supports-color@10.2.2: {}
 
   tailwind-merge@3.4.0: {}
@@ -7738,6 +7918,8 @@ snapshots:
 
   webpack-virtual-modules@0.6.2:
     optional: true
+
+  which-pm-runs@1.1.0: {}
 
   which@2.0.2:
     dependencies:

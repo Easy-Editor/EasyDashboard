@@ -53,9 +53,10 @@ EasyDashboard/
 
 ## Requirements
 
-- Node.js 22 or later
+- Node.js 22.x (the exact CI version is recorded in `.node-version`)
 - pnpm 10.28.2
-- A Supabase project with PostgreSQL, Auth, and Storage
+- Docker for the local Supabase stack
+- A separate Supabase project for each hosted environment
 
 ## Local development
 
@@ -65,14 +66,40 @@ EasyDashboard/
    pnpm install --frozen-lockfile
    ```
 
-2. Create `.env` from [`.env.example`](./.env.example) and replace every
-   placeholder. Apply every SQL file in `supabase/migrations/` in filename
-   order, then set a password for the `easy_dashboard_runtime` role as described
-   in [the deployment guide](./docs/DEPLOYMENT.md).
+2. Start the repository-pinned Supabase CLI:
 
-3. Configure Supabase Auth redirect URLs and the GitHub/Google providers. The
-   exact callback values are listed in
-   [the deployment guide](./docs/DEPLOYMENT.md#3-authentication).
+   ```bash
+   pnpm exec supabase start
+   pnpm exec supabase status -o env \
+     --override-name api.url=SUPABASE_URL,auth.publishable_key=SUPABASE_PUBLISHABLE_KEY
+   ```
+
+   A fresh local stack applies `supabase/roles.sql` and the ordered migrations.
+   `roles.sql` contains a local/CI-only runtime password; hosted environments
+   must provision their own strong random password. If an existing local stack
+   contains development data, do not run `supabase db reset` just to update the
+   role. Apply the local-only role file without deleting data:
+
+   ```bash
+   pnpm exec supabase db query --local --file supabase/roles.sql
+   ```
+
+3. Create `.env` from [`.env.example`](./.env.example). Use the local values
+   reported by `supabase status` and these origins:
+
+   ```text
+   APP_ORIGIN=http://127.0.0.1:5173
+   PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+   PORT=8787
+   VITE_PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+   VITE_PUBLIC_API_ORIGIN=http://127.0.0.1:5173
+   SUPABASE_URL=<SUPABASE_URL reported by supabase status>
+   SUPABASE_PUBLISHABLE_KEY=<SUPABASE_PUBLISHABLE_KEY reported by supabase status>
+   DATABASE_URL=postgresql://easy_dashboard_runtime:easy_dashboard_ci_local_only@127.0.0.1:54322/postgres
+   ```
+
+   The browser calls the API through the app's same-origin `/api` path. Vite
+   proxies that path to the Hono development server on port `8787`.
 
 4. Start all three development processes:
 
@@ -80,8 +107,20 @@ EasyDashboard/
    pnpm dev
    ```
 
-The authenticated app runs on `http://localhost:5173`, the viewer on
-`http://localhost:5174`, and the API on `http://localhost:8787`.
+Open the authenticated app at `http://127.0.0.1:5173` and the public viewer at
+`http://view.localhost:5174`.
+
+## Local verification
+
+Install Chromium once, then run the product-lifecycle browser test:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+The test creates a uniquely named local E2E account and project, permanently
+deletes the project, and does not reset developer data.
 
 ## Scripts
 
@@ -94,6 +133,8 @@ The authenticated app runs on `http://localhost:5173`, the viewer on
 | `pnpm build` | Build the app, viewer, and server |
 | `pnpm typecheck` | Type-check all three workspace applications |
 | `pnpm test` | Run the web, public Viewer, and server test suites |
+| `pnpm test:e2e` | Run the Chromium product-lifecycle test |
+| `pnpm test:e2e:ui` | Open the Playwright test UI |
 | `pnpm lint` | Run Biome checks |
 | `pnpm format` | Format the workspace with Biome |
 

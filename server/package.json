@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../.env src/node.ts",

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../http.js'
@@ -87,6 +88,12 @@ function expectClearedRecoveryCookies(response: Response): void {
 }
 
 describe('auth routes', () => {
+  it('keeps the local Supabase allow-list compatible with state-bearing OAuth callbacks', () => {
+    const config = readFileSync(new URL('../../../supabase/config.toml', import.meta.url), 'utf8')
+
+    expect(config).toContain('"http://127.0.0.1:5173/api/auth/oauth/callback**"')
+  })
+
   it('starts an allowed OAuth provider with PKCE cookies and a safe callback', async () => {
     const startOAuth = vi.fn(auth().startOAuth)
     const response = await routes(auth({ startOAuth })).request('/auth/oauth/github?returnTo=%2Fsettings')

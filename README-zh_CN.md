@@ -41,9 +41,10 @@ EasyDashboard/
 
 ## 环境要求
 
-- Node.js 22 或更高版本
+- Node.js 22.x（CI 的准确版本记录在 `.node-version`）
 - pnpm 10.28.2
-- 启用了 PostgreSQL、Auth 和 Storage 的 Supabase 项目
+- 用于运行本地 Supabase 的 Docker
+- 每个线上环境使用独立的 Supabase 项目
 
 ## 本地开发
 
@@ -53,12 +54,39 @@ EasyDashboard/
    pnpm install --frozen-lockfile
    ```
 
-2. 参考 [`.env.example`](./.env.example) 创建 `.env`，替换所有占位值。按文件名顺序执行
-   `supabase/migrations/` 下的全部 SQL 文件，再按照[部署文档](./docs/DEPLOYMENT.md)为
-   `easy_dashboard_runtime` 设置密码。
+2. 使用仓库锁定版本的 Supabase CLI 启动本地服务：
 
-3. 配置 Supabase Auth 重定向 URL 以及 GitHub/Google Provider。准确的回调地址见
-   [部署文档](./docs/DEPLOYMENT.md#3-authentication)。
+   ```bash
+   pnpm exec supabase start
+   pnpm exec supabase status -o env \
+     --override-name api.url=SUPABASE_URL,auth.publishable_key=SUPABASE_PUBLISHABLE_KEY
+   ```
+
+   全新本地实例会自动执行 `supabase/roles.sql` 和全部迁移。
+   `roles.sql` 中的运行时密码只允许用于本地与 CI；线上环境必须单独生成强随机密码。
+   如果现有本地实例已经有开发数据，不要为了更新角色而执行
+   `supabase db reset`，可在不删除数据的情况下单独执行本地角色文件：
+
+   ```bash
+   pnpm exec supabase db query --local --file supabase/roles.sql
+   ```
+
+3. 参考 [`.env.example`](./.env.example) 创建 `.env`，填入
+   `supabase status` 输出的本地值，并使用以下地址：
+
+   ```text
+   APP_ORIGIN=http://127.0.0.1:5173
+   PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+   PORT=8787
+   VITE_PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+   VITE_PUBLIC_API_ORIGIN=http://127.0.0.1:5173
+   SUPABASE_URL=<supabase status 输出的 SUPABASE_URL>
+   SUPABASE_PUBLISHABLE_KEY=<supabase status 输出的 SUPABASE_PUBLISHABLE_KEY>
+   DATABASE_URL=postgresql://easy_dashboard_runtime:easy_dashboard_ci_local_only@127.0.0.1:54322/postgres
+   ```
+
+   浏览器统一通过应用同源的 `/api` 路径访问 API，Vite 再将请求代理到
+   `8787` 端口上的 Hono 开发服务。
 
 4. 启动三个开发进程：
 
@@ -66,8 +94,20 @@ EasyDashboard/
    pnpm dev
    ```
 
-登录应用运行在 `http://localhost:5173`，Viewer 运行在
-`http://localhost:5174`，API 运行在 `http://localhost:8787`。
+登录应用地址为 `http://127.0.0.1:5173`，公开 Viewer 地址为
+`http://view.localhost:5174`。
+
+## 本地验证
+
+首次运行前安装 Chromium，然后执行产品闭环浏览器测试：
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+测试会创建名称唯一的本地 E2E 账户和项目，并在结束时永久删除测试项目，
+不要求重置开发数据。
 
 ## 常用脚本
 
@@ -80,6 +120,8 @@ EasyDashboard/
 | `pnpm build` | 构建应用、Viewer 和服务端 |
 | `pnpm typecheck` | 对三个 workspace 应用执行类型检查 |
 | `pnpm test` | 运行 Web、公开 Viewer 与服务端测试 |
+| `pnpm test:e2e` | 运行 Chromium 产品闭环测试 |
+| `pnpm test:e2e:ui` | 打开 Playwright 测试界面 |
 | `pnpm lint` | 执行 Biome 检查 |
 | `pnpm format` | 使用 Biome 格式化 workspace |
 

@@ -9,7 +9,7 @@
   "packageManager": "pnpm@10.28.2",
   "scripts": {
     "prepare": "husky",
-    "preinstall": "npx only-allow pnpm",
+    "preinstall": "only-allow pnpm",
     "format": "biome format --write .",
     "lint": "biome check .",
     "dev": "concurrently --kill-others-on-fail --names app,viewer,api --prefix-colors cyan,magenta,green \"pnpm dev:web\" \"pnpm dev:viewer\" \"pnpm dev:server\"",
@@ -25,6 +25,8 @@
     "test": "pnpm test:unit && pnpm test:viewer && pnpm --dir server test",
     "test:unit": "vitest run src",
     "test:viewer": "vitest run viewer",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "preview": "vite preview",
     "add:ui": "pnpm dlx shadcn@canary add"
   },
@@ -91,6 +93,7 @@
     "@changesets/cli": "^2.29.8",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
+    "@playwright/test": "1.62.0",
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
@@ -99,11 +102,13 @@
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.2",
+    "only-allow": "1.2.2",
+    "supabase": "2.110.0",
     "typescript": "~5.7.3",
     "vite": "^6.4.1",
     "vitest": "4.1.10"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": "22.x"
   }
 }

@@ -1,8 +1,20 @@
 # EasyDashboard Deployment
 
-EasyDashboard uses one Supabase project and two Vercel Projects created from the
-same Git repository. Keep the authenticated application and public viewer on
-different origins.
+Each hosted environment uses one Supabase project and two Vercel Projects
+created from the same Git repository. Keep the authenticated application and
+public viewer on different origins.
+
+Do not share databases or secrets between CI, staging, and production:
+
+- CI starts a disposable local Supabase stack in Docker and removes it after
+  the workflow.
+- Staging uses its own Supabase project, app/API Vercel Project, viewer Vercel
+  Project, domains, OAuth callbacks, and secrets.
+- Production uses another isolated set of those resources.
+
+`supabase/roles.sql` is only for local development and CI. Do not apply it to a
+hosted project and do not use `supabase db push --include-roles` for staging or
+production.
 
 Examples below use:
 
@@ -141,8 +153,8 @@ In Supabase Auth URL Configuration:
 Add these entries when testing the local application:
 
 ```text
-http://localhost:5173/api/auth/oauth/callback**
-http://localhost:5173/api/auth/password/callback
+http://127.0.0.1:5173/api/auth/oauth/callback**
+http://127.0.0.1:5173/api/auth/password/callback
 ```
 
 Do not use a broad production-domain wildcard.
@@ -266,7 +278,8 @@ project. Viewer requests use
 Before promoting a deployment:
 
 1. Run `pnpm install --frozen-lockfile`.
-2. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+2. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and
+   `pnpm test:e2e` against an isolated local or staging Supabase environment.
 3. Confirm `/api/health/live` returns `{"status":"ok"}` and
    `/api/health/ready` returns `{"status":"ready"}`.
 4. Confirm email/password, GitHub, Google, sign-out, and password recovery work

@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  HUSKY: 0
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10.28.2
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  e2e:
+    name: Browser E2E
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10.28.2
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start local Supabase
+        run: pnpm exec supabase start
+
+      - name: Replay database migrations
+        run: pnpm exec supabase db reset --local --no-seed
+
+      - name: Create CI environment
+        shell: bash
+        run: |
+          eval "$(pnpm exec supabase status -o env \
+            --override-name api.url=SUPABASE_URL,auth.publishable_key=SUPABASE_PUBLISHABLE_KEY)"
+
+          cat > .env <<EOF
+          NODE_ENV=test
+          APP_ORIGIN=http://127.0.0.1:5173
+          PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+          PORT=8787
+          VITE_PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+          VITE_PUBLIC_API_ORIGIN=http://127.0.0.1:5173
+          SUPABASE_URL=${SUPABASE_URL}
+          SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+          DATABASE_URL=postgresql://easy_dashboard_runtime:easy_dashboard_ci_local_only@127.0.0.1:54322/postgres
+          EOF
+
+      - name: Run browser E2E
+        run: pnpm test:e2e
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/playwright/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop local Supabase
+        if: always()
+        continue-on-error: true
+        run: pnpm exec supabase stop --no-backup
