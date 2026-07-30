@@ -1,5 +1,8 @@
 # CLAUDE.md
 
+> `AGENTS.md` is the canonical current repository guide. When this legacy file
+> disagrees with `AGENTS.md`, follow `AGENTS.md`.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
