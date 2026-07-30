@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { useEditorSession } from '@/contexts/editor-session-context'
+import { getDraftPreviewHref } from '@/features/projects/project-navigation'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -7,7 +8,7 @@ import { ConflictResolutionDialog } from './ConflictResolutionDialog'
 import { EditorModeTabs } from './EditorModeTabs'
 import { HistoryButtons } from './HistoryButtons'
 import { MainNav } from './Nav'
-import { PublishShareDialog } from './PublishShareDialog'
+import { PUBLISH_SHARE_LABEL, PublishShareDialog } from './PublishShareDialog'
 import { formatEditorSaveStatus } from './save-status'
 
 export function AppHeader({ className }: { className?: string }) {
@@ -22,6 +23,7 @@ export function AppHeader({ className }: { className?: string }) {
     projectName,
     publish: publishProject,
     reloadServerDraft,
+    restoreRelease,
     saveState,
   } = useEditorSession()
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)
@@ -58,7 +60,8 @@ export function AppHeader({ className }: { className?: string }) {
 
     try {
       await flush()
-      const href = `/projects/${encodeURIComponent(projectId)}/preview`
+      const currentPageId = new URLSearchParams(window.location.search).get('page')
+      const href = getDraftPreviewHref(projectId, currentPageId)
       previewWindow.location.href = href
     } catch (error) {
       previewWindow.close()
@@ -71,7 +74,7 @@ export function AppHeader({ className }: { className?: string }) {
   return (
     <header
       className={cn(
-        'h-12 w-full',
+        'h-[var(--ed-header-height)] w-full',
         'bg-[var(--ed-rail)]/95 backdrop-blur-xl',
         'border-b border-[var(--ed-line)]',
         'sticky top-0 z-50',
@@ -88,7 +91,7 @@ export function AppHeader({ className }: { className?: string }) {
           <div className='hidden xl:block'>
             <HistoryButtons />
           </div>
-          <div className='hidden h-4 w-px bg-border/60 xl:block' />
+          <div className='hidden h-4 w-px bg-[var(--ed-line)] xl:block' />
           <Button
             variant='ghost'
             size='sm'
@@ -110,7 +113,7 @@ export function AppHeader({ className }: { className?: string }) {
             <Button
               size='sm'
               variant='outline'
-              className='h-7 border-[#D99A4E] bg-[#2A1E12] text-[12px] text-[#FFD39A] hover:bg-[#382718]'
+              className='h-[var(--ed-control-compact)] border-[var(--ed-conflict)] bg-[color-mix(in_srgb,var(--ed-conflict)_12%,var(--ed-panel))] text-[12px] text-[var(--ed-conflict)] hover:bg-[color-mix(in_srgb,var(--ed-conflict)_18%,var(--ed-panel))]'
               onClick={openConflictResolution}
             >
               解决冲突
@@ -122,17 +125,19 @@ export function AppHeader({ className }: { className?: string }) {
             disabled={saveState.status === 'saving' || saveState.status === 'conflict'}
             onClick={() => setPublishDialogOpen(true)}
           >
-            {publicationActive ? '发布与分享' : '发布'}
+            {PUBLISH_SHARE_LABEL}
           </Button>
         </div>
       </div>
       <PublishShareDialog
+        key={projectId}
         open={publishDialogOpen}
         onOpenChange={setPublishDialogOpen}
         projectId={projectId}
         projectName={projectName}
         initiallyPublished={publicationActive}
         publish={publishProject}
+        restoreRelease={restoreRelease}
         onPublicationChange={release => setPublicationActive(release !== null)}
       />
       <ConflictResolutionDialog

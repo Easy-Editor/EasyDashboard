@@ -47,7 +47,10 @@ export function ConflictResolutionDialog({
 
   return (
     <Dialog open={open} onOpenChange={nextOpen => !reloading && onOpenChange(nextOpen)}>
-      <DialogContent className='border-[#34414C] bg-[#11171D] text-[#EDF3F6]'>
+      <DialogContent
+        data-ed-shell='editor'
+        className='border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-[var(--ed-ink)]'
+      >
         {confirmDiscard ? (
           <>
             <DialogHeader>

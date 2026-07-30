@@ -30,13 +30,13 @@ function EditorContent({ children }: { children: React.ReactNode }) {
       <AppSidebar
         style={
           {
-            height: 'calc(100vh - 48px)',
-            top: '48px',
+            height: 'calc(100vh - var(--ed-header-height))',
+            top: 'var(--ed-header-height)',
           } as React.CSSProperties
         }
       />
       <SidebarInset>
-        <div className='relative flex flex-1 flex-col gap-4 overflow-hidden min-w-0'>
+        <div className='relative flex min-w-0 flex-1 flex-col gap-0 overflow-hidden'>
           {children}
           {/* Code 模式：悬浮在画布上方 */}
           {mode === 'code' && (
@@ -50,9 +50,9 @@ function EditorContent({ children }: { children: React.ReactNode }) {
         <ConfigureSidebar
           style={
             {
-              height: 'calc(100vh - 48px)',
-              top: '48px',
-              width: '304px',
+              height: 'calc(100vh - var(--ed-header-height))',
+              top: 'var(--ed-header-height)',
+              width: 'var(--ed-inspector-width)',
             } as React.CSSProperties
           }
         />
@@ -77,9 +77,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               defaultFixed={false}
               style={
                 {
-                  '--sidebar-width': '308px',
-                  '--sidebar-width-icon': '44px',
-                  '--header-height': '48px',
+                  '--sidebar-width': 'calc(var(--ed-tool-rail-width) + var(--ed-left-panel-width))',
+                  '--sidebar-width-icon': 'var(--ed-tool-rail-width)',
+                  '--header-height': 'var(--ed-header-height)',
                 } as React.CSSProperties
               }
             >

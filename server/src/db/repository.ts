@@ -159,6 +159,8 @@ export function createPgRepository(env: AppEnv): Repository {
     thumbnailErrorCode: projects.thumbnailErrorCode,
     publicationSlug: projectPublications.slug,
     publishedRevisionId: projectPublications.revisionId,
+    publishedAt: projectPublications.publishedAt,
+    currentReleaseNumber: projectReleases.releaseNumber,
     deletedAt: projects.deletedAt,
     createdAt: projects.createdAt,
     updatedAt: projects.updatedAt,
@@ -200,6 +202,10 @@ export function createPgRepository(env: AppEnv): Repository {
       .leftJoin(
         projectPublications,
         and(eq(projectPublications.projectId, projects.id), eq(projectPublications.isPublished, true)),
+      )
+      .leftJoin(
+        projectReleases,
+        and(eq(projectReleases.projectId, projects.id), eq(projectReleases.revisionId, projectPublications.revisionId)),
       )
       .where(
         and(
@@ -437,6 +443,13 @@ export function createPgRepository(env: AppEnv): Repository {
             projectPublications,
             and(eq(projectPublications.projectId, projects.id), eq(projectPublications.isPublished, true)),
           )
+          .leftJoin(
+            projectReleases,
+            and(
+              eq(projectReleases.projectId, projects.id),
+              eq(projectReleases.revisionId, projectPublications.revisionId),
+            ),
+          )
           .where(
             and(
               canReadProject(actorId),
@@ -515,6 +528,13 @@ export function createPgRepository(env: AppEnv): Repository {
             projectPublications,
             and(eq(projectPublications.projectId, projects.id), eq(projectPublications.isPublished, true)),
           )
+          .leftJoin(
+            projectReleases,
+            and(
+              eq(projectReleases.projectId, projects.id),
+              eq(projectReleases.revisionId, projectPublications.revisionId),
+            ),
+          )
           .where(eq(projects.id, projectId))
           .limit(1)
         return project ?? null
@@ -584,6 +604,40 @@ export function createPgRepository(env: AppEnv): Repository {
       })
       if (trashed) await reconcileThumbnailArtifacts(actorId, accessToken, projectId).catch(() => undefined)
       return trashed
+    },
+    async permanentlyDeleteProject(actorId, accessToken, projectId) {
+      const state = await withActor(actorId, async tx => {
+        const [project] = await tx
+          .select({ id: projects.id, deletedAt: projects.deletedAt })
+          .from(projects)
+          .where(and(eq(projects.id, projectId), canEditProject(actorId)))
+          .for('update')
+          .limit(1)
+        if (!project) return null
+        return project.deletedAt ?? ('conflict' as const)
+      })
+      if (state === null || state === 'conflict') return state
+
+      // Trash already clears project thumbnail references. Reconciliation
+      // preserves signed-upload expiry guarantees, marks the remaining ledger
+      // rows for cleanup, and makes a best-effort storage deletion before the
+      // project aggregate is removed.
+      await reconcileThumbnailArtifacts(actorId, accessToken, projectId).catch(() => undefined)
+
+      return withActor(actorId, async tx => {
+        const [deleted] = await tx
+          .delete(projects)
+          .where(and(eq(projects.id, projectId), canEditProject(actorId), eq(projects.deletedAt, state)))
+          .returning({ id: projects.id })
+        if (deleted) return true
+
+        const [existing] = await tx
+          .select({ id: projects.id, deletedAt: projects.deletedAt })
+          .from(projects)
+          .where(and(eq(projects.id, projectId), canEditProject(actorId)))
+          .limit(1)
+        return existing ? ('conflict' as const) : null
+      })
     },
     restoreProject(actorId, projectId) {
       return withActor(actorId, async tx => {
@@ -793,6 +847,72 @@ export function createPgRepository(env: AppEnv): Repository {
         return detail
       })
     },
+    restoreRelease(actorId, projectId, releaseNumber, expectedVersion) {
+      return withActor(actorId, async tx => {
+        const [project] = await tx
+          .select()
+          .from(projects)
+          .where(and(eq(projects.id, projectId), canEditProject(actorId), isNull(projects.deletedAt)))
+          .for('update')
+          .limit(1)
+        if (!project) return null
+        if (project.draftVersion !== expectedVersion) return 'conflict'
+
+        const [release] = await tx
+          .select({ schema: projectRevisions.schema })
+          .from(projectReleases)
+          .innerJoin(projectRevisions, eq(projectRevisions.id, projectReleases.revisionId))
+          .where(
+            and(
+              eq(projectReleases.projectId, projectId),
+              eq(projectReleases.releaseNumber, releaseNumber),
+              eq(projectRevisions.projectId, projectId),
+              eq(projectRevisions.kind, 'publish'),
+            ),
+          )
+          .limit(1)
+        if (!release) return null
+
+        await insertRevision(tx, {
+          actorId,
+          projectId,
+          schema: project.draftSchema,
+          kind: 'pre_restore',
+          sourceDraftVersion: project.draftVersion,
+        })
+        const savedAt = new Date()
+        const [restored] = await tx
+          .update(projects)
+          .set({
+            draftSchema: release.schema,
+            draftVersion: expectedVersion + 1,
+            draftSavedAt: savedAt,
+            ...projectMetadata(release.schema),
+            thumbnailStatus: sql`case
+              when ${projects.thumbnailMode} = 'auto' then 'queued'
+              when ${projects.thumbnailPath} is not null then 'ready'
+              else 'failed'
+            end`,
+            thumbnailRequestedVersion: thumbnailRequestedVersionCase(expectedVersion + 1),
+            thumbnailPendingPath: null,
+            thumbnailPendingContentType: null,
+            thumbnailPendingSize: null,
+            thumbnailErrorCode: sql`case
+              when ${projects.thumbnailMode} = 'auto' then null
+              when ${projects.thumbnailPath} is not null then null
+              else 'draft-version-changed'
+            end`,
+            updatedAt: savedAt,
+          })
+          .where(and(eq(projects.id, projectId), eq(projects.draftVersion, expectedVersion)))
+          .returning({ id: projects.id })
+        if (!restored) return 'conflict'
+
+        const detail = await selectProjectDetail(tx, actorId, projectId)
+        if (!detail) throw new Error('Restored release draft could not be read')
+        return detail
+      })
+    },
     publish(actorId, projectId, input) {
       return withActor(actorId, async tx => {
         const [project] = await tx
@@ -860,43 +980,6 @@ export function createPgRepository(env: AppEnv): Repository {
           schema: revision.schema,
           publishedAt: release.publishedAt,
         })
-      })
-    },
-    rollback(actorId, projectId, revisionId) {
-      return withActor(actorId, async tx => {
-        const [project] = await tx
-          .select({ id: projects.id })
-          .from(projects)
-          .where(and(eq(projects.id, projectId), canEditProject(actorId), isNull(projects.deletedAt)))
-          .for('update')
-          .limit(1)
-        if (!project) return null
-
-        const [row] = await tx
-          .select({
-            projectId: projects.id,
-            name: projectReleases.name,
-            description: projectReleases.description,
-            revisionId: projectRevisions.id,
-            revisionNumber: projectRevisions.revisionNumber,
-            releaseNumber: projectReleases.releaseNumber,
-            schema: projectRevisions.schema,
-            slug: projectPublications.slug,
-          })
-          .from(projects)
-          .innerJoin(projectRevisions, eq(projectRevisions.projectId, projects.id))
-          .innerJoin(projectReleases, eq(projectReleases.revisionId, projectRevisions.id))
-          .innerJoin(projectPublications, eq(projectPublications.projectId, projects.id))
-          .where(and(eq(projects.id, projectId), canEditProject(actorId), eq(projectRevisions.id, revisionId)))
-          .limit(1)
-        if (!row) return null
-        const [publication] = await tx
-          .update(projectPublications)
-          .set({ revisionId, isPublished: true, publishedAt: new Date(), updatedAt: new Date() })
-          .where(eq(projectPublications.projectId, projectId))
-          .returning()
-        if (!publication) return null
-        return toPublicProject({ ...row, publishedAt: publication.publishedAt })
       })
     },
     unpublish(actorId, projectId) {

@@ -3,7 +3,14 @@ import { z } from 'zod'
 import { ApiError, readJson } from '../http.js'
 import type { AppVariables } from '../middleware/auth.js'
 import type { Repository } from '../types.js'
-import { ValidationError, assertSchemaBudget, projectIdSchema, projectSchemaSchema, slugSchema } from '../validation.js'
+import {
+  ValidationError,
+  assertCanvasDimensions,
+  assertSchemaBudget,
+  projectIdSchema,
+  projectSchemaSchema,
+  slugSchema,
+} from '../validation.js'
 
 const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -30,8 +37,9 @@ const publishSchema = z.object({
   slug: slugSchema.optional(),
 })
 
-const rollbackSchema = z.object({ revisionId: z.uuid() })
+const revisionIdSchema = z.object({ revisionId: z.uuid() })
 const restoreSchema = z.object({ expectedVersion: z.number().int().positive() })
+const releaseNumberSchema = z.coerce.number().int().positive()
 const restorePointSchema = z.object({ label: z.string().trim().min(1).max(120).nullable().optional() })
 const projectViewSchema = z.enum(['active', 'trash']).default('active')
 const thumbnailUploadSchema = z
@@ -77,9 +85,13 @@ function idFrom(c: { req: { param(name: string): string } }): string {
 
 function assertBudget(schema: Record<string, unknown>): void {
   try {
+    assertCanvasDimensions(schema)
     assertSchemaBudget(schema)
   } catch (error) {
-    if (error instanceof ValidationError) throw new ApiError(413, error.code, error.message)
+    if (error instanceof ValidationError) {
+      const status = error.code === 'INVALID_CANVAS_DIMENSION' ? 422 : 413
+      throw new ApiError(status, error.code, error.message)
+    }
     throw error
   }
 }
@@ -136,6 +148,15 @@ export function createProjectRoutes(repository: Repository) {
   routes.delete('/:projectId', async c => {
     const trashed = await repository.trashProject(c.get('actorId'), c.get('accessToken'), idFrom(c))
     if (!trashed) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.body(null, 204)
+  })
+
+  routes.delete('/:projectId/permanent', async c => {
+    const deleted = await repository.permanentlyDeleteProject(c.get('actorId'), c.get('accessToken'), idFrom(c))
+    if (deleted === 'conflict') {
+      throw new ApiError(409, 'PROJECT_NOT_TRASHED', 'Project must be moved to trash before permanent deletion')
+    }
+    if (!deleted) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
     return c.body(null, 204)
   })
 
@@ -226,6 +247,21 @@ export function createProjectRoutes(repository: Repository) {
     })
   })
 
+  routes.post('/:projectId/releases/:releaseNumber/restore', async c => {
+    const releaseNumber = releaseNumberSchema.safeParse(c.req.param('releaseNumber'))
+    if (!releaseNumber.success) throw new ApiError(404, 'RELEASE_NOT_FOUND', 'Release not found')
+    const input = await readJson(c, restoreSchema)
+    const project = await repository.restoreRelease(
+      c.get('actorId'),
+      idFrom(c),
+      releaseNumber.data,
+      input.expectedVersion,
+    )
+    if (project === 'conflict') throw new ApiError(409, 'DRAFT_CONFLICT', 'The saved draft has changed')
+    if (!project) throw new ApiError(404, 'RELEASE_NOT_FOUND', 'Release not found')
+    return c.json({ project, savedAt: project.updatedAt })
+  })
+
   routes.post('/:projectId/restore-points', async c => {
     const input = await readJson(c, restorePointSchema)
     const revision = await repository.createRestorePoint(c.get('actorId'), idFrom(c), 'manual', input.label)
@@ -235,7 +271,7 @@ export function createProjectRoutes(repository: Repository) {
   })
 
   routes.post('/:projectId/restore-points/:revisionId/restore', async c => {
-    const revisionId = rollbackSchema.safeParse({ revisionId: c.req.param('revisionId') })
+    const revisionId = revisionIdSchema.safeParse({ revisionId: c.req.param('revisionId') })
     if (!revisionId.success) throw new ApiError(404, 'REVISION_NOT_FOUND', 'Restore point not found')
     const input = await readJson(c, restoreSchema)
     const project = await repository.restoreRevision(
@@ -266,13 +302,6 @@ export function createProjectRoutes(repository: Repository) {
       },
       201,
     )
-  })
-
-  routes.post('/:projectId/rollback', async c => {
-    const input = await readJson(c, rollbackSchema)
-    const publication = await repository.rollback(c.get('actorId'), idFrom(c), input.revisionId)
-    if (!publication) throw new ApiError(404, 'REVISION_NOT_FOUND', 'Published project or revision not found')
-    return c.json({ publication })
   })
 
   routes.post('/:projectId/unpublish', async c => {

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { formatProjectTime } from './ProjectCard'
+import { type ProjectCardProject, formatProjectActivity, formatProjectTime } from './ProjectCard'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 
@@ -26,6 +26,31 @@ function contrastRatio(foreground: string, background: string): number {
 }
 
 describe('ProjectCard', () => {
+  const project: ProjectCardProject = {
+    id: 'project-1',
+    name: '运营大屏',
+    description: '',
+    slug: null,
+    state: 'draft',
+    draftVersion: 3,
+    resolution: { width: 1920, height: 1080 },
+    pageCount: 4,
+    startPageId: 'page-home',
+    isFavorite: false,
+    thumbnail: {
+      mode: 'auto',
+      status: 'ready',
+      url: null,
+      draftVersion: 3,
+      errorCode: null,
+    },
+    savedAt: '2026-07-30T04:05:06.000Z',
+    publishedAt: null,
+    currentReleaseNumber: null,
+    deletedAt: null,
+    updatedAt: '2026-07-30T05:05:06.000Z',
+  }
+
   it('keeps the trash restore action directly visible on the card', async () => {
     const source = await readProjectCardSource()
     const actions = source.slice(source.indexOf('const actions ='), source.indexOf("if (view === 'list')"))
@@ -33,6 +58,8 @@ describe('ProjectCard', () => {
     expect(actions).toContain('trashed ? (')
     expect(actions).toContain('onClick={() => onRestore?.(project)}')
     expect(actions).toContain('恢复')
+    expect(actions).toContain('onDeletePermanently')
+    expect(actions).toContain('永久删除')
     expect(actions).not.toMatch(/DropdownMenuItem[\s\S]*onRestore/)
   })
 
@@ -52,6 +79,14 @@ describe('ProjectCard', () => {
     expect(formatProjectTime(new Date(now + 5 * 60_000).toISOString())).toBe('刚刚')
     expect(formatProjectTime(new Date(now - 12 * 60_000).toISOString())).toBe('12 分钟前')
     expect(formatProjectTime(new Date(now - 3 * 60 * 60_000).toISOString())).toBe('3 小时前')
+  })
+
+  it('describes project activity with page count and the persisted draft save time', () => {
+    const activity = formatProjectActivity(project)
+
+    expect(activity).toContain('4 个页面')
+    expect(activity).toContain('草稿保存于')
+    expect(activity).not.toContain(project.updatedAt)
   })
 
   it('keeps shell metadata text readable on raised card surfaces', async () => {

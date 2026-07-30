@@ -48,6 +48,8 @@ export interface ProjectSummaryRecord {
   thumbnailErrorCode: string | null
   publicationSlug?: string | null
   publishedRevisionId?: string | null
+  publishedAt: Date | null
+  currentReleaseNumber: number | null
   deletedAt: Date | null
   createdAt: Date
   updatedAt: Date
@@ -131,6 +133,7 @@ export interface Repository {
   setProjectFavorite(actorId: string, projectId: string, isFavorite: boolean): Promise<ProjectSummaryRecord | null>
   duplicateProject(actorId: string, projectId: string): Promise<ProjectRecord | null>
   trashProject(actorId: string, accessToken: string, projectId: string): Promise<boolean>
+  permanentlyDeleteProject(actorId: string, accessToken: string, projectId: string): Promise<true | 'conflict' | null>
   restoreProject(actorId: string, projectId: string): Promise<ProjectRecord | null>
   saveDraft(
     actorId: string,
@@ -152,12 +155,17 @@ export interface Repository {
     revisionId: string,
     expectedVersion: number,
   ): Promise<ProjectRecord | 'conflict' | null>
+  restoreRelease(
+    actorId: string,
+    projectId: string,
+    releaseNumber: number,
+    expectedVersion: number,
+  ): Promise<ProjectRecord | 'conflict' | null>
   publish(
     actorId: string,
     projectId: string,
     input: { expectedVersion: number; slug?: string },
   ): Promise<PublicProject | 'conflict' | null>
-  rollback(actorId: string, projectId: string, revisionId: string): Promise<PublicProject | null>
   unpublish(actorId: string, projectId: string): Promise<boolean>
   isPublicProjectAvailable(slug: string, releaseNumber?: number): Promise<boolean>
   getPublicProject(slug: string): Promise<PublicProject | null>

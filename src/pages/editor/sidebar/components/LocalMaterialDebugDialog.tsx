@@ -150,7 +150,7 @@ export const LocalMaterialDebugDialog = observer(
 
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className='sm:max-w-md'>
+        <DialogContent data-ed-shell='editor' className='sm:max-w-md'>
           <DialogHeader>
             <DialogTitle>本地物料调试</DialogTitle>
             <DialogDescription>连接本地物料开发服务器进行实时调试</DialogDescription>

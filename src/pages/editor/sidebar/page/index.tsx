@@ -283,7 +283,7 @@ const Page: React.FC<{
       onMouseEnter={() => setIsShowExtra(true)}
       onMouseLeave={() => setIsShowExtra(false)}
       className={cn(
-        'flex w-full items-center rounded-md p-2 text-left text-sm justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+        'flex min-h-12 w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         isCurrentPage && 'bg-sidebar-accent text-sidebar-accent-foreground',
         isLoading && 'opacity-50 pointer-events-none',
       )}
@@ -296,11 +296,15 @@ const Page: React.FC<{
         onClick={() => void handleSelect(page)}
       >
         <File />
-        <span className='min-w-0 truncate'>
-          {page.fileDesc}
-          <span className='text-xs text-muted-foreground ml-1'>({page.fileName})</span>
+        <span className='min-w-0 flex-1'>
+          <span className='block truncate text-xs font-medium text-[var(--ed-ink-soft)]'>{page.fileDesc}</span>
+          <span className='mt-0.5 block truncate font-mono text-[9px] uppercase tracking-wide text-[var(--ed-ink-faint)]'>
+            PAGE {String(pageIndex + 1).padStart(2, '0')} · {page.fileName}
+          </span>
         </span>
-        {page.isStartPage ? <Flag className='size-3 fill-current text-primary' aria-label='启动页' /> : null}
+        {page.isStartPage ? (
+          <Flag className='size-3 shrink-0 fill-current text-[var(--ed-cyan)]' aria-label='启动页' />
+        ) : null}
       </button>
       <SidebarMenuExtra>
         <SidebarMenuExtraItem
@@ -324,7 +328,7 @@ const Page: React.FC<{
                 <MoreHorizontal />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align='end'>
+            <DropdownMenuContent data-ed-shell='editor' align='end'>
               <DropdownMenuItem onSelect={handleSetStartPage} disabled={page.isStartPage}>
                 <Flag />
                 设为启动页
@@ -348,6 +352,7 @@ const Page: React.FC<{
           className={cn('invisible group-focus-within/menu-sub-item:visible', isShowExtra && 'visible')}
         >
           <AlertModal
+            editorScoped
             title='确定删除吗？'
             description='删除后，该页面将无法恢复。'
             trigger={

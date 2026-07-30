@@ -58,7 +58,10 @@ export const PageModal = observer((props: PageModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       {children}
-      <DialogContent className='!max-w-[500px]'>
+      <DialogContent
+        data-ed-shell='editor'
+        className='border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-[var(--ed-ink)] !max-w-[500px]'
+      >
         <DialogHeader>
           <DialogTitle>页面{isEdit ? `编辑 - ${data.fileName}` : '新增'}</DialogTitle>
           <DialogDescription className='sr-only'>

@@ -109,7 +109,7 @@ export const VariableBind = observer((props: VariableBindProps) => {
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DialogContent className='!max-w-[800px]'>
+      <DialogContent data-ed-shell='editor' className='!max-w-[800px]'>
         <DialogHeader>
           <DialogTitle>变量绑定</DialogTitle>
           <DialogDescription className='mt-2'>

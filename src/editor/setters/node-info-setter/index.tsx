@@ -13,7 +13,7 @@ import { Spinner } from '@/components/ui/spinner'
 import type { NpmInfo, SetterProps } from '@easy-editor/core'
 import { CircleFadingArrowUp } from 'lucide-react'
 import { observer } from 'mobx-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { VersionCheckResult } from '../../remote/managers'
 import { versionManager } from '../../remote/managers'
@@ -33,9 +33,10 @@ const NodeInfoSetter = observer((props: NodeInfoSetterProps) => {
   const hasUpdate = versionInfo?.hasUpdate ?? false
   // 获取节点的 npm 信息
   const npm = selected.getExtraPropValue('npm') as NpmInfo | undefined
+  const hasNpm = Boolean(npm)
 
   // 检查更新
-  const handleCheckUpdate = async () => {
+  const handleCheckUpdate = useCallback(async () => {
     setChecking(true)
 
     try {
@@ -46,7 +47,7 @@ const NodeInfoSetter = observer((props: NodeInfoSetterProps) => {
     } finally {
       setChecking(false)
     }
-  }
+  }, [selected])
 
   // 打开确认对话框
   const handleClickUpdate = () => {
@@ -83,10 +84,10 @@ const NodeInfoSetter = observer((props: NodeInfoSetterProps) => {
 
   // 组件挂载时自动检查更新
   useEffect(() => {
-    if (isRemote && npm) {
-      handleCheckUpdate()
+    if (isRemote && hasNpm) {
+      void handleCheckUpdate()
     }
-  }, [selected.id])
+  }, [isRemote, hasNpm, handleCheckUpdate])
 
   return (
     <>
@@ -122,7 +123,7 @@ const NodeInfoSetter = observer((props: NodeInfoSetterProps) => {
       </div>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent data-ed-shell='editor'>
           <AlertDialogHeader>
             <AlertDialogTitle>确认更新组件</AlertDialogTitle>
             <AlertDialogDescription>

@@ -72,6 +72,8 @@ export function useCanvasPan(options: UseCanvasPanOptions): UseCanvasPanResult {
   useEffect(() => {
     if (!enabled) return
 
+    const previousMarqueeEnabled = marqueeSelection.enabled
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault()
@@ -95,8 +97,9 @@ export function useCanvasPan(options: UseCanvasPanOptions): UseCanvasPanResult {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
+      marqueeSelection.enabled = previousMarqueeEnabled
     }
-  }, [enabled])
+  }, [enabled, marqueeSelection])
 
   // 鼠标拖动处理
   useEffect(() => {

@@ -29,6 +29,8 @@ const summary = {
   thumbnailErrorCode: null,
   publicationSlug: 'dashboard-stable',
   publishedRevisionId: revisionId,
+  publishedAt: now,
+  currentReleaseNumber: 2,
   deletedAt: null,
   createdAt: new Date('2026-07-30T00:00:00.000Z'),
   updatedAt: now,
@@ -71,26 +73,49 @@ describe('project product routes', () => {
     expect(payload.projects[0]).not.toHaveProperty('draftSchema')
   })
 
-  it('favorites, duplicates, trashes, and restores projects through explicit lifecycle routes', async () => {
+  it('favorites, duplicates, trashes, permanently deletes, and restores projects through explicit lifecycle routes', async () => {
     const setProjectFavorite = vi.fn(async () => summary)
     const duplicateProject = vi.fn(async () => ({ ...detail, name: 'Dashboard copy' }))
     const trashProject = vi.fn(async () => true)
+    const permanentlyDeleteProject = vi.fn(async () => true as const)
     const restoreProject = vi.fn(async () => detail)
-    const app = createTestApp({ setProjectFavorite, duplicateProject, trashProject, restoreProject })
+    const app = createTestApp({
+      setProjectFavorite,
+      duplicateProject,
+      trashProject,
+      permanentlyDeleteProject,
+      restoreProject,
+    })
 
     const favorite = await app.request(jsonMutation(`/projects/${projectId}/favorite`, 'PUT', {}))
     const duplicate = await app.request(jsonMutation(`/projects/${projectId}/duplicate`, 'POST', {}))
     const trash = await app.request(jsonMutation(`/projects/${projectId}`, 'DELETE'))
+    const permanent = await app.request(jsonMutation(`/projects/${projectId}/permanent`, 'DELETE'))
     const restore = await app.request(jsonMutation(`/projects/${projectId}/restore`, 'POST', {}))
 
     expect(favorite.status).toBe(200)
     expect(duplicate.status).toBe(201)
     expect(trash.status).toBe(204)
+    expect(permanent.status).toBe(204)
     expect(restore.status).toBe(200)
     expect(setProjectFavorite).toHaveBeenCalledWith(actorId, projectId, true)
     expect(duplicateProject).toHaveBeenCalledWith(actorId, projectId)
     expect(trashProject).toHaveBeenCalledWith(actorId, 'session-secret', projectId)
+    expect(permanentlyDeleteProject).toHaveBeenCalledWith(actorId, 'session-secret', projectId)
     expect(restoreProject).toHaveBeenCalledWith(actorId, projectId)
+  })
+
+  it.each([
+    ['active project', 'conflict' as const, 409, 'PROJECT_NOT_TRASHED'],
+    ['missing project', null, 404, 'PROJECT_NOT_FOUND'],
+  ])('rejects permanent deletion of an %s', async (_case, result, status, code) => {
+    const permanentlyDeleteProject = vi.fn(async () => result)
+    const response = await createTestApp({ permanentlyDeleteProject }).request(
+      jsonMutation(`/projects/${projectId}/permanent`, 'DELETE'),
+    )
+
+    expect(response.status).toBe(status)
+    await expect(response.json()).resolves.toMatchObject({ error: { code } })
   })
 
   it('creates manual restore points and restores drafts without publishing them', async () => {
@@ -165,6 +190,74 @@ describe('project product routes', () => {
         },
       ],
     })
+  })
+
+  it('restores an immutable release into the draft through expected-version CAS', async () => {
+    const savedAt = new Date('2026-07-30T03:00:00.000Z')
+    const restoreRelease = vi.fn(async () => ({
+      ...detail,
+      draftVersion: 5,
+      updatedAt: savedAt,
+    }))
+    const response = await createTestApp({ restoreRelease }).request(
+      jsonMutation(`/projects/${projectId}/releases/2/restore`, 'POST', { expectedVersion: 4 }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      project: { id: projectId, draftVersion: 5 },
+      savedAt: savedAt.toISOString(),
+    })
+    expect(restoreRelease).toHaveBeenCalledWith(actorId, projectId, 2, 4)
+  })
+
+  it.each([
+    ['stale draft', 'conflict' as const, 409, 'DRAFT_CONFLICT'],
+    ['missing release', null, 404, 'RELEASE_NOT_FOUND'],
+  ])('reports %s while restoring a release', async (_case, result, status, code) => {
+    const restoreRelease = vi.fn(async () => result)
+    const response = await createTestApp({ restoreRelease }).request(
+      jsonMutation(`/projects/${projectId}/releases/2/restore`, 'POST', { expectedVersion: 4 }),
+    )
+
+    expect(response.status).toBe(status)
+    await expect(response.json()).resolves.toMatchObject({ error: { code } })
+  })
+
+  it.each([
+    [
+      'project creation',
+      '/projects',
+      'POST' as const,
+      {
+        name: 'Oversized canvas',
+        schema: {
+          componentsTree: [{ $dashboard: { rect: { width: 16_385, height: 1080 } } }],
+        },
+      },
+      'createProject' as const,
+    ],
+    [
+      'draft save',
+      `/projects/${projectId}/draft`,
+      'PUT' as const,
+      {
+        expectedVersion: 4,
+        schema: {
+          componentsTree: [{ $dashboard: { rect: { width: 1920, height: 16_385 } } }],
+        },
+      },
+      'saveDraft' as const,
+    ],
+  ])('rejects an invalid canvas dimension during %s', async (_case, path, method, body, methodName) => {
+    const repositoryMethod = vi.fn()
+    const response = await createTestApp({ [methodName]: repositoryMethod }).request(jsonMutation(path, method, body))
+
+    expect(response.status).toBe(422)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'INVALID_CANVAS_DIMENSION' },
+    })
+    expect(repositoryMethod).not.toHaveBeenCalled()
   })
 
   it('returns the server-authored saved time for a successful CAS draft save', async () => {

@@ -26,6 +26,8 @@ function thumbnailProject(schema: ProjectSchema, draftVersion: number): ProjectD
       errorCode: null,
     },
     savedAt: new Date(0).toISOString(),
+    publishedAt: null,
+    currentReleaseNumber: null,
     deletedAt: null,
     updatedAt: new Date(0).toISOString(),
     schema,

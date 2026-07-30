@@ -92,7 +92,7 @@ export const EventBindModal = observer((props: EventBindModalProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {children}
-      <DialogContent className='max-w-[800px]!'>
+      <DialogContent data-ed-shell='editor' className='max-w-[800px]!'>
         <DialogHeader>
           <DialogTitle>事件绑定</DialogTitle>
           <DialogDescription asChild>

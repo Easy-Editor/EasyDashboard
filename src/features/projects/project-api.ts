@@ -37,6 +37,8 @@ type RawProject = {
   updatedAt: string
   slug?: string | null
   publicationSlug?: string | null
+  publishedAt?: string | null
+  currentReleaseNumber?: number | null
 }
 
 type RawRevision = {
@@ -105,6 +107,8 @@ function toProjectSummary(project: RawProject): ProjectSummary {
       errorCode: project.thumbnailErrorCode ?? null,
     },
     savedAt,
+    publishedAt: project.publishedAt ?? null,
+    currentReleaseNumber: project.currentReleaseNumber ?? null,
     deletedAt,
     updatedAt: project.updatedAt,
   }
@@ -271,28 +275,6 @@ export async function publishProject(projectId: string, expectedVersion: number)
   }
 }
 
-export async function rollbackProject(projectId: string, revisionId: string): Promise<PublishResponse> {
-  const response = await apiRequest<{ publication: RawPublication }>(
-    `/api/projects/${encodeURIComponent(projectId)}/rollback`,
-    {
-      method: 'POST',
-      body: jsonBody({ revisionId }),
-    },
-  )
-  return {
-    projectId: response.publication.projectId,
-    revisionId: response.publication.revisionId,
-    revision: response.publication.revisionNumber,
-    releaseNumber: response.publication.releaseNumber ?? response.publication.revisionNumber,
-    slug: response.publication.slug,
-    stablePath: `/view/${encodeURIComponent(response.publication.slug)}`,
-    versionPath: `/view/${encodeURIComponent(response.publication.slug)}/versions/${
-      response.publication.releaseNumber ?? response.publication.revisionNumber
-    }`,
-    publishedAt: response.publication.publishedAt,
-  }
-}
-
 export async function unpublishProject(projectId: string): Promise<void> {
   await apiRequest(`/api/projects/${encodeURIComponent(projectId)}/unpublish`, {
     method: 'POST',
@@ -328,6 +310,12 @@ export async function restoreProject(projectId: string): Promise<void> {
   await apiRequest(`/api/projects/${encodeURIComponent(projectId)}/restore`, {
     method: 'POST',
     body: jsonBody({}),
+  })
+}
+
+export async function deleteProjectPermanently(projectId: string): Promise<void> {
+  await apiRequest(`/api/projects/${encodeURIComponent(projectId)}/permanent`, {
+    method: 'DELETE',
   })
 }
 

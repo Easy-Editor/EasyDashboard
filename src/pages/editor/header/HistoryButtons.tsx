@@ -42,24 +42,36 @@ export const HistoryButtons = () => {
     <div className='flex items-center gap-1'>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={handleUndo} disabled={!canUndo}>
-            <Undo2 className='h-4 w-4' />
+          <Button
+            variant='ghost'
+            size='icon'
+            className='size-[var(--ed-control-compact)] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+            onClick={handleUndo}
+            disabled={!canUndo}
+          >
+            <Undo2 className='size-4' />
             <span className='sr-only'>撤销</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>撤销 (Ctrl+Z)</p>
+          <p>撤销本次编辑会话中的操作 (Ctrl+Z)</p>
         </TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant='ghost' size='icon' className='h-8 w-8' onClick={handleRedo} disabled={!canRedo}>
-            <Redo2 className='h-4 w-4' />
+          <Button
+            variant='ghost'
+            size='icon'
+            className='size-[var(--ed-control-compact)] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+            onClick={handleRedo}
+            disabled={!canRedo}
+          >
+            <Redo2 className='size-4' />
             <span className='sr-only'>重做</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>重做 (Ctrl+Y)</p>
+          <p>重做本次编辑会话中的操作 (Ctrl+Y)</p>
         </TooltipContent>
       </Tooltip>
     </div>

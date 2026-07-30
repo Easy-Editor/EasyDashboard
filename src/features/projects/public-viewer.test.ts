@@ -14,7 +14,7 @@ describe('public viewer origin isolation', () => {
   })
 
   it('uses the dedicated local viewer port only during development', () => {
-    expect(resolvePublicViewerOrigin(undefined, false)).toBe('http://localhost:5174')
+    expect(resolvePublicViewerOrigin(undefined, false)).toBe('http://view.localhost:5174')
   })
 
   it('normalizes a valid viewer origin and rejects credentials', () => {

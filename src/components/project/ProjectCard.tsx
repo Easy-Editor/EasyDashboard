@@ -28,6 +28,7 @@ type ProjectCardProps = {
   onDuplicate?: (project: ProjectCardProject) => void
   onTrash?: (project: ProjectCardProject) => void
   onRestore?: (project: ProjectCardProject) => void
+  onDeletePermanently?: (project: ProjectCardProject) => void
 }
 
 export function formatProjectTime(value: string): string {
@@ -43,6 +44,14 @@ export function formatProjectTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(date)
 }
 
+export function formatProjectActivity(project: ProjectCardProject): string {
+  const pageLabel = `${project.pageCount} 个页面`
+  if (project.deletedAt) {
+    return `${pageLabel} · 移入回收站于 ${formatProjectTime(project.deletedAt)}`
+  }
+  return `${pageLabel} · 草稿保存于 ${formatProjectTime(project.savedAt)}`
+}
+
 export function ProjectCard({
   project,
   view = 'grid',
@@ -50,6 +59,7 @@ export function ProjectCard({
   onDuplicate,
   onTrash,
   onRestore,
+  onDeletePermanently,
 }: ProjectCardProps) {
   const publishedHref = project.slug ? getPublishedProjectUrl(project.slug) : null
   const trashed = Boolean(project.deletedAt)
@@ -81,10 +91,8 @@ export function ProjectCard({
         </h2>
       </div>
       <p className='mt-1 truncate text-[11px] text-[var(--ed-ink-muted)]'>{project.description || '暂无项目说明'}</p>
-      <div className='mt-2 flex min-w-0 items-center gap-2 font-mono text-[9px] tracking-[0.02em] text-[var(--ed-ink-faint)]'>
-        <p className='min-w-0 flex-1 truncate'>
-          {trashed ? '移入回收站' : '更新'}于 {formatProjectTime(project.deletedAt ?? project.updatedAt)}
-        </p>
+      <div className='mt-2 flex min-w-0 items-center gap-2 font-mono text-[11px] tracking-[0.01em] text-[var(--ed-ink-faint)]'>
+        <p className='min-w-0 flex-1 truncate'>{formatProjectActivity(project)}</p>
         {trashed ? null : (
           <span className='inline-flex shrink-0 items-center gap-1.5 uppercase tracking-[0.1em]'>
             <span
@@ -105,18 +113,32 @@ export function ProjectCard({
   const actions = (
     <div className='flex shrink-0 items-center'>
       {trashed ? (
-        <Button
-          type='button'
-          variant='ghost'
-          size='sm'
-          onClick={() => onRestore?.(project)}
-          disabled={!onRestore}
-          className='h-8 gap-1.5 rounded-[6px] border border-[var(--ed-line-strong)] px-2.5 text-[11px] text-[var(--ed-cyan)] hover:border-[var(--ed-cyan)]/50 hover:bg-[var(--ed-panel-raised)] hover:text-[#b8f4ff]'
-          aria-label={`恢复 ${project.name}`}
-        >
-          <RotateCcw className='size-3.5' />
-          恢复
-        </Button>
+        <div className='flex items-center gap-1'>
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            onClick={() => onDeletePermanently?.(project)}
+            disabled={!onDeletePermanently}
+            className='size-8 rounded-[6px] text-[#ff9ca5] hover:bg-[#35161d]/65 hover:text-[#ffc3c8]'
+            aria-label={`永久删除 ${project.name}`}
+            title='永久删除'
+          >
+            <Trash2 className='size-3.5' />
+          </Button>
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            onClick={() => onRestore?.(project)}
+            disabled={!onRestore}
+            className='h-8 gap-1.5 rounded-[6px] border border-[var(--ed-line-strong)] px-2.5 text-[11px] text-[var(--ed-cyan)] hover:border-[var(--ed-cyan)]/50 hover:bg-[var(--ed-panel-raised)] hover:text-[#b8f4ff]'
+            aria-label={`恢复 ${project.name}`}
+          >
+            <RotateCcw className='size-3.5' />
+            恢复
+          </Button>
+        </div>
       ) : (
         <>
           {onToggleFavorite ? (

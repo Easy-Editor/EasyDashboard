@@ -25,12 +25,17 @@ import {
   listProjectReleases,
   unpublishProjectRelease,
 } from '@/features/releases/release-api'
-import { Check, Clipboard, ExternalLink, Globe2, Loader2, Radio, ShieldOff } from 'lucide-react'
+import { Check, Clipboard, ExternalLink, Globe2, Loader2, Radio, RefreshCw, RotateCcw, ShieldOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 export const UNPUBLISH_CONFIRMATION =
   '取消发布后，稳定链接和所有版本链接都会立即失效并返回 404。保存或恢复草稿不会重新发布；如需再次公开，必须重新发布。'
+
+export const RESTORE_RELEASE_CONFIRMATION =
+  '恢复会把整项目的所有页面替换为所选发布版本；执行前会先把当前草稿创建为可回滚备份；公开地址和当前线上版本保持不变。'
+
+export const PUBLISH_SHARE_LABEL = '发布与分享'
 
 export type PublishShareReleaseDetailsProps = {
   projectName: string
@@ -60,7 +65,7 @@ function UrlRow({
       <div className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
           <p className='text-[11px] font-medium text-[var(--ed-ink-soft)]'>{label}</p>
-          <p className='mt-0.5 text-[10px] text-[var(--ed-ink-faint)]'>{hint}</p>
+          <p className='mt-0.5 text-[11px] text-[var(--ed-ink-faint)]'>{hint}</p>
         </div>
         <div className='flex shrink-0 gap-1'>
           <Button
@@ -86,7 +91,7 @@ function UrlRow({
         </div>
       </div>
       <p
-        className='mt-2 truncate border-t border-[var(--ed-line)] pt-2 font-mono text-[10px] text-[var(--ed-cyan)]'
+        className='mt-2 truncate border-t border-[var(--ed-line)] pt-2 font-mono text-[11px] text-[var(--ed-cyan)]'
         title={url}
       >
         {url}
@@ -115,7 +120,7 @@ export function PublishShareReleaseDetails({
           <span className='text-[var(--ed-line-strong)]'>/</span>
           <span>版本 {releaseNumber}</span>
         </div>
-        <time className='font-mono text-[10px] text-[var(--ed-ink-faint)]' dateTime={publishedAt}>
+        <time className='font-mono text-[11px] text-[var(--ed-ink-faint)]' dateTime={publishedAt}>
           {new Intl.DateTimeFormat('zh-CN', {
             year: 'numeric',
             month: '2-digit',
@@ -150,12 +155,53 @@ export type PublishShareDialogProps = {
   projectName: string
   initiallyPublished: boolean
   publish: () => Promise<PublishedProjectRelease>
+  restoreRelease: (releaseNumber: number) => Promise<void>
   onPublicationChange?: (release: PublishedProjectRelease | null) => void
 }
 
 function viewerUrl(path: string | null): string | null {
   const origin = getPublicViewerOrigin()
   return path && origin ? new URL(path, `${origin}/`).toString() : null
+}
+
+export function ReleaseHistoryLoadError({
+  message,
+  retrying,
+  onRetry,
+}: {
+  message: string
+  retrying: boolean
+  onRetry: () => void
+}) {
+  return (
+    <div
+      role='alert'
+      className='flex h-52 flex-col items-center justify-center border border-[#5B4327] bg-[#211A12] px-7 text-center'
+    >
+      <p className='text-sm font-medium text-[#E2C18A]'>发布状态读取失败</p>
+      <p className='mt-2 max-w-sm text-[11px] leading-5 text-[#B79A70]'>{message}</p>
+      <Button
+        type='button'
+        variant='outline'
+        size='sm'
+        className='mt-4 h-8 gap-1.5 border-[#6A5031] bg-transparent text-[11px] text-[#E2C18A] hover:bg-[#2C2116] hover:text-[#F2D8AC]'
+        disabled={retrying}
+        onClick={onRetry}
+      >
+        {retrying ? <Loader2 className='size-3.5 animate-spin' /> : <RefreshCw className='size-3.5' />}
+        {retrying ? '正在重试' : '重新读取'}
+      </Button>
+    </div>
+  )
+}
+
+export async function restoreReleaseAndReloadHistory(
+  releaseNumber: number,
+  restoreRelease: (releaseNumber: number) => Promise<void>,
+  reloadHistory: () => Promise<boolean>,
+): Promise<boolean> {
+  await restoreRelease(releaseNumber)
+  return reloadHistory()
 }
 
 export function PublishShareDialog({
@@ -165,23 +211,32 @@ export function PublishShareDialog({
   projectName,
   initiallyPublished,
   publish,
+  restoreRelease,
   onPublicationChange,
 }: PublishShareDialogProps) {
   const [releases, setReleases] = useState<ProjectRelease[]>([])
   const [loaded, setLoaded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isPublishing, setIsPublishing] = useState(false)
   const [isUnpublishing, setIsUnpublishing] = useState(false)
+  const [restoringReleaseNumber, setRestoringReleaseNumber] = useState<number | null>(null)
+  const [confirmRestoreRelease, setConfirmRestoreRelease] = useState<ProjectRelease | null>(null)
+  const [restoredReleaseNumber, setRestoredReleaseNumber] = useState<number | null>(null)
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
 
-  const loadReleases = useCallback(async () => {
+  const loadReleases = useCallback(async (): Promise<boolean> => {
     setIsLoading(true)
     try {
       const history = await listProjectReleases(projectId)
       setReleases(history)
       setLoaded(true)
+      setLoadError(null)
+      return true
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '发布记录加载失败')
+      setLoaded(true)
+      setLoadError(error instanceof Error ? error.message : '发布记录加载失败')
+      return false
     } finally {
       setIsLoading(false)
     }
@@ -195,7 +250,7 @@ export function PublishShareDialog({
     () => releases.find(release => release.isCurrent && release.isPublished) ?? null,
     [releases],
   )
-  const isPublished = currentRelease !== null || (!loaded && initiallyPublished)
+  const isPublished = currentRelease !== null || ((!loaded || loadError !== null) && initiallyPublished)
   const stableUrl = viewerUrl(currentRelease?.stablePath ?? null)
   const versionUrl = viewerUrl(currentRelease?.versionPath ?? null)
 
@@ -223,6 +278,8 @@ export function PublishShareDialog({
           .map(item => ({ ...item, isCurrent: false, isPublished: true })),
       ])
       setLoaded(true)
+      setLoadError(null)
+      setRestoredReleaseNumber(null)
       onPublicationChange?.(release)
       toast.success(`版本 ${release.releaseNumber} 已发布`)
     } catch (error) {
@@ -237,6 +294,7 @@ export function PublishShareDialog({
     try {
       await unpublishProjectRelease(projectId)
       setReleases(current => current.map(release => ({ ...release, isCurrent: false, isPublished: false })))
+      setRestoredReleaseNumber(null)
       onPublicationChange?.(null)
       setConfirmUnpublish(false)
       toast.success('已取消发布', {
@@ -248,6 +306,29 @@ export function PublishShareDialog({
       setIsUnpublishing(false)
     }
   }
+
+  const restoreAsDraft = async () => {
+    if (!confirmRestoreRelease) return
+
+    const releaseNumber = confirmRestoreRelease.releaseNumber
+    setRestoringReleaseNumber(releaseNumber)
+    try {
+      const historyReloaded = await restoreReleaseAndReloadHistory(releaseNumber, restoreRelease, loadReleases)
+      setConfirmRestoreRelease(null)
+      setRestoredReleaseNumber(releaseNumber)
+      toast.success(`版本 ${releaseNumber} 已恢复为当前草稿`, {
+        description: historyReloaded
+          ? '恢复前的草稿已保存为回滚点，当前线上版本没有变化'
+          : '草稿已恢复，发布历史暂时未刷新；当前线上版本没有变化',
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '发布版本恢复失败')
+    } finally {
+      setRestoringReleaseNumber(null)
+    }
+  }
+
+  const mutationPending = isPublishing || isUnpublishing || restoringReleaseNumber !== null
 
   return (
     <>
@@ -262,7 +343,7 @@ export function PublishShareDialog({
                 <Globe2 className='size-4 text-[var(--ed-cyan)]' />
               </div>
               <div>
-                <DialogTitle className='text-sm'>发布与分享</DialogTitle>
+                <DialogTitle className='text-sm'>{PUBLISH_SHARE_LABEL}</DialogTitle>
                 <DialogDescription className='mt-1 text-[11px] text-[var(--ed-ink-soft)]'>
                   发布大屏快照，并管理公开访问地址
                 </DialogDescription>
@@ -272,7 +353,9 @@ export function PublishShareDialog({
 
           <div className='grid min-h-0 md:grid-cols-[minmax(0,1.25fr)_minmax(220px,0.75fr)]'>
             <div className='min-w-0 border-b border-[var(--ed-line)] p-5 md:border-r md:border-b-0'>
-              {isLoading && !loaded ? (
+              {loadError ? (
+                <ReleaseHistoryLoadError message={loadError} retrying={isLoading} onRetry={() => void loadReleases()} />
+              ) : isLoading && !loaded ? (
                 <div className='flex h-52 items-center justify-center gap-2 text-xs text-[var(--ed-ink-muted)]'>
                   <Loader2 className='size-4 animate-spin' />
                   正在读取发布状态
@@ -287,6 +370,16 @@ export function PublishShareDialog({
                   onCopy={(url, label) => void copy(url, label)}
                   onOpen={openUrl}
                 />
+              ) : currentRelease ? (
+                <div className='flex h-52 flex-col items-center justify-center border border-[var(--ed-line-strong)] bg-[var(--ed-rail)] px-6 text-center'>
+                  <Globe2 className='size-5 text-[var(--ed-cyan)]' />
+                  <p className='mt-3 text-sm font-medium text-[var(--ed-ink-soft)]'>
+                    版本 {currentRelease.releaseNumber} 已公开
+                  </p>
+                  <p className='mt-2 max-w-sm text-[11px] leading-5 text-[var(--ed-ink-muted)]'>
+                    当前环境未配置公开查看器地址，发布状态正常，但暂时不能生成可复制的访问链接。
+                  </p>
+                </div>
               ) : isPublished ? (
                 <div className='flex h-52 flex-col items-center justify-center border border-[var(--ed-line-strong)] bg-[var(--ed-rail)] px-6 text-center'>
                   <Loader2 className='size-4 animate-spin text-[var(--ed-cyan)]' />
@@ -304,12 +397,17 @@ export function PublishShareDialog({
                 </div>
               )}
 
+              {restoredReleaseNumber !== null ? (
+                <output className='mt-3 block border border-[#28513F] bg-[#10241C] px-3 py-2 text-[11px] leading-4 text-[#78CFA1]'>
+                  版本 {restoredReleaseNumber} 已恢复为当前草稿；恢复前草稿已备份，当前线上版本未改变。
+                </output>
+              ) : null}
               {getPublicViewerOrigin() ? null : (
-                <p className='mt-3 border border-[#5B4327] bg-[#211A12] px-3 py-2 text-[10px] leading-4 text-[#D7B578]'>
+                <p className='mt-3 border border-[#5B4327] bg-[#211A12] px-3 py-2 text-[11px] leading-4 text-[#D7B578]'>
                   未配置公开查看器地址，发布记录仍可管理，但暂时无法生成可分享链接。
                 </p>
               )}
-              <p className='mt-3 flex items-start gap-1.5 text-[10px] leading-4 text-[var(--ed-ink-faint)]'>
+              <p className='mt-3 flex items-start gap-1.5 text-[11px] leading-4 text-[var(--ed-ink-faint)]'>
                 <Check className='mt-0.5 size-3 shrink-0 text-[#56B98A]' />
                 保存和恢复只改变草稿，不会自动发布或重新公开；每次发布都需要明确操作。
               </p>
@@ -317,13 +415,24 @@ export function PublishShareDialog({
 
             <div className='flex min-h-0 flex-col bg-[var(--ed-rail)]'>
               <div className='border-b border-[var(--ed-line)] px-4 py-3'>
-                <p className='text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--ed-ink-muted)]'>
+                <p className='text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--ed-ink-muted)]'>
                   发布历史
                 </p>
               </div>
               <ScrollArea className='h-[260px] md:h-[330px]'>
                 <div className='space-y-2 p-3'>
-                  {releases.length === 0 ? (
+                  {loadError ? (
+                    <p className='border border-[var(--ed-line)] px-3 py-8 text-center text-[11px] leading-5 text-[var(--ed-ink-faint)]'>
+                      发布历史暂不可用
+                      <br />
+                      请在左侧重新读取
+                    </p>
+                  ) : isLoading && releases.length === 0 ? (
+                    <div className='flex items-center justify-center gap-2 px-2 py-8 text-[11px] text-[var(--ed-ink-faint)]'>
+                      <Loader2 className='size-3.5 animate-spin' />
+                      正在读取发布历史
+                    </div>
+                  ) : releases.length === 0 ? (
                     <p className='px-2 py-8 text-center text-[11px] text-[var(--ed-ink-faint)]'>暂无发布记录</p>
                   ) : (
                     releases.map(release => {
@@ -338,14 +447,14 @@ export function PublishShareDialog({
                               版本 {release.releaseNumber}
                             </span>
                             {release.isCurrent && release.isPublished ? (
-                              <span className='border border-[#28513F] bg-[#10241C] px-1.5 py-0.5 text-[9px] text-[#68C897]'>
+                              <span className='border border-[#28513F] bg-[#10241C] px-1.5 py-0.5 text-[11px] text-[#68C897]'>
                                 当前
                               </span>
                             ) : null}
                           </div>
-                          <div className='mt-1.5 flex items-center justify-between gap-2'>
+                          <div className='mt-1.5 flex items-center justify-between gap-2 border-b border-[var(--ed-line)] pb-2'>
                             <time
-                              className='font-mono text-[9px] text-[var(--ed-ink-faint)]'
+                              className='font-mono text-[11px] text-[var(--ed-ink-faint)]'
                               dateTime={release.publishedAt}
                             >
                               {new Intl.DateTimeFormat('zh-CN', {
@@ -358,15 +467,28 @@ export function PublishShareDialog({
                             {releaseUrl ? (
                               <button
                                 type='button'
-                                className='text-[10px] text-[var(--ed-cyan)] hover:text-[var(--ed-ink)]'
+                                className='text-[11px] text-[var(--ed-cyan)] hover:text-[var(--ed-ink)]'
                                 onClick={() => openUrl(releaseUrl)}
                               >
                                 打开版本
                               </button>
                             ) : (
-                              <span className='text-[9px] text-[var(--ed-ink-faint)]'>公开访问已关闭</span>
+                              <span className='text-[11px] text-[var(--ed-ink-faint)]'>公开访问已关闭</span>
                             )}
                           </div>
+                          <button
+                            type='button'
+                            className='mt-2 inline-flex h-6 items-center gap-1 text-[11px] text-[var(--ed-ink-muted)] hover:text-[var(--ed-cyan)] disabled:cursor-not-allowed disabled:opacity-50'
+                            disabled={mutationPending}
+                            onClick={() => setConfirmRestoreRelease(release)}
+                          >
+                            {restoringReleaseNumber === release.releaseNumber ? (
+                              <Loader2 className='size-3 animate-spin' />
+                            ) : (
+                              <RotateCcw className='size-3' />
+                            )}
+                            {restoringReleaseNumber === release.releaseNumber ? '正在恢复' : '恢复为草稿'}
+                          </button>
                         </div>
                       )
                     })
@@ -384,7 +506,7 @@ export function PublishShareDialog({
                   variant='ghost'
                   size='sm'
                   className='h-8 gap-1.5 px-2 text-[11px] text-[#B78383] hover:bg-[#271718] hover:text-[#E3A0A0]'
-                  disabled={isPublishing || isUnpublishing}
+                  disabled={mutationPending}
                   onClick={() => setConfirmUnpublish(true)}
                 >
                   <ShieldOff className='size-3.5' />
@@ -396,7 +518,7 @@ export function PublishShareDialog({
               type='button'
               size='sm'
               className='h-8 gap-1.5 bg-[var(--ed-ink)] px-4 text-[11px] text-[var(--ed-canvas)] hover:bg-white'
-              disabled={isPublishing || isUnpublishing}
+              disabled={mutationPending}
               onClick={() => void publishCurrentDraft()}
             >
               {isPublishing ? <Loader2 className='size-3.5 animate-spin' /> : null}
@@ -405,6 +527,49 @@ export function PublishShareDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={confirmRestoreRelease !== null}
+        onOpenChange={nextOpen => {
+          if (!nextOpen && restoringReleaseNumber === null) setConfirmRestoreRelease(null)
+        }}
+      >
+        <AlertDialogContent
+          data-ed-shell='editor'
+          className='border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-[var(--ed-ink)] sm:max-w-[460px]'
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className='text-base'>
+              将版本 {confirmRestoreRelease?.releaseNumber ?? ''} 恢复为当前草稿？
+            </AlertDialogTitle>
+            <AlertDialogDescription className='leading-6 text-[var(--ed-ink-muted)]'>
+              {RESTORE_RELEASE_CONFIRMATION}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className='border border-[#5B4327] bg-[#211A12] px-3 py-2.5 text-[11px] leading-5 text-[#D7B578]'>
+            此操作不会改变任何公开链接；如需让恢复后的内容上线，仍需再次点击“发布新版本”。
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={restoringReleaseNumber !== null}
+              className='border-[var(--ed-line-strong)] bg-transparent text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+            >
+              保留当前草稿
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={restoringReleaseNumber !== null}
+              className='bg-[var(--ed-ink)] text-[var(--ed-canvas)] hover:bg-white'
+              onClick={event => {
+                event.preventDefault()
+                void restoreAsDraft()
+              }}
+            >
+              {restoringReleaseNumber !== null ? <Loader2 className='size-4 animate-spin' /> : null}
+              {restoringReleaseNumber !== null ? '正在恢复' : '创建备份并恢复'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmUnpublish} onOpenChange={setConfirmUnpublish}>
         <AlertDialogContent

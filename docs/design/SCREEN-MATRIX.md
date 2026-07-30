@@ -28,7 +28,7 @@ reserved.
 | Login | `/login` | default, submitting, invalid credentials, OAuth error |
 | Sign up | `/signup` | default, submitting, validation error, confirmation |
 | Forgot password | `/forgot-password` | default, sending, sent, failure |
-| Reset password | `/reset-password` | default, invalid link, saving, success |
+| Reset password | `/reset-password` | direct-access invalid, callback-ready form, saving, success |
 | Home | `/` | loading, populated, first-use empty, partial failure |
 | Projects | `/projects` | grid, list, search, filters, empty, error, create dialog |
 | Recycle bin | `/trash` | populated, empty, restore, permanent-delete warning |
@@ -42,22 +42,13 @@ reserved.
 `TemplatesPage.tsx` currently exists but is not registered in the router. It is
 not part of current primary navigation.
 
-### Current implementation gaps
+### Current implementation coverage
 
-This matrix is the target contract, not a claim that every state is already
-implemented. The current source still has these known gaps:
-
-- the wildcard application route redirects to `/`; the target is a deliberate
-  product 404;
-- draft preview accepts `?page=<pageId>`, but has no product-level page
-  selector;
-- editor preview opens a new tab, while the home-page fallback preview link
-  still replaces the current tab;
-- selecting an editor page does not yet write route-restorable page state;
-- a new project starts at the default resolution and is adjusted later from the
-  canvas HUD; the creation dialog does not ask for resolution;
-- release history is inspectable, but release rollback has no verified
-  front-end flow.
+The current source covers the deliberate product 404, explicit auth recovery
+states, truthful home and recycle-bin failures, draft preview page selection
+and fit/scale controls, new-tab preview entry points, route-restorable editor
+pages, per-page resolution choice, permanent deletion, and restoring an
+immutable release into the draft.
 
 ## Navigation model
 
@@ -110,15 +101,16 @@ text label and close action.
 ```text
 Projects
   -> New project
-  -> Name and optional description
+  -> Name, optional description, and initial-page resolution
   -> Create
   -> Editor opens on Page 01
-  -> Adjust resolution from the canvas HUD when needed
+  -> Adjust each page later from the canvas HUD when needed
 ```
 
 Acceptance:
 
-- resolution belongs to the project, not account settings;
+- resolution belongs to each project page, not account settings;
+- custom width and height are positive integers capped at 16384 pixels;
 - the editor shows a return action;
 - the canvas renders on first entry and after refresh;
 - the page list contains at least one valid page;
@@ -305,7 +297,10 @@ Required sections:
 6. unpublish warning.
 
 Publication history is currently inspectable. Release rollback is not presented
-as available until a front-end flow is implemented and verified.
+as a change to the public pointer. Each immutable release can instead be
+restored into the current draft after explicit confirmation. The restore creates
+a `pre_restore` backup, replaces every draft page, and leaves all currently
+published URLs unchanged until the user publishes again.
 
 ## Cross-screen states
 
@@ -327,13 +322,13 @@ as available until a front-end flow is implemented and verified.
 
 | Capability | Status | Design treatment |
 | --- | --- | --- |
-| Multi-page project | Current | first-class in editor; preview selector remains a tracked gap |
+| Multi-page project | Current | first-class in editor and draft preview |
 | Draft save | Current | persistent editor-header state |
 | Undo / redo | Current | session-only history |
 | Restore points | Current | dedicated Versions panel |
 | Stable latest URL | Current | primary share path |
 | Immutable release URL | Current | history and audit path |
-| Release rollback UI | Not current | do not imply availability |
+| Restore release as draft | Current | full-project restore with pre-restore backup; public pointer unchanged |
 | Templates route | Not current | reserve, do not expose in nav |
 | OAuth | Current when configured | direct auth option |
 | Agent | Reserved | no primary navigation |
@@ -361,3 +356,22 @@ For each critical flow:
 6. capture a screenshot;
 7. verify keyboard focus and escape behavior;
 8. verify long Chinese text and narrow panel content.
+
+### 2026-07-30 desktop acceptance record
+
+The current product loop was exercised against the normal local web, Viewer,
+and Hono services rather than a separate demo server:
+
+- 1440 x 900: editor rail, component drag, setters, resolution HUD, and Settings;
+- 1920 x 1080: Home density and recent-project layout;
+- 2560 x 1440: project grid and 2K editor canvas;
+- multi-page editor route survived a full reload;
+- draft preview opened the active page in a new tab and kept page selection,
+  URL, return target, fit, 100%, and zoom controls aligned;
+- two releases proved stable-latest and immutable-version behavior;
+- restoring release 1 created a pre-restore backup while stable latest remained
+  on release 2;
+- unpublishing made the stable link and every release link return the branded
+  404 state;
+- the disposable project was moved through Trash and permanently deleted only
+  after exact-name confirmation.

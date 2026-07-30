@@ -10,6 +10,7 @@ import type { DataSourceEngine } from '@easy-editor/core'
 import { PureRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
 import { useMemo, useState } from 'react'
+import { PreviewScaleViewport } from './PreviewScaleViewport'
 import { PreviewState } from './PreviewState'
 
 export type PreviewDataSourceEngine = DataSourceEngine['createDataSourceEngine']
@@ -19,10 +20,14 @@ export const ProjectSchemaRenderer = observer(
     project,
     requestedPageId,
     createDataSourceEngine,
+    showPreviewScaleControls = false,
+    onActivePageChange,
   }: {
     project: ProjectDetail<unknown>
     requestedPageId?: string | null
     createDataSourceEngine: PreviewDataSourceEngine
+    showPreviewScaleControls?: boolean
+    onActivePageChange?: (pageId: string) => void
   }) => {
     const routeRenderModel = useMemo(
       () => createDashboardRenderModel(project.schema, requestedPageId),
@@ -34,6 +39,7 @@ export const ProjectSchemaRenderer = observer(
       fileName: string
     } | null>(null)
     const normalizedRequestedPageId = requestedPageId ?? null
+    const [navigationError, setNavigationError] = useState<Error | null>(null)
     const hasActiveNavigation =
       activeNavigation !== null &&
       activeNavigation.sourceSchema === project.schema &&
@@ -46,10 +52,12 @@ export const ProjectSchemaRenderer = observer(
     const { initialPage, projectSchema } = routeRenderModel
     const { rootAttributes, rootStyle, viewport } = renderModel
 
-    return (
+    if (navigationError) throw navigationError
+
+    const renderer = (
       <main
         {...rootAttributes}
-        className='h-screen w-full overflow-hidden bg-black'
+        className='h-full w-full overflow-hidden bg-black'
         aria-label={createDashboardPreviewAriaLabel(project.name, viewport)}
         style={rootStyle}
       >
@@ -60,7 +68,18 @@ export const ProjectSchemaRenderer = observer(
           components={{ ...components, ...materialManager.remoteComponentsMap }}
           viewport={viewport}
           onBeforeNavigate={async (pageSchema, projectComponentsMap) => {
-            await loadRemoteMaterialsFromComponentsMap(projectComponentsMap)
+            setNavigationError(null)
+            const nextPageId = routeRenderModel.document.editorSchema.componentsTree.find(
+              page => page.fileName === pageSchema.fileName,
+            )?.meta.easyDashboard.pageId
+
+            try {
+              await loadRemoteMaterialsFromComponentsMap(projectComponentsMap)
+            } catch (reason) {
+              setNavigationError(reason instanceof Error ? reason : new Error('页面物料加载失败'))
+              return
+            }
+
             const fileName = pageSchema.fileName
             if (!fileName) return
             setActiveNavigation(current => {
@@ -79,6 +98,7 @@ export const ProjectSchemaRenderer = observer(
                 fileName,
               }
             })
+            if (nextPageId) onActivePageChange?.(nextPageId)
           }}
           appHelper={{
             dataSourceEngine: {
@@ -90,5 +110,9 @@ export const ProjectSchemaRenderer = observer(
         />
       </main>
     )
+
+    if (!showPreviewScaleControls) return renderer
+
+    return <PreviewScaleViewport viewport={viewport}>{renderer}</PreviewScaleViewport>
   },
 )

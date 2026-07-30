@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { RouterProvider, createBrowserRouter, useParams } from 'react-router'
 import { PublicOnlyRoute, RequireSession } from './auth/RequireSession'
+import { NetworkStatusNotice } from './components/common/NetworkStatusNotice'
 import { LogoLoading } from './components/common/logo-loading'
 import { ThemeProvider } from './components/theme-provider'
 import { evaluatePublicViewerAccess } from './features/projects/public-viewer'
@@ -149,6 +150,7 @@ function App() {
       }
     >
       <ThemeProvider defaultTheme='dark' storageKey='easy-dashboard-theme'>
+        <NetworkStatusNotice />
         <Suspense fallback={<LogoLoading />}>
           <RouterProvider router={router} />
         </Suspense>

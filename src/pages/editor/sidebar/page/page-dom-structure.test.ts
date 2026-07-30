@@ -52,6 +52,14 @@ describe('page sidebar DOM structure', () => {
     expect(pageRow).not.toMatch(/<div[^>]*onClick=\{\(\) => handleSelect\(page\)\}/)
   })
 
+  it('keeps the page name readable while moving its route identifier to a compact second line', async () => {
+    const source = await readSource('index.tsx')
+
+    expect(source).toContain('{page.fileDesc}</span>')
+    expect(source).toContain("PAGE {String(pageIndex + 1).padStart(2, '0')} · {page.fileName}")
+    expect(source).not.toContain('({page.fileName})')
+  })
+
   it('keeps page form inputs controlled for the full dialog lifecycle', async () => {
     const source = await readSource('PageModal.tsx')
 

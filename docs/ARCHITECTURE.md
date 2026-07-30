@@ -57,8 +57,12 @@ The root, `server`, and `viewer` packages are pnpm workspace members.
 
 - Email/password, GitHub OAuth, Google OAuth, password recovery, and sign-out
   flow through Hono.
-- OAuth and password recovery use PKCE. The verifier and OAuth state are stored
-  in short-lived Host-only cookies, not browser storage.
+- OAuth and password recovery use PKCE. OAuth state, verifiers, and the
+  short-lived single-use recovery code are stored in ten-minute Host-only
+  cookies, not browser storage.
+- The password callback does not create process-local recovery state. The
+  password mutation exchanges the code and verifier with Supabase and clears
+  both cookies, so callback and mutation may run on different Vercel instances.
 - Supabase access and refresh tokens use `Secure`, `HttpOnly`, `SameSite=Lax`,
   `Path=/` Host-only cookies.
 - Authenticated responses use `Cache-Control: private, no-store`.
@@ -214,6 +218,7 @@ PUT    /api/projects/:projectId/favorite
 DELETE /api/projects/:projectId/favorite
 POST   /api/projects/:projectId/duplicate
 DELETE /api/projects/:projectId
+DELETE /api/projects/:projectId/permanent
 POST   /api/projects/:projectId/restore
 PUT    /api/projects/:projectId/draft
 
@@ -221,13 +226,14 @@ GET    /api/projects/:projectId/restore-points
 POST   /api/projects/:projectId/restore-points
 POST   /api/projects/:projectId/restore-points/:revisionId/restore
 GET    /api/projects/:projectId/releases
+POST   /api/projects/:projectId/releases/:releaseNumber/restore
 POST   /api/projects/:projectId/publish
-POST   /api/projects/:projectId/rollback
 POST   /api/projects/:projectId/unpublish
 
 POST   /api/projects/:projectId/thumbnail/upload
 POST   /api/projects/:projectId/thumbnail/complete
 POST   /api/projects/:projectId/thumbnail/fail
+POST   /api/projects/:projectId/thumbnail/reconcile
 GET    /api/projects/:projectId/thumbnail/content
 
 GET    /api/public/projects/:slug

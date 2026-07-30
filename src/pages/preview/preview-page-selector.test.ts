@@ -1,6 +1,6 @@
 import { defaultProjectSchema } from '@/editor/const'
 import { describe, expect, it } from 'vitest'
-import { getPreviewPages, resolvePreviewPage, withPreviewPage } from './preview-page-selector'
+import { getPreviewPages, resolvePreviewPageSelection, withPreviewPage } from './preview-page-selector'
 
 describe('preview page selector helpers', () => {
   it('lists every canonical page with its product-facing name', () => {
@@ -20,11 +20,30 @@ describe('preview page selector helpers', () => {
     ])
   })
 
-  it('uses a requested page and falls back to the configured start page', () => {
+  it('uses a requested page and selects the configured start page when the query is absent', () => {
     const schema = structuredClone(defaultProjectSchema)
 
-    expect(resolvePreviewPage(schema, 'page-home')).toBe('page-home')
-    expect(resolvePreviewPage(schema, 'missing')).toBe('page-home')
+    expect(resolvePreviewPageSelection(schema, 'page-home')).toMatchObject({
+      status: 'selected',
+      activePageId: 'page-home',
+      source: 'requested',
+    })
+    expect(resolvePreviewPageSelection(schema, null)).toMatchObject({
+      status: 'selected',
+      activePageId: 'page-home',
+      source: 'start',
+    })
+  })
+
+  it('retains an invalid deep link instead of silently replacing it with the start page', () => {
+    const schema = structuredClone(defaultProjectSchema)
+
+    expect(resolvePreviewPageSelection(schema, 'missing-page')).toEqual({
+      status: 'invalid',
+      requestedPageId: 'missing-page',
+      activePageId: null,
+      startPageId: 'page-home',
+    })
   })
 
   it('updates only the page query', () => {

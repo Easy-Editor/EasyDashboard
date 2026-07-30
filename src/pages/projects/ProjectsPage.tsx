@@ -21,6 +21,12 @@ import {
   setProjectFavorite,
   trashProject,
 } from '@/features/projects/project-api'
+import {
+  CANVAS_RESOLUTION_PRESETS,
+  type CanvasResolutionPreset,
+  createProjectSchemaWithResolution,
+  resolveCanvasResolution,
+} from '@/features/projects/project-creation'
 import { PageFrame } from '@/layouts/PageFrame'
 import { cn } from '@/lib/utils'
 import { Grid2X2, LayoutDashboard, List, Plus, Search, X } from 'lucide-react'
@@ -29,9 +35,45 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 
 type ProjectView = 'grid' | 'list'
+export type ProjectStatusFilter = 'all' | 'draft' | 'published'
 
 function loadPreferredView(): ProjectView {
   return window.localStorage.getItem('easy-dashboard-project-view') === 'list' ? 'list' : 'grid'
+}
+
+export function normalizeProjectSearchTerm(query: string): string {
+  return query.trim().replace(/\s+/g, ' ')
+}
+
+export function filterAndSortProjects(
+  projects: ProjectCardProject[],
+  query: string,
+  status: ProjectStatusFilter,
+): ProjectCardProject[] {
+  const normalizedQuery = normalizeProjectSearchTerm(query).toLocaleLowerCase()
+  return projects
+    .filter(project => {
+      const matchesQuery =
+        !normalizedQuery ||
+        project.name.toLocaleLowerCase().includes(normalizedQuery) ||
+        project.description.toLocaleLowerCase().includes(normalizedQuery)
+      return matchesQuery && (status === 'all' || project.state === status)
+    })
+    .sort((first, second) => {
+      if (first.isFavorite !== second.isFavorite) return first.isFavorite ? -1 : 1
+      return new Date(second.savedAt).getTime() - new Date(first.savedAt).getTime()
+    })
+}
+
+export function describeEmptyProjectFilter(query: string, status: ProjectStatusFilter): string {
+  const normalizedQuery = normalizeProjectSearchTerm(query)
+  const statusLabel = status === 'published' ? '已发布' : status === 'draft' ? '草稿' : ''
+  if (normalizedQuery && statusLabel) {
+    return `未找到名称或说明中包含“${normalizedQuery}”的${statusLabel}项目。`
+  }
+  if (normalizedQuery) return `未找到名称或说明中包含“${normalizedQuery}”的项目。`
+  if (statusLabel) return `当前没有${statusLabel}项目。`
+  return '调整关键词或清除当前筛选。'
 }
 
 export function ProjectsPage() {
@@ -39,22 +81,25 @@ export function ProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [projects, setProjects] = useState<ProjectCardProject[] | null>(null)
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState('all')
+  const [status, setStatus] = useState<ProjectStatusFilter>('all')
   const [view, setView] = useState<ProjectView>(loadPreferredView)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [resolutionPreset, setResolutionPreset] = useState<CanvasResolutionPreset>('fhd')
+  const [customWidth, setCustomWidth] = useState('1920')
+  const [customHeight, setCustomHeight] = useState('1080')
 
   const createOpen = searchParams.get('create') === '1'
 
   const load = useCallback(async () => {
     setLoadError(null)
+    setProjects(null)
     try {
       const response = await listProjects()
       setProjects(response.projects)
     } catch (reason) {
       setLoadError(reason instanceof ApiError ? reason.message : '项目列表加载失败')
-      setProjects([])
     }
   }, [])
 
@@ -64,20 +109,7 @@ export function ProjectsPage() {
 
   const filteredProjects = useMemo(() => {
     if (!projects) return []
-    const normalizedQuery = query.trim().toLocaleLowerCase()
-    return projects
-      .filter(project => {
-        const matchesQuery =
-          !normalizedQuery ||
-          project.name.toLocaleLowerCase().includes(normalizedQuery) ||
-          project.description.toLocaleLowerCase().includes(normalizedQuery)
-        const matchesStatus = status === 'all' || project.state === status
-        return matchesQuery && matchesStatus
-      })
-      .sort((first, second) => {
-        if (first.isFavorite !== second.isFavorite) return first.isFavorite ? -1 : 1
-        return new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime()
-      })
+    return filterAndSortProjects(projects, query, status)
   }, [projects, query, status])
 
   function setPreferredView(nextView: ProjectView) {
@@ -92,6 +124,9 @@ export function ProjectsPage() {
 
   function closeCreateDialog() {
     setCreateError(null)
+    setResolutionPreset('fhd')
+    setCustomWidth('1920')
+    setCustomHeight('1080')
     setSearchParams(previous => {
       const next = new URLSearchParams(previous)
       next.delete('create')
@@ -145,13 +180,22 @@ export function ProjectsPage() {
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
+    let schema: typeof defaultProjectSchema
+    try {
+      const resolution = resolveCanvasResolution(resolutionPreset, customWidth, customHeight)
+      schema = createProjectSchemaWithResolution(defaultProjectSchema, resolution)
+    } catch (reason) {
+      setCreateError(reason instanceof Error ? reason.message : '画布分辨率无效')
+      return
+    }
+
     setCreating(true)
     setCreateError(null)
     try {
       const project = await createProject({
         name: String(form.get('name') ?? '').trim(),
         description: String(form.get('description') ?? '').trim(),
-        schema: structuredClone(defaultProjectSchema),
+        schema,
       })
       closeCreateDialog()
       navigate(`/projects/${project.id}/editor`)
@@ -190,7 +234,7 @@ export function ProjectsPage() {
               className='h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] pl-8 text-xs text-[var(--ed-ink)] placeholder:text-[var(--ed-ink-faint)] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[var(--ed-cyan)]/25'
             />
           </div>
-          <Select value={status} onValueChange={setStatus}>
+          <Select value={status} onValueChange={value => setStatus(value as ProjectStatusFilter)}>
             <SelectTrigger
               className='h-8 w-[120px] rounded-[6px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-xs text-[var(--ed-ink-soft)]'
               aria-label='按发布状态筛选'
@@ -254,7 +298,7 @@ export function ProjectsPage() {
           </div>
         ) : null}
 
-        {projects ? (
+        {loadError ? null : projects ? (
           projects.length === 0 && !loadError ? (
             <div className='mx-auto mt-20 max-w-[420px] text-center'>
               <div className='ed-empty-canvas mx-auto grid aspect-video w-[340px] place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[#080d15]'>
@@ -306,7 +350,7 @@ export function ProjectsPage() {
               <h2 className='mt-4 font-[var(--font-display)] text-base font-medium text-[var(--ed-ink)]'>
                 没有匹配的项目
               </h2>
-              <p className='mt-2 text-xs text-[var(--ed-ink-muted)]'>调整关键词或清除当前筛选。</p>
+              <p className='mt-2 text-xs text-[var(--ed-ink-muted)]'>{describeEmptyProjectFilter(query, status)}</p>
               <Button
                 type='button'
                 variant='outline'
@@ -364,6 +408,71 @@ export function ProjectsPage() {
                 className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
               />
             </div>
+            <div className='space-y-2'>
+              <Label htmlFor='project-resolution' className='text-xs text-[var(--ed-ink-soft)]'>
+                初始页面分辨率
+              </Label>
+              <Select
+                value={resolutionPreset}
+                onValueChange={value => setResolutionPreset(value as CanvasResolutionPreset)}
+              >
+                <SelectTrigger
+                  id='project-resolution'
+                  className='w-full rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] text-[var(--ed-ink)]'>
+                  {CANVAS_RESOLUTION_PRESETS.map(preset => (
+                    <SelectItem key={preset.value} value={preset.value}>
+                      {preset.label} · {preset.width} × {preset.height}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value='custom'>自定义</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className='text-[11px] leading-5 text-[var(--ed-ink-faint)]'>
+                创建后可在编辑器底部为每个页面独立调整。
+              </p>
+            </div>
+            {resolutionPreset === 'custom' ? (
+              <div className='grid grid-cols-2 gap-3'>
+                <div className='space-y-2'>
+                  <Label htmlFor='project-canvas-width' className='text-xs text-[var(--ed-ink-soft)]'>
+                    宽度
+                  </Label>
+                  <Input
+                    id='project-canvas-width'
+                    type='number'
+                    inputMode='numeric'
+                    min={1}
+                    max={16384}
+                    step={1}
+                    required
+                    value={customWidth}
+                    onChange={event => setCustomWidth(event.target.value)}
+                    className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
+                  />
+                </div>
+                <div className='space-y-2'>
+                  <Label htmlFor='project-canvas-height' className='text-xs text-[var(--ed-ink-soft)]'>
+                    高度
+                  </Label>
+                  <Input
+                    id='project-canvas-height'
+                    type='number'
+                    inputMode='numeric'
+                    min={1}
+                    max={16384}
+                    step={1}
+                    required
+                    value={customHeight}
+                    onChange={event => setCustomHeight(event.target.value)}
+                    className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
+                  />
+                </div>
+              </div>
+            ) : null}
             {createError ? (
               <p role='alert' className='text-xs text-[#ffabb2]'>
                 {createError}

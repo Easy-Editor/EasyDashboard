@@ -44,6 +44,8 @@ export type ProjectSummary = {
   isFavorite: boolean
   thumbnail: ProjectThumbnail
   savedAt: string
+  publishedAt: string | null
+  currentReleaseNumber: number | null
   deletedAt: string | null
   updatedAt: string
 }

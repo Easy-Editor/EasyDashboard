@@ -8,6 +8,7 @@ export const OAUTH_STATE_COOKIE = '__Host-ed-oauth-state'
 export const OAUTH_VERIFIER_COOKIE = '__Host-ed-oauth-verifier'
 export const OAUTH_RETURN_TO_COOKIE = '__Host-ed-oauth-return-to'
 export const RECOVERY_VERIFIER_COOKIE = '__Host-ed-recovery-verifier'
+export const RECOVERY_CODE_COOKIE = '__Host-ed-recovery-code'
 
 const cookieOptions = {
   httpOnly: true,
@@ -77,4 +78,16 @@ export function readRecoveryVerifierCookie(c: Context): string | undefined {
 
 export function clearRecoveryVerifierCookie(c: Context): void {
   deleteCookie(c, RECOVERY_VERIFIER_COOKIE, cookieOptions)
+}
+
+export function writeRecoveryCodeCookie(c: Context, code: string): void {
+  setCookie(c, RECOVERY_CODE_COOKIE, code, flowCookieOptions)
+}
+
+export function readRecoveryCodeCookie(c: Context): string | undefined {
+  return getCookie(c, RECOVERY_CODE_COOKIE)
+}
+
+export function clearRecoveryCodeCookie(c: Context): void {
+  deleteCookie(c, RECOVERY_CODE_COOKIE, cookieOptions)
 }

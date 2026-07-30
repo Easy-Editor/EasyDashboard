@@ -630,6 +630,19 @@
   --ed-ink-faint: #748695;
   --ed-blue: #4f8cff;
   --ed-cyan: #6ddcf3;
+  --ed-success: #52d28b;
+  --ed-warning: #f59e0b;
+  --ed-error: #ff7f8a;
+  --ed-conflict: #d99a4e;
+  --ed-control-compact: 28px;
+  --ed-control-standard: 32px;
+  --ed-header-height: 48px;
+  --ed-tool-rail-width: 44px;
+  --ed-left-panel-width: 264px;
+  --ed-inspector-width: 304px;
+  --ed-panel-header-height: 44px;
+  --ed-ruler-size: 22px;
+  --ed-canvas-hud-height: 32px;
   --radius: 0.5rem;
 
   color-scheme: dark;
@@ -770,6 +783,26 @@
   color: var(--ed-ink);
   background: var(--ed-panel-raised);
   box-shadow: inset 0 0 0 1px var(--ed-cyan);
+}
+
+/*
+ * Radix portals mount under body. Their root carries the editor scope so it
+ * receives the token aliases, then explicitly returns to the panel surface
+ * instead of inheriting the shell root's canvas background.
+ */
+[data-ed-shell="editor"][data-slot="popover-content"],
+[data-ed-shell="editor"][data-slot="dialog-content"],
+[data-ed-shell="editor"][data-slot="alert-dialog-content"],
+[data-ed-shell="editor"][data-slot="dropdown-menu-content"] {
+  color: var(--ed-ink);
+  background: var(--ed-panel);
+  border-color: var(--ed-line-strong);
+}
+
+[data-ed-shell="preview"] .ed-preview-stage-grid {
+  background-image: linear-gradient(rgb(109 220 243 / 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(109 220 243 / 0.028) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 
 .ed-auth-grid {

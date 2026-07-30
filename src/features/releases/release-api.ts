@@ -1,4 +1,5 @@
 import { apiRequest, jsonBody } from '@/api/client'
+import type { ProjectSchema } from '@easy-editor/core'
 
 export type ProjectRelease = {
   projectId: string
@@ -19,6 +20,14 @@ export type PublishedProjectRelease = ProjectRelease & {
   versionPath: string
   isCurrent: true
   isPublished: true
+}
+
+export type RestoredProjectReleaseDraft = {
+  project: {
+    draftSchema: ProjectSchema
+    draftVersion: number
+  }
+  savedAt: string
 }
 
 type RawRelease = {
@@ -103,6 +112,33 @@ export async function publishProjectRelease(
     versionPath: release.versionPath,
     isCurrent: true,
     isPublished: true,
+  }
+}
+
+export async function restoreProjectReleaseDraft(
+  projectId: string,
+  releaseNumber: number,
+  expectedVersion: number,
+): Promise<RestoredProjectReleaseDraft> {
+  const response = await apiRequest<{
+    project: {
+      draftSchema: ProjectSchema
+      draftVersion: number
+    }
+    savedAt: string
+  }>(`/api/projects/${encodeURIComponent(projectId)}/releases/${encodeURIComponent(String(releaseNumber))}/restore`, {
+    method: 'POST',
+    body: jsonBody({ expectedVersion }),
+  })
+  if (!response.project?.draftSchema || !Number.isInteger(response.project.draftVersion) || !response.savedAt) {
+    throw new Error('发布版本恢复响应缺少项目文档、版本或保存时间')
+  }
+  return {
+    project: {
+      draftSchema: response.project.draftSchema,
+      draftVersion: response.project.draftVersion,
+    },
+    savedAt: response.savedAt,
   }
 }
 

@@ -85,7 +85,7 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [activeItem, setActiveItem] = useState(data.navTop[2])
+  const [activeItem, setActiveItem] = useState(data.navTop[0])
   const { open, setOpen } = useSidebar()
 
   return (
@@ -97,8 +97,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       style={
         {
           ...props.style,
-          '--sidebar-width': '308px',
-          '--sidebar-width-icon': '44px',
+          '--sidebar-width': 'calc(var(--ed-tool-rail-width) + var(--ed-left-panel-width))',
+          '--sidebar-width-icon': 'var(--ed-tool-rail-width)',
         } as React.CSSProperties
       }
     >
@@ -106,7 +106,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         collapsible='none'
         data-editor-tool-rail
         className='shrink-0 border-r border-[var(--ed-line)] bg-[var(--ed-rail)]'
-        style={{ width: '44px' }}
+        style={{ width: 'var(--ed-tool-rail-width)' }}
       >
         <SidebarContent>
           <SidebarGroup className='h-full px-1 py-2'>
@@ -150,9 +150,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           id='editor-tool-panel'
           aria-labelledby={`editor-tool-${activeItem.key}`}
           className='hidden shrink-0 border-r border-[var(--ed-line)] bg-[var(--ed-panel)] md:flex'
-          style={{ width: '264px' }}
+          style={{ width: 'var(--ed-left-panel-width)' }}
         >
-          <SidebarHeader className='flex h-11 shrink-0 items-center justify-between border-b border-[var(--ed-line)] px-3'>
+          <SidebarHeader className='flex h-[var(--ed-panel-header-height)] shrink-0 items-center justify-between border-b border-[var(--ed-line)] px-3'>
             <div className='flex items-center gap-2'>
               <div className='h-3.5 w-0.5 rounded-full bg-[var(--ed-cyan)]' />
               <h2 className='text-[12px] font-medium tracking-wide text-[var(--ed-ink-soft)]'>{activeItem?.title}</h2>

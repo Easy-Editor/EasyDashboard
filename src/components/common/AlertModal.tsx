@@ -20,6 +20,7 @@ interface AlertModalProps {
   cancelText?: string
   trigger: React.ReactNode | string
   disabled?: boolean
+  editorScoped?: boolean
 }
 
 export const AlertModal = ({
@@ -31,6 +32,7 @@ export const AlertModal = ({
   title = '提示',
   confirmText = '确定',
   cancelText = '取消',
+  editorScoped = false,
 }: AlertModalProps) => {
   return (
     <AlertDialog>
@@ -47,7 +49,7 @@ export const AlertModal = ({
           trigger
         )}
       </AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent data-ed-shell={editorScoped ? 'editor' : undefined}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {description && <AlertDialogDescription>{description}</AlertDialogDescription>}

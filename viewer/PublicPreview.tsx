@@ -1,11 +1,8 @@
 import { ProjectSchemaRenderer } from '@/pages/preview/ProjectSchemaRenderer'
 import { useEffect, useState } from 'react'
+import { ViewerState } from './ViewerState'
 import { createCookieLessDataSourceEngine } from './data-source-engine'
 import { PublicProjectNotFoundError, getPublishedProject } from './public-project-api'
-
-function ViewerMessage({ children }: { children: React.ReactNode }) {
-  return <output className='grid min-h-screen place-items-center bg-black p-6 text-sm text-white'>{children}</output>
-}
 
 export function PublicPreview({
   slug,
@@ -18,8 +15,10 @@ export function PublicPreview({
 }) {
   const [projectDetail, setProjectDetail] = useState<Awaited<ReturnType<typeof getPublishedProject>> | null>(null)
   const [error, setError] = useState<Error | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
+    void retryKey
     let cancelled = false
 
     const load = async () => {
@@ -40,18 +39,24 @@ export function PublicPreview({
     return () => {
       cancelled = true
     }
-  }, [releaseNumber, slug])
+  }, [releaseNumber, retryKey, slug])
 
   if (error) {
+    const notFound = error instanceof PublicProjectNotFoundError
     return (
-      <ViewerMessage>
-        {error instanceof PublicProjectNotFoundError ? '404 · 该发布地址不存在或已下线。' : '公开大屏暂时无法加载。'}
-      </ViewerMessage>
+      <ViewerState
+        code={notFound ? '404 / RELEASE' : '503 / VIEWER'}
+        title={notFound ? '发布地址不存在' : '公开大屏暂时无法加载'}
+        detail={notFound ? '该大屏可能尚未发布、已取消发布或已移入回收站。' : '发布内容读取失败，请检查网络后重试。'}
+        tone='error'
+        actionLabel={notFound ? undefined : '重新加载'}
+        onAction={notFound ? undefined : () => setRetryKey(value => value + 1)}
+      />
     )
   }
 
   if (!projectDetail) {
-    return <ViewerMessage>正在加载…</ViewerMessage>
+    return <ViewerState code='VIEW / RELEASE' title='正在加载公开大屏…' detail='正在校验发布状态并读取不可变版本。' />
   }
 
   return (

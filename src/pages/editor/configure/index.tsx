@@ -105,20 +105,23 @@ export const ConfigureSidebar = observer(({ ...props }: React.ComponentProps<typ
       className='sticky top-0 hidden h-svh border-l border-[var(--ed-line)] bg-[var(--ed-panel)] text-[var(--ed-ink)] lg:flex'
       {...props}
     >
-      <SidebarHeader className='flex h-11 shrink-0 items-center border-b border-[var(--ed-line)] bg-[var(--ed-panel)] px-3 py-0'>
+      <SidebarHeader className='flex h-[var(--ed-panel-header-height)] shrink-0 items-center border-b border-[var(--ed-line)] bg-[var(--ed-panel)] px-3 py-0'>
         <div className='flex w-full items-center justify-between'>
-          <span className='text-[12px] font-medium tracking-wide text-[var(--ed-ink-soft)]'>属性配置</span>
+          <div className='flex min-w-0 items-center gap-2'>
+            <div className='h-3.5 w-0.5 shrink-0 rounded-full bg-[var(--ed-cyan)]' />
+            <span className='truncate text-[12px] font-medium tracking-wide text-[var(--ed-ink-soft)]'>属性配置</span>
+          </div>
           {(isLocked || isHidden) && (
             <div className='flex items-center gap-1.5'>
               {isLocked && (
-                <div className='flex items-center gap-1.5 px-2 py-1 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded'>
-                  <Lock className='h-3.5 w-3.5' />
+                <div className='flex h-6 items-center gap-1 border border-[color-mix(in_srgb,var(--ed-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--ed-warning)_10%,var(--ed-panel))] px-1.5 text-[10px] text-[var(--ed-warning)]'>
+                  <Lock className='size-3' />
                   <span>已锁定</span>
                 </div>
               )}
               {isHidden && (
-                <div className='flex items-center gap-1.5 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded'>
-                  <EyeOff className='h-3.5 w-3.5' />
+                <div className='flex h-6 items-center gap-1 border border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] px-1.5 text-[10px] text-[var(--ed-ink-muted)]'>
+                  <EyeOff className='size-3' />
                   <span>已隐藏</span>
                 </div>
               )}

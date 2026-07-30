@@ -4,6 +4,7 @@ import { initGlobals } from '@/globals'
 import { Suspense, lazy, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from 'react-error-boundary'
+import { ViewerState } from './ViewerState'
 import { buildViewerRedirectUrl, parseViewerLocation } from './viewer-route'
 
 import '@/styles/global.css'
@@ -11,10 +12,6 @@ import '@/styles/global.css'
 installCookieLessFetchGuard()
 
 const PublicPreview = lazy(() => import('./PublicPreview').then(module => ({ default: module.PublicPreview })))
-
-function ViewerState({ children }: { children: React.ReactNode }) {
-  return <output className='grid min-h-screen place-items-center bg-black p-6 text-sm text-white'>{children}</output>
-}
 
 function ViewerApp() {
   const route = parseViewerLocation(window.location.pathname, window.location.search)
@@ -33,15 +30,29 @@ function ViewerApp() {
   }, [redirectUrl])
 
   if (!route) {
-    return <ViewerState>发布地址无效。</ViewerState>
+    return (
+      <ViewerState
+        code='404 / ROUTE'
+        title='发布地址无效'
+        detail='请确认链接完整，并向发布者重新获取访问地址。'
+        tone='error'
+      />
+    )
   }
 
   if (access.status === 'misconfigured') {
-    return <ViewerState>公开 Viewer 域名未正确配置。</ViewerState>
+    return (
+      <ViewerState
+        code='503 / CONFIG'
+        title='公开 Viewer 尚未就绪'
+        detail='发布域名配置不完整，请稍后再试或联系发布者。'
+        tone='error'
+      />
+    )
   }
 
   if (access.status === 'redirect') {
-    return <ViewerState>正在跳转…</ViewerState>
+    return <ViewerState code='VIEW / REDIRECT' title='正在打开公开大屏…' detail='正在切换到独立 Viewer 域名。' />
   }
 
   return <PublicPreview {...route} />
@@ -50,8 +61,19 @@ function ViewerApp() {
 initGlobals()
 
 createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary fallback={<ViewerState>公开大屏加载失败，请稍后重试。</ViewerState>}>
-    <Suspense fallback={<ViewerState>正在加载…</ViewerState>}>
+  <ErrorBoundary
+    fallback={
+      <ViewerState
+        code='VIEW / RENDER'
+        title='公开大屏渲染失败'
+        detail='页面内容未能完成渲染，请刷新后重试。'
+        tone='error'
+        actionLabel='刷新页面'
+        onAction={() => window.location.reload()}
+      />
+    }
+  >
+    <Suspense fallback={<ViewerState code='VIEW / BOOT' title='正在启动 Viewer…' detail='正在装载大屏渲染环境。' />}>
       <ViewerApp />
     </Suspense>
   </ErrorBoundary>,

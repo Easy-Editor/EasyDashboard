@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { listProjectReleases, publishProjectRelease, unpublishProjectRelease } from './release-api'
+import {
+  listProjectReleases,
+  publishProjectRelease,
+  restoreProjectReleaseDraft,
+  unpublishProjectRelease,
+} from './release-api'
 
 const projectId = '22222222-2222-4222-8222-222222222222'
 
@@ -102,6 +107,48 @@ describe('release API', () => {
         method: 'POST',
         body: JSON.stringify({}),
       }),
+    )
+  })
+
+  it('restores a published release into the draft with optimistic concurrency', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        project: {
+          draftSchema: {
+            version: '1.0.0',
+            componentsTree: [],
+          },
+          draftVersion: 12,
+        },
+        savedAt: '2026-07-30T06:05:06.000Z',
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(restoreProjectReleaseDraft(projectId, 4, 11)).resolves.toEqual({
+      project: {
+        draftSchema: {
+          version: '1.0.0',
+          componentsTree: [],
+        },
+        draftVersion: 12,
+      },
+      savedAt: '2026-07-30T06:05:06.000Z',
+    })
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/projects/${projectId}/releases/4/restore`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ expectedVersion: 11 }),
+      }),
+    )
+  })
+
+  it('rejects a malformed release restore response instead of accepting an unknown baseline', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})))
+
+    await expect(restoreProjectReleaseDraft(projectId, 4, 11)).rejects.toThrow(
+      '发布版本恢复响应缺少项目文档、版本或保存时间',
     )
   })
 })

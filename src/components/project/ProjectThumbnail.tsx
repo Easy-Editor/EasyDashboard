@@ -52,14 +52,14 @@ export function ProjectThumbnail({ project, className }: ProjectThumbnailProps) 
               />
             ))}
           </div>
-          <div className='absolute left-[10%] top-[14%] flex items-center gap-2 text-[9px] uppercase tracking-[0.16em] text-[#668099]'>
+          <div className='absolute left-[10%] top-[14%] flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-[#668099]'>
             <span className='size-1 bg-[var(--ed-cyan)] shadow-[0_0_8px_var(--ed-cyan)]' />
             Live canvas
           </div>
         </div>
       )}
       <div className='absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-[#05080d]/92 via-[#05080d]/45 to-transparent px-3 pb-2.5 pt-8'>
-        <span className='font-mono text-[9px] tracking-[0.08em] text-[#a0afbd]'>
+        <span className='font-mono text-[11px] tracking-[0.08em] text-[#a0afbd]'>
           {project.resolution.width} × {project.resolution.height}
         </span>
         {artworkUrl && imageFailed ? <ImageOff className='size-3 text-[#687989]' aria-label='缩略图加载失败' /> : null}

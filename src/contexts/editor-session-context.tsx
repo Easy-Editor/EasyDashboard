@@ -4,6 +4,7 @@ import { buildLocalDraftExport, getBlockedNavigationAction } from '@/editor/pers
 import type { DraftSyncSnapshot } from '@/editor/persistence/draft-sync'
 import { DraftSync } from '@/editor/persistence/draft-sync'
 import { EDITOR_SAVE_REQUEST_EVENT } from '@/editor/persistence/editor-events'
+import { shouldBlockEditorNavigation } from '@/editor/persistence/editor-navigation'
 import { bindProjectMutations } from '@/editor/persistence/mutation-bridge'
 import { restoreProjectDraft } from '@/editor/persistence/restore-draft'
 import {
@@ -12,7 +13,12 @@ import {
   restoreProjectRevision,
   saveProjectDraft,
 } from '@/features/projects/project-api'
-import { type PublishedProjectRelease, publishProjectRelease } from '@/features/releases/release-api'
+import {
+  type PublishedProjectRelease,
+  type RestoredProjectReleaseDraft,
+  publishProjectRelease,
+  restoreProjectReleaseDraft,
+} from '@/features/releases/release-api'
 import { getSettings } from '@/features/settings/settings-api'
 import { type ProjectSchema, TRANSFORM_STAGE, project } from '@easy-editor/core'
 import {
@@ -25,8 +31,49 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { Link, useBlocker } from 'react-router'
+import { type BlockerFunction, Link, useBlocker } from 'react-router'
 import { toast } from 'sonner'
+
+type RestorePublishedReleaseOptions = {
+  projectId: string
+  releaseNumber: number
+  flush: () => Promise<DraftSyncSnapshot>
+  restore: (projectId: string, releaseNumber: number, expectedVersion: number) => Promise<RestoredProjectReleaseDraft>
+  reloadEditor: (schema: ProjectSchema) => Promise<void>
+  acceptBaseline: (version: number, savedAt: string) => void
+  reportConflict: (error: unknown) => void
+}
+
+export class ReleaseRestoreReloadRequiredError extends Error {
+  readonly draftVersion: number
+  readonly savedAt: string
+
+  constructor(draftVersion: number, savedAt: string, cause: unknown) {
+    super('发布版本已恢复到服务端草稿，但编辑器载入失败。请刷新页面重新加载已恢复的草稿。', { cause })
+    this.name = 'ReleaseRestoreReloadRequiredError'
+    this.draftVersion = draftVersion
+    this.savedAt = savedAt
+  }
+}
+
+export async function restorePublishedRelease(options: RestorePublishedReleaseOptions) {
+  const snapshot = await options.flush()
+  try {
+    const restored = await options.restore(options.projectId, options.releaseNumber, snapshot.version)
+    try {
+      await options.reloadEditor(restored.project.draftSchema)
+    } catch (error) {
+      throw new ReleaseRestoreReloadRequiredError(restored.project.draftVersion, restored.savedAt, error)
+    }
+    options.acceptBaseline(restored.project.draftVersion, restored.savedAt)
+    return restored.project
+  } catch (error) {
+    if (error instanceof Error && 'status' in error && error.status === 409) {
+      options.reportConflict(error)
+    }
+    throw error
+  }
+}
 
 type EditorSessionValue = {
   projectId: string
@@ -43,6 +90,7 @@ type EditorSessionValue = {
   publish: () => Promise<PublishedProjectRelease>
   createRestorePoint: () => Promise<ProjectRevision<ProjectSchema | undefined>>
   restoreRevision: (revisionId: string) => Promise<void>
+  restoreRelease: (releaseNumber: number) => Promise<void>
 }
 
 const EditorSessionContext = createContext<EditorSessionValue | null>(null)
@@ -88,7 +136,11 @@ function EditorSessionReady({
     return snapshot
   }, [sync])
 
-  const blocker = useBlocker(['dirty', 'saving', 'error', 'conflict'].includes(saveState.status))
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) => shouldBlockEditorNavigation(saveState.status, currentLocation, nextLocation),
+    [saveState.status],
+  )
+  const blocker = useBlocker(shouldBlock)
 
   useEffect(() => {
     const unbindMutations = bindProjectMutations(project, sync.markDirty)
@@ -199,6 +251,21 @@ function EditorSessionReady({
     [flush, projectId, sync],
   )
 
+  const restoreRelease = useCallback(
+    async (releaseNumber: number) => {
+      await restorePublishedRelease({
+        projectId,
+        releaseNumber,
+        flush,
+        restore: restoreProjectReleaseDraft,
+        reloadEditor: initializeEditorProject,
+        acceptBaseline: sync.acceptReloadedVersion,
+        reportConflict: sync.reportConflict,
+      })
+    },
+    [flush, projectId, sync],
+  )
+
   useEffect(() => {
     const handleSaveRequest = () => {
       void flush().catch(() => undefined)
@@ -235,6 +302,7 @@ function EditorSessionReady({
       publish,
       createRestorePoint,
       restoreRevision,
+      restoreRelease,
     }),
     [
       conflictResolutionOpen,
@@ -247,6 +315,7 @@ function EditorSessionReady({
       projectSlug,
       publish,
       reloadServerDraft,
+      restoreRelease,
       restoreRevision,
       saveState,
     ],

@@ -76,6 +76,8 @@ export async function getPublishedProject(
       errorCode: null,
     },
     savedAt: publication.publishedAt,
+    publishedAt: publication.publishedAt,
+    currentReleaseNumber: publishedVersion,
     deletedAt: null,
     updatedAt: publication.publishedAt,
     schema: document,

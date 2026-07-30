@@ -86,7 +86,7 @@ export const LifeCycleList = observer(({ rootNode }: { rootNode: Node<RootSchema
                 <Plus className='size-4' aria-hidden='true' />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align='end' className='w-64'>
+            <DropdownMenuContent data-ed-shell='editor' align='end' className='w-64'>
               {lifeCycleOptions.map(option => (
                 <DropdownMenuItem
                   key={option.name}

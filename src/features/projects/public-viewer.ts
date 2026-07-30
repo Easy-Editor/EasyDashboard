@@ -1,4 +1,4 @@
-const DEVELOPMENT_VIEWER_ORIGIN = 'http://localhost:5174'
+const DEVELOPMENT_VIEWER_ORIGIN = 'http://view.localhost:5174'
 
 export type PublicViewerAccess =
   | {

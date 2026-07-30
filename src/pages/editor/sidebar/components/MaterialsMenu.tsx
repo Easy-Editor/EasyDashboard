@@ -51,7 +51,7 @@ export const MaterialsMenu = observer(() => {
             {hasConnections && <span className='ml-1.5 h-2 w-2 rounded-full bg-green-500 animate-pulse' />}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end'>
+        <DropdownMenuContent data-ed-shell='editor' align='end'>
           <DropdownMenuItem onClick={() => setLocalDebugOpen(true)}>
             <Plug className='mr-2 h-4 w-4' />
             本地调试

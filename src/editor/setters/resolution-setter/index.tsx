@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { MAX_CANVAS_DIMENSION, clampCanvasDimension } from '@/features/projects/canvas-resolution'
 import { cn } from '@/lib/utils'
 import { project } from '@easy-editor/core'
 import { observer } from 'mobx-react'
@@ -74,14 +75,14 @@ const ResolutionSetter = observer((props: ResolutionSetterProps) => {
 
   // 自定义宽度变化
   const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const width = Math.max(1, Number.parseInt(e.target.value) || 1)
+    const width = clampCanvasDimension(Number.parseInt(e.target.value))
     setCustomWidth(width)
     setSelectedPreset('')
   }
 
   // 自定义高度变化
   const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const height = Math.max(1, Number.parseInt(e.target.value) || 1)
+    const height = clampCanvasDimension(Number.parseInt(e.target.value))
     setCustomHeight(height)
     setSelectedPreset('')
   }
@@ -140,6 +141,7 @@ const ResolutionSetter = observer((props: ResolutionSetterProps) => {
           <Input
             type='number'
             min={1}
+            max={MAX_CANVAS_DIMENSION}
             value={customWidth}
             onChange={handleWidthChange}
             onKeyDown={handleKeyDown}
@@ -154,6 +156,7 @@ const ResolutionSetter = observer((props: ResolutionSetterProps) => {
           <Input
             type='number'
             min={1}
+            max={MAX_CANVAS_DIMENSION}
             value={customHeight}
             onChange={handleHeightChange}
             onKeyDown={handleKeyDown}

@@ -11,7 +11,7 @@ const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(currentDirectory, '../../..')
 
 const previewUtilityContracts = [
-  { className: ['h', 'screen'].join('-'), declaration: 'height:100vh' },
+  { className: ['h', 'full'].join('-'), declaration: 'height:100%' },
   { className: ['w', 'full'].join('-'), declaration: 'width:100%' },
   { className: ['overflow', 'hidden'].join('-'), declaration: 'overflow:hidden' },
   { className: ['bg', 'black'].join('-'), declaration: 'background-color:' },

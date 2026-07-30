@@ -4,17 +4,37 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ArrowRight, Github } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
+import { type AuthMessage, AuthStateNotice, readLoginRouteState } from './auth-state'
 
 export function LoginPage() {
   const { signIn, startOAuth } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const requestedPath = (location.state as { from?: string } | null)?.from
-  const returnTo = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/projects'
+  const requestedPathValue = (location.state as { from?: unknown } | null)?.from
+  const requestedPath = typeof requestedPathValue === 'string' ? requestedPathValue : undefined
+  const routeState = useMemo(
+    () => readLoginRouteState(location.search, requestedPath),
+    [location.search, requestedPath],
+  )
+  const [error, setError] = useState<AuthMessage | null>(() => routeState.authError)
+  const returnTo = routeState.returnTo
+
+  useEffect(() => {
+    if (!routeState.hadAuthError) return
+    navigate(
+      {
+        pathname: location.pathname,
+        search: routeState.cleanedSearch,
+      },
+      {
+        replace: true,
+        state: location.state,
+      },
+    )
+  }, [location.pathname, location.state, navigate, routeState.cleanedSearch, routeState.hadAuthError])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -28,7 +48,17 @@ export function LoginPage() {
       })
       navigate(returnTo, { replace: true })
     } catch (reason) {
-      setError(reason instanceof ApiError && reason.status === 401 ? '邮箱或密码不正确' : '登录失败，请稍后重试')
+      setError(
+        reason instanceof ApiError && reason.status === 401
+          ? {
+              title: '邮箱或密码不正确',
+              description: '请检查输入后重新登录。',
+            }
+          : {
+              title: '暂时无法登录',
+              description: '请稍后重试，或选择第三方登录。',
+            },
+      )
     } finally {
       setSubmitting(false)
     }
@@ -77,9 +107,9 @@ export function LoginPage() {
           />
         </div>
         {error ? (
-          <p role='alert' className='border-l-2 border-[#ff7f8a] bg-[#35161d]/50 px-3 py-2 text-xs text-[#ffabb2]'>
-            {error}
-          </p>
+          <AuthStateNotice tone='error' title={error.title}>
+            {error.description}
+          </AuthStateNotice>
         ) : null}
         <Button
           type='submit'

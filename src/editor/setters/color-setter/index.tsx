@@ -46,7 +46,12 @@ const ColorSetter = ({ value, initialValue, onChange }: ColorSetterProps) => {
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent side='left' align='start' className='w-64 space-y-3 p-3'>
+      <PopoverContent
+        data-ed-shell='editor'
+        side='left'
+        align='start'
+        className='w-64 space-y-3 border-[var(--ed-line-strong)] bg-[var(--ed-panel)] p-3 text-[var(--ed-ink)]'
+      >
         <div>
           <div className='text-sm font-medium'>颜色</div>
           <p className='mt-0.5 text-xs text-muted-foreground'>可选取纯色，也可直接填写 CSS 颜色值。</p>

@@ -195,6 +195,7 @@ const EventSetter = (props: EventSetterProps) => {
                         onClick={() => handleEditEvent(eventData)}
                       />
                       <AlertModal
+                        editorScoped
                         title='确定删除吗？'
                         description='删除后，该事件绑定将无法恢复。'
                         trigger={

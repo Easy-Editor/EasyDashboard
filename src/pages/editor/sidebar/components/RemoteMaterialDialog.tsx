@@ -125,7 +125,7 @@ export const RemoteMaterialDialog = observer(({ open, onOpenChange }: RemoteMate
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-4xl max-h-[85vh] gap-4'>
+      <DialogContent data-ed-shell='editor' className='sm:max-w-4xl max-h-[85vh] gap-4'>
         <DialogHeader className='space-y-1'>
           <DialogTitle className='text-lg font-semibold tracking-tight'>远程物料管理</DialogTitle>
           <DialogDescription className='text-sm text-muted-foreground'>从 NPM/CDN 动态加载物料组件</DialogDescription>

@@ -20,13 +20,18 @@ Create a Supabase project, then apply every migration in filename order with a
 direct or Supavisor session-mode administrator connection:
 
 ```bash
-psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction \
   -f supabase/migrations/20260729052216_initial_app_schema.sql
-psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction \
   -f supabase/migrations/20260730123000_project_spaces_lifecycle_and_releases.sql
-psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction \
   -f supabase/migrations/20260730124500_thumbnail_cleanup_claim_clock_and_release.sql
 ```
+
+Run the same sequence against a disposable or staging database before applying
+it to production, and take a database backup first. `ON_ERROR_STOP` together
+with `--single-transaction` keeps each migration file atomic: any failed
+statement rolls that file back instead of leaving a partially applied schema.
 
 Use one of these administrator URL forms:
 
@@ -102,7 +107,7 @@ Do not print, commit, or reuse this value. Apply the idempotent schedule only
 after both Vault values and the deployed Function exist:
 
 ```bash
-psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction \
   -f supabase/scripts/schedule-thumbnail-cleanup.sql
 ```
 
@@ -145,6 +150,13 @@ Do not use a broad production-domain wildcard.
 These values match the `redirectTo` URLs created by `server/src/routes/auth.ts`.
 Supabase documents the allow-list requirement in its
 [Redirect URLs guide](https://supabase.com/docs/guides/auth/redirect-urls).
+
+Password recovery remains stateless across Vercel Function instances. The
+callback keeps Supabase's short-lived, single-use PKCE authorization code and
+its verifier in `Secure`, `HttpOnly`, `SameSite=Lax`, Host-only cookies for ten
+minutes. The final password mutation exchanges that code and immediately
+clears both cookies. No recovery session or bearer token is stored in
+process-local memory, browser storage, or a URL.
 
 ### GitHub provider
 

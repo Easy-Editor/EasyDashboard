@@ -4,27 +4,38 @@ import { z } from 'zod'
 import {
   clearAuthCookies,
   clearOAuthFlowCookies,
+  clearRecoveryCodeCookie,
   clearRecoveryVerifierCookie,
   readAuthCookies,
   readOAuthFlowCookies,
+  readRecoveryCodeCookie,
   readRecoveryVerifierCookie,
   writeAuthCookies,
   writeOAuthFlowCookies,
+  writeRecoveryCodeCookie,
   writeRecoveryVerifierCookie,
 } from '../auth/cookies.js'
 import { ApiError, readJson } from '../http.js'
 import type { AppVariables } from '../middleware/auth.js'
-import type { AuthService, OAuthProvider, PersonalSpaceProvisioner } from '../types.js'
+import type { AuthService, AuthSession, OAuthProvider, PersonalSpaceProvisioner } from '../types.js'
 import { credentialsSchema } from '../validation.js'
 
 const oauthProviders = new Set<OAuthProvider>(['github', 'google'])
 const emailSchema = z.object({ email: z.email().max(320) })
 const passwordSchema = z.object({ password: z.string().min(8).max(256) })
+const recoveryCodeSchema = z.string().min(1).max(2048)
 
 type AuthRouteOptions = {
   appOrigin: string
   provisionPersonalSpace?: PersonalSpaceProvisioner
 }
+
+type OAuthFailure =
+  | 'oauth_callback_invalid'
+  | 'oauth_exchange_failed'
+  | 'oauth_provider_unsupported'
+  | 'oauth_start_failed'
+  | 'oauth_state_invalid'
 
 function internalReturnTo(value: string | undefined): string {
   if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/projects'
@@ -35,6 +46,19 @@ function internalReturnTo(value: string | undefined): string {
   } catch {
     return '/projects'
   }
+}
+
+function authFailureRedirect(appOrigin: string, authError: OAuthFailure, returnTo?: string): string {
+  const location = new URL('/login', appOrigin)
+  location.searchParams.set('authError', authError)
+  location.searchParams.set('returnTo', internalReturnTo(returnTo))
+  return location.toString()
+}
+
+function recoveryFailureRedirect(appOrigin: string): string {
+  const location = new URL('/reset-password', appOrigin)
+  location.searchParams.set('status', 'invalid')
+  return location.toString()
 }
 
 function statesMatch(received: string | undefined, expected: string | undefined): boolean {
@@ -108,11 +132,11 @@ export function createAuthRoutes(auth: AuthService, options: AuthRouteOptions) {
     const flow = readOAuthFlowCookies(c)
     clearOAuthFlowCookies(c)
     if (!statesMatch(c.req.query('state'), flow.state)) {
-      return c.json({ error: { code: 'INVALID_OAUTH_STATE', message: 'OAuth state is invalid or expired' } }, 400)
+      return c.redirect(authFailureRedirect(options.appOrigin, 'oauth_state_invalid', flow.returnTo))
     }
     const code = c.req.query('code')
     if (!code || !flow.codeVerifier) {
-      return c.json({ error: { code: 'INVALID_OAUTH_CALLBACK', message: 'OAuth callback is incomplete' } }, 400)
+      return c.redirect(authFailureRedirect(options.appOrigin, 'oauth_callback_invalid', flow.returnTo))
     }
 
     try {
@@ -121,18 +145,19 @@ export function createAuthRoutes(auth: AuthService, options: AuthRouteOptions) {
       writeAuthCookies(c, session)
       return c.redirect(new URL(internalReturnTo(flow.returnTo), options.appOrigin).toString())
     } catch {
-      return c.json({ error: { code: 'OAUTH_EXCHANGE_FAILED', message: 'OAuth sign-in could not be completed' } }, 400)
+      return c.redirect(authFailureRedirect(options.appOrigin, 'oauth_exchange_failed', flow.returnTo))
     }
   })
 
   routes.get('/oauth/:provider', async c => {
     const provider = c.req.param('provider')
+    const returnTo = internalReturnTo(c.req.query('returnTo'))
     if (!oauthProviders.has(provider as OAuthProvider)) {
-      return c.json({ error: { code: 'OAUTH_PROVIDER_NOT_ALLOWED', message: 'OAuth provider is not allowed' } }, 404)
+      clearOAuthFlowCookies(c)
+      return c.redirect(authFailureRedirect(options.appOrigin, 'oauth_provider_unsupported', returnTo))
     }
 
     const state = randomBytes(32).toString('base64url')
-    const returnTo = internalReturnTo(c.req.query('returnTo'))
     const callback = new URL('/api/auth/oauth/callback', options.appOrigin)
     callback.searchParams.set('state', state)
 
@@ -141,12 +166,14 @@ export function createAuthRoutes(auth: AuthService, options: AuthRouteOptions) {
       writeOAuthFlowCookies(c, { state, codeVerifier: flow.codeVerifier, returnTo })
       return c.redirect(flow.url)
     } catch {
-      return c.json({ error: { code: 'OAUTH_START_FAILED', message: 'OAuth sign-in could not be started' } }, 502)
+      clearOAuthFlowCookies(c)
+      return c.redirect(authFailureRedirect(options.appOrigin, 'oauth_start_failed', returnTo))
     }
   })
 
   routes.post('/forgot-password', async c => {
     const { email } = await readJson(c, emailSchema)
+    clearRecoveryCodeCookie(c)
     try {
       const callback = new URL('/api/auth/password/callback', options.appOrigin).toString()
       const { codeVerifier } = await auth.requestPasswordReset(email, callback)
@@ -160,35 +187,39 @@ export function createAuthRoutes(auth: AuthService, options: AuthRouteOptions) {
 
   routes.get('/password/callback', async c => {
     const codeVerifier = readRecoveryVerifierCookie(c)
-    clearRecoveryVerifierCookie(c)
-    const code = c.req.query('code')
-    if (!code || !codeVerifier) {
-      return c.json(
-        { error: { code: 'INVALID_RECOVERY_CALLBACK', message: 'Password recovery link is invalid or expired' } },
-        400,
-      )
+    const code = recoveryCodeSchema.safeParse(c.req.query('code'))
+    if (!code.success || !codeVerifier) {
+      clearRecoveryCodeCookie(c)
+      clearRecoveryVerifierCookie(c)
+      return c.redirect(recoveryFailureRedirect(options.appOrigin))
     }
-    try {
-      const session = await auth.exchangeCode(code, codeVerifier)
-      await provisionPersonalSpace(session.user)
-      writeAuthCookies(c, session)
-      return c.redirect(new URL('/reset-password', options.appOrigin).toString())
-    } catch {
-      return c.json(
-        { error: { code: 'RECOVERY_EXCHANGE_FAILED', message: 'Password recovery could not be completed' } },
-        400,
-      )
-    }
+    // Keep the short-lived, single-use PKCE code unexchanged until the password
+    // mutation request. This remains correct across serverless instances and
+    // never stores a user session in process-global memory.
+    writeRecoveryCodeCookie(c, code.data)
+    writeRecoveryVerifierCookie(c, codeVerifier)
+    const location = new URL('/reset-password', options.appOrigin)
+    location.searchParams.set('status', 'ready')
+    return c.redirect(location.toString())
   })
 
   routes.post('/reset-password', async c => {
     const { password } = await readJson(c, passwordSchema)
-    const { accessToken, refreshToken } = readAuthCookies(c)
-    if (!accessToken || !refreshToken) {
+    const recoveryCode = readRecoveryCodeCookie(c)
+    const recoveryVerifier = readRecoveryVerifierCookie(c)
+    clearRecoveryCodeCookie(c)
+    clearRecoveryVerifierCookie(c)
+    if (!recoveryCode || !recoveryVerifier) {
+      throw new ApiError(401, 'RECOVERY_SESSION_REQUIRED', 'Password recovery session is missing or expired')
+    }
+    let recoverySession: AuthSession
+    try {
+      recoverySession = await auth.exchangeCode(recoveryCode, recoveryVerifier)
+    } catch {
       throw new ApiError(401, 'RECOVERY_SESSION_REQUIRED', 'Password recovery session is missing or expired')
     }
     try {
-      const session = await auth.updatePassword(accessToken, refreshToken, password)
+      const session = await auth.updatePassword(recoverySession.accessToken, recoverySession.refreshToken, password)
       writeAuthCookies(c, session)
       return c.body(null, 204)
     } catch {

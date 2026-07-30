@@ -61,7 +61,7 @@ export const CanvasToolbar: FC<CanvasToolbarProps> = observer(({ onFitWidth, min
   }
 
   return (
-    <div className='absolute bottom-3 left-1/2 z-20 flex h-8 -translate-x-1/2 items-center gap-1 rounded-[7px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)]/95 px-1 shadow-[0_8px_28px_rgba(0,0,0,0.38)] backdrop-blur'>
+    <div className='absolute bottom-3 left-1/2 z-20 flex h-[var(--ed-canvas-hud-height)] -translate-x-1/2 items-center gap-1 rounded-[7px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)]/95 px-1 shadow-[0_8px_28px_rgba(0,0,0,0.38)] backdrop-blur'>
       <Popover>
         <PopoverTrigger asChild>
           <Button

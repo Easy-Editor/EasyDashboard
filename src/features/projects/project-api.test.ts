@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createProjectRestorePoint,
+  deleteProjectPermanently,
   duplicateProject,
   listProjectRestorePoints,
   listProjects,
@@ -45,6 +46,8 @@ describe('project product API', () => {
             isFavorite: true,
             publicationSlug: 'operations-stable',
             isPublished: true,
+            publishedAt: '2026-07-30T03:05:06.000Z',
+            currentReleaseNumber: 4,
             thumbnailMode: 'auto',
             thumbnailStatus: 'ready',
             thumbnailUrl: 'https://assets.example.com/operations.webp',
@@ -67,6 +70,8 @@ describe('project product API', () => {
       isFavorite: true,
       slug: 'operations-stable',
       state: 'published',
+      publishedAt: '2026-07-30T03:05:06.000Z',
+      currentReleaseNumber: 4,
       thumbnail: {
         mode: 'auto',
         status: 'ready',
@@ -114,6 +119,18 @@ describe('project product API', () => {
       [`/api/projects/${projectId}`, 'DELETE'],
       [`/api/projects/${projectId}/restore`, 'POST'],
     ])
+  })
+
+  it('uses the explicit permanent-delete endpoint for a confirmed trash action', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetch)
+
+    await deleteProjectPermanently(projectId)
+
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/projects/${projectId}/permanent`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 
   it('uses server-confirmed save time and persistent restore-point endpoints', async () => {

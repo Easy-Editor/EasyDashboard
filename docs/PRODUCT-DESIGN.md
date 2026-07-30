@@ -1,6 +1,6 @@
 # EasyDashboard Product Design
 
-Status: Phase 0 visual direction approved
+Status: Phase 0 visual foundation implemented
 
 Scope: desktop product shell, editor workspace, preview, and publishing
 
@@ -331,9 +331,10 @@ The target draft preview:
 - can deep-link with `?page=<pageId>`;
 - never exposes unpublished content through the public viewer.
 
-The current editor action already opens a new tab and supports the page query.
-The preview-level selector and same behavior from every workspace entry point
-remain implementation gaps tracked in the screen matrix.
+The editor and workspace preview actions open a new tab. Draft preview provides
+a project-page selector, preserves `?page=<pageId>`, reports invalid page
+references without losing the project, and exposes fit/scale controls without
+adding editor chrome.
 
 ### Publishing links
 
@@ -358,9 +359,12 @@ access then returns a deliberate 404 state.
 | Restore points | persistent draft history | recover saved automatic or manual states |
 | Releases | immutable publication history | inspect what was publicly available |
 
-Restoring a persistent draft creates a pre-restore backup. Release history is
-currently viewable; a release rollback API may exist, but rollback is not shown
-as a current front-end capability until the UI is implemented and tested.
+Restoring a persistent draft creates a pre-restore backup. An immutable release
+can also be restored into the current draft: the server first creates a
+`pre_restore` backup, then replaces the full multi-page draft using optimistic
+version checking. This operation never moves or republishes the public pointer;
+the stable and immutable public URLs keep serving the previously published
+content until the user explicitly publishes a new version.
 
 ## Authentication
 

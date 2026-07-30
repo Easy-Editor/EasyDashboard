@@ -49,9 +49,9 @@ actual product logo and bundled Alibaba fonts from this repository.
 | Product design | Phase 0 approved | product core and visual contract |
 | Screen matrix | Active | desktop page and state coverage |
 | Visual foundations | Active | inspectable calibration boards |
-| Components | Pending | reusable shell and editor component specifications |
-| Key-screen prototypes | Pending | editor, project space, authentication, publishing |
-| Runtime implementation | Separate execution phase | apply and browser-test the design |
+| Components | Runtime baseline active | shared shell and core editor geometry use Phase 0 tokens |
+| Key-screen prototypes | Runtime baseline active | authentication, project space, editor, preview, and publishing are implemented |
+| Runtime implementation | Active | converge remaining states and verify them in a real browser |
 
 ## Review rules
 
