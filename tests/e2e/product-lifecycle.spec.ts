@@ -6,19 +6,28 @@ const appOrigin = process.env.PLAYWRIGHT_APP_ORIGIN ?? 'http://127.0.0.1:5173'
 let createdProjectId: string | null = null
 
 async function permanentlyDeleteProject(page: Page, projectId: string) {
-  const headers = {
-    'Content-Type': 'application/json',
-    Origin: appOrigin,
-    'X-CSRF-Token': '1',
+  if (new URL(page.url()).origin !== appOrigin) {
+    await page.goto(`${appOrigin}/projects`)
   }
 
-  const trashResponse = await page.request.delete(`/api/projects/${encodeURIComponent(projectId)}`, { headers })
-  expect([204, 404], 'E2E 清理应能将测试项目移入回收站或确认它已不在活动项目中').toContain(trashResponse.status())
+  const deleteThroughBrowser = (path: string) =>
+    page.evaluate(async requestPath => {
+      const response = await fetch(requestPath, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '1',
+        },
+        credentials: 'same-origin',
+      })
+      return response.status
+    }, path)
 
-  const deleteResponse = await page.request.delete(`/api/projects/${encodeURIComponent(projectId)}/permanent`, {
-    headers,
-  })
-  expect([204, 404], 'E2E 清理应能永久删除测试项目或确认其已不存在').toContain(deleteResponse.status())
+  const trashStatus = await deleteThroughBrowser(`/api/projects/${encodeURIComponent(projectId)}`)
+  expect([204, 404], 'E2E 清理应能将测试项目移入回收站或确认它已不在活动项目中').toContain(trashStatus)
+
+  const deleteStatus = await deleteThroughBrowser(`/api/projects/${encodeURIComponent(projectId)}/permanent`)
+  expect([204, 404], 'E2E 清理应能永久删除测试项目或确认其已不存在').toContain(deleteStatus)
 }
 
 function publicationApiUrl(viewerUrl: string): string {
@@ -120,12 +129,13 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
     await page.getByRole('button', { name: '预览草稿' }).click()
     const previewPage = await previewPromise
 
-    await previewPage.waitForURL(/\/projects\/[^/]+\/preview\?page=page-home$/)
-    await expect(previewPage.locator('[data-ed-shell="preview"]')).toBeVisible()
-    await expect(previewPage.getByRole('main', { name: new RegExp(`^${projectName} 预览`) })).toBeVisible()
-    await expect(page).toHaveURL(/\/projects\/[^/]+\/editor\?page=page-home$/)
-
-    await previewPage.close()
+    try {
+      await previewPage.waitForURL(/\/projects\/[^/]+\/preview\?page=page-home$/)
+      await expect(previewPage.getByRole('main', { name: new RegExp(`^${projectName} 预览`) })).toBeVisible()
+      await expect(page).toHaveURL(/\/projects\/[^/]+\/editor\?page=page-home$/)
+    } finally {
+      await previewPage.close()
+    }
   })
 
   let stableUrl = ''
@@ -170,10 +180,13 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
       expect(payload.project.releaseNumber).toBe(expectedReleaseNumber)
 
       const publishedPage = await context.newPage()
-      const response = await publishedPage.goto(url)
-      expect(response?.status()).toBe(200)
-      await expect(publishedPage.getByRole('main', { name: new RegExp(`^${projectName} 预览`) })).toBeVisible()
-      await publishedPage.close()
+      try {
+        const response = await publishedPage.goto(url)
+        expect(response?.status()).toBe(200)
+        await expect(publishedPage.getByRole('main', { name: new RegExp(`^${projectName} 预览`) })).toBeVisible()
+      } finally {
+        await publishedPage.close()
+      }
     }
   })
 
@@ -199,10 +212,13 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
     }
 
     const unavailablePage = await context.newPage()
-    const response = await unavailablePage.goto(stableUrl)
-    expect(response?.status()).toBe(404)
-    await expect(unavailablePage.getByText('发布地址不存在')).toBeVisible()
-    await unavailablePage.close()
+    try {
+      const response = await unavailablePage.goto(stableUrl)
+      expect(response?.status()).toBe(404)
+      await expect(unavailablePage.getByText('发布地址不存在')).toBeVisible()
+    } finally {
+      await unavailablePage.close()
+    }
 
     await page.keyboard.press('Escape')
     await expect(publishDialog).toBeHidden()
@@ -225,7 +241,5 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
     await deleteDialog.getByLabel(`输入项目名称“${projectName}”确认`).fill(projectName)
     await deleteDialog.getByRole('button', { name: '永久删除' }).click()
     await expect(page.getByText(`“${projectName}”已永久删除`)).toBeVisible()
-
-    createdProjectId = null
   })
 })

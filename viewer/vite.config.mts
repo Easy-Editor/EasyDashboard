@@ -2,13 +2,13 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { type Plugin, defineConfig } from 'vite'
+import { type Plugin, defineConfig, loadEnv } from 'vite'
 import { probePublicViewerAccess, publicViewerErrorResponse } from './public-access-gate'
 
 const repositoryRoot = path.resolve(__dirname, '..')
 const viewerFonts = ['AlibabaSans-Regular.woff2', 'AlibabaPuHuiTi-3-55-Regular.woff2']
 
-function cookieLessViewerBuild(): Plugin {
+function cookieLessViewerBuild(publicApiOrigin: string | undefined): Plugin {
   let isBuild = false
 
   return {
@@ -23,7 +23,7 @@ function cookieLessViewerBuild(): Plugin {
 
         void probePublicViewerAccess({
           pathname,
-          apiOrigin: process.env.VITE_PUBLIC_API_ORIGIN,
+          apiOrigin: publicApiOrigin,
         })
           .then(async result => {
             if (result.status === 'allow') {
@@ -82,52 +82,57 @@ function cookieLessViewerBuild(): Plugin {
   }
 }
 
-export default defineConfig({
-  publicDir: false,
-  plugins: [
-    react({
-      babel: {
-        exclude: 'node_modules/**',
-        babelrc: false,
-        presets: [
-          [
-            '@babel/preset-typescript',
-            {
-              allowDeclareFields: true,
-            },
+export default defineConfig(({ mode }) => {
+  const environment = loadEnv(mode, repositoryRoot, 'VITE_')
+
+  return {
+    envDir: repositoryRoot,
+    publicDir: false,
+    plugins: [
+      react({
+        babel: {
+          exclude: 'node_modules/**',
+          babelrc: false,
+          presets: [
+            [
+              '@babel/preset-typescript',
+              {
+                allowDeclareFields: true,
+              },
+            ],
           ],
-        ],
-        plugins: [
-          [
-            '@babel/plugin-proposal-decorators',
-            {
-              version: '2023-11',
-            },
+          plugins: [
+            [
+              '@babel/plugin-proposal-decorators',
+              {
+                version: '2023-11',
+              },
+            ],
           ],
-        ],
+        },
+      }),
+      tailwindcss(),
+      cookieLessViewerBuild(environment.VITE_PUBLIC_API_ORIGIN),
+    ],
+    resolve: {
+      alias: {
+        '@': path.resolve(repositoryRoot, 'src'),
       },
-    }),
-    tailwindcss(),
-    cookieLessViewerBuild(),
-  ],
-  resolve: {
-    alias: {
-      '@': path.resolve(repositoryRoot, 'src'),
     },
-  },
-  server: {
-    port: 5174,
-    strictPort: true,
-    fs: {
-      allow: [repositoryRoot],
+    server: {
+      port: 5174,
+      strictPort: true,
+      fs: {
+        allow: [repositoryRoot],
+      },
     },
-  },
-  build: {
-    target: 'esnext',
-    modulePreload: {
-      polyfill: false,
+    build: {
+      target: 'esnext',
+      modulePreload: {
+        polyfill: false,
+      },
+      outDir: path.resolve(__dirname, 'dist'),
+      emptyOutDir: true,
     },
-    outDir: path.resolve(__dirname, 'dist'),
-    emptyOutDir: true,
-  },
+  }
 })
