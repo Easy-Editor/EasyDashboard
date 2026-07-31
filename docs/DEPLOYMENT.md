@@ -224,7 +224,7 @@ VITE_PUBLIC_VIEWER_ORIGIN=https://view.example.com
 ENABLE_EXPERIMENTAL_COREPACK=1
 SUPABASE_URL=https://<PROJECT_REF>.supabase.co
 SUPABASE_PUBLISHABLE_KEY=<SUPABASE_PUBLISHABLE_KEY>
-DATABASE_URL=postgresql://easy_dashboard_runtime.<PROJECT_REF>:<PASSWORD>@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require
+DATABASE_URL=postgresql://easy_dashboard_runtime.<PROJECT_REF>:<PASSWORD>@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require&uselibpqcompat=true
 ```
 
 `APP_ORIGIN` is an exact security boundary for private requests and
