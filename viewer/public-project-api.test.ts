@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getPublishedProject } from './public-project-api'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  vi.resetModules()
 })
 
 describe('getPublishedProject', () => {
   it('loads stable and numbered publications without credentials', async () => {
+    vi.stubEnv('VITE_PUBLIC_API_ORIGIN', '')
+    const { getPublishedProject } = await import('./public-project-api')
     const fetch = vi.fn().mockImplementation(
       async () =>
         new Response(
@@ -53,6 +56,8 @@ describe('getPublishedProject', () => {
   })
 
   it('surfaces a clean not-found error', async () => {
+    vi.stubEnv('VITE_PUBLIC_API_ORIGIN', '')
+    const { getPublishedProject } = await import('./public-project-api')
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
