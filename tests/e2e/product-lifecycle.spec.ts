@@ -83,6 +83,8 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
     await page.getByRole('button', { name: '新建项目' }).click()
     const dialog = page.getByRole('dialog', { name: '新建项目' })
     await expect(dialog).toBeVisible()
+    await expect(dialog).toHaveCSS('background-color', 'rgb(18, 27, 38)')
+    await expect(dialog).toHaveCSS('opacity', '1')
     await dialog.getByLabel('项目名称').fill(projectName)
     await dialog.getByLabel('说明').fill('Playwright 产品闭环回归项目')
     await dialog.getByRole('button', { name: '创建并打开' }).click()
