@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress'
 import { project } from '@easy-editor/core'
 import { RefreshCw } from 'lucide-react'
 import { observer } from 'mobx-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { type VersionCheckResult, versionManager } from '../../../editor/remote/managers'
 
@@ -30,7 +30,7 @@ export const UpdateCheckDialog = observer(({ open, onOpenChange }: UpdateCheckDi
   const [updateProgress, setUpdateProgress] = useState(0)
 
   // 检查所有组件更新
-  const handleCheckAll = async () => {
+  const handleCheckAll = useCallback(async () => {
     const currentDoc = project.currentDocument
     if (!currentDoc || !currentDoc.rootNode) {
       setError('未找到当前文档')
@@ -54,14 +54,14 @@ export const UpdateCheckDialog = observer(({ open, onOpenChange }: UpdateCheckDi
     } finally {
       setChecking(false)
     }
-  }
+  }, [])
 
   // 打开对话框时自动检查
   useEffect(() => {
     if (open) {
-      handleCheckAll()
+      void handleCheckAll()
     }
-  }, [open])
+  }, [open, handleCheckAll])
 
   // 切换选择
   const toggleSelection = (nodeId: string) => {
@@ -134,7 +134,7 @@ export const UpdateCheckDialog = observer(({ open, onOpenChange }: UpdateCheckDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-2xl max-h-[80vh] flex flex-col'>
+      <DialogContent data-ed-shell='editor' className='max-w-2xl max-h-[80vh] flex flex-col'>
         <DialogHeader>
           <DialogTitle>检查组件更新</DialogTitle>
           <DialogDescription>检查并更新画布中的远程组件到最新版本</DialogDescription>

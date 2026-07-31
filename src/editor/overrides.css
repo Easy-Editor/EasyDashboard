@@ -12,24 +12,45 @@
   }
 }
 
-/* 组件选中框发光效果 */
-.lc-simulator .lc-selected-box {
-  border: 1px solid var(--foreground) !important;
-  box-shadow: var(--glow-md) var(--glow-color-active), inset 0 0 0 1px var(--foreground) !important;
+/* Precision Canvas 状态色 */
+.lc-simulator {
+  --color-brand: var(--ed-blue);
+  --color-canvas-guide: var(--ed-cyan);
+  --color-canvas-user-guide: #f59e0b;
+  --color-canvas-user-guide-hover: #fbbf24;
+  --color-canvas-locked: #f59e0b;
+  --color-canvas-locked-surface: var(--background);
 }
 
-/* 调整手柄发光 */
-.lc-simulator .lc-resize-handle {
+/* 真实 renderer selector：单选实线、多选青色虚线、锁定琥珀虚线 */
+.lc-simulator .lc-borders-selecting {
+  border: 1px solid var(--color-brand) !important;
+  box-shadow: none !important;
+}
+
+.lc-simulator .lc-borders-selecting.multi-select {
+  border-style: dashed !important;
+  border-color: var(--color-canvas-guide) !important;
+}
+
+.lc-simulator .lc-borders-detecting.locked,
+.lc-simulator .lc-borders-selecting.locked {
+  border-style: dashed !important;
+  border-color: var(--color-canvas-locked) !important;
+}
+
+/* 真实 renderer selector：精确方形缩放手柄，不使用发光 */
+.lc-simulator .lc-resize-corner,
+.lc-simulator .lc-resize-side::after {
   background: var(--background) !important;
-  border: 1.5px solid var(--foreground) !important;
-  border-radius: var(--radius-tech) !important;
-  box-shadow: var(--glow-sm) var(--glow-color-active) !important;
-  transition: transform var(--transition-fast) var(--ease-tech) !important;
+  border: 1px solid var(--color-brand) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
-.lc-simulator .lc-resize-handle:hover {
-  transform: scale(1.2) !important;
-  box-shadow: var(--glow-md) var(--glow-color-active) !important;
+.lc-simulator .lc-resize-corner:hover,
+.lc-simulator .lc-resize-side:hover::after {
+  background: var(--color-brand) !important;
 }
 
 /* 修复画布截断问题 - 大分辨率时不被截断 */
@@ -39,6 +60,17 @@
 
 .lc-simulator .lc-simulator-canvas {
   overflow: visible !important;
+  box-shadow: none !important;
+}
+
+/*
+ * The page viewport itself is scaled by the renderer. Compensating for that
+ * scale keeps its outline at one physical screen pixel instead of letting it
+ * disappear when a 1920×1080 page is fitted into the workbench.
+ */
+.lc-simulator .lc-simulator-canvas-viewport {
+  box-shadow: 0 0 0 calc(1px / var(--scale, 1)) var(--ed-line-strong), 0 calc(12px / var(--scale, 1))
+    calc(32px / var(--scale, 1)) rgb(0 0 0 / 0.28) !important;
 }
 
 .lc-simulator .lc-simulator-content {

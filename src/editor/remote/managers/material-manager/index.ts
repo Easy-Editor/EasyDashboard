@@ -89,7 +89,9 @@ class MaterialManagerClass {
 
       return { total: configs.length, succeeded, failed }
     } finally {
-      this.isLoading = false
+      runInAction(() => {
+        this.isLoading = false
+      })
     }
   }
 
@@ -148,7 +150,9 @@ class MaterialManagerClass {
 
       return { total: configs.length, succeeded, failed }
     } finally {
-      this.isLoading = false
+      runInAction(() => {
+        this.isLoading = false
+      })
     }
   }
 

@@ -38,7 +38,7 @@ interface EventSetterProps extends SetterProps<Event> {
 const EventSetter = (props: EventSetterProps) => {
   const { value, onChange, events, field } = props
   const node = field.getNode()
-  const methods = node.document?.rootNode?.getExtraPropValue('methods') as Record<string, JSFunction>
+  const methods = node.document?.rootNode?.getExtraPropValue('methods') as Record<string, JSFunction> | null | undefined
 
   // 这里需要使用 key 来触发重新渲染，让 select 保持 undefined
   const [openKey, setOpenKey] = useState(0)
@@ -195,6 +195,7 @@ const EventSetter = (props: EventSetterProps) => {
                         onClick={() => handleEditEvent(eventData)}
                       />
                       <AlertModal
+                        editorScoped
                         title='确定删除吗？'
                         description='删除后，该事件绑定将无法恢复。'
                         trigger={

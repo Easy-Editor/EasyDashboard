@@ -1,0 +1,322 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 52b92397e342434393cd443f13064c217abf9192..7907ce83b54e2578fd37f71beb3736a29e84655d 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -6077,19 +6077,36 @@ const Layout = mobxReact.observer(props => {
+     children: children
+   });
+ });
+-const RouteList = mobxReact.observer(props => {
+-  const {
+-    simulatorRenderer
+-  } = props;
++const RouteList = props => {
+   return /*#__PURE__*/jsxRuntime.jsx(Routes, {
+-    children: simulatorRenderer.documentInstances.map(inst => /*#__PURE__*/jsxRuntime.jsx(Route, {
+-      path: inst.path,
+-      element: /*#__PURE__*/jsxRuntime.jsx(Renderer, {
+-        documentInstance: inst,
+-        simulatorRenderer: simulatorRenderer
++    children: /*#__PURE__*/jsxRuntime.jsx(Route, {
++      path: "*",
++      element: /*#__PURE__*/jsxRuntime.jsx(DocumentRoute, {
++        simulatorRenderer: props.simulatorRenderer
+       })
+-    }, inst.path))
++    })
+   });
++};
++const DocumentRoute = mobxReact.observer(props => {
++  const {
++    simulatorRenderer
++  } = props;
++  const {
++    pathname
++  } = useLocation();
++  const {
++    documentInstances,
++    host
++  } = simulatorRenderer;
++  const currentDocumentId = host.currentDocument?.id;
++  const documentInstance = documentInstances.find(instance => instance.path === pathname) ?? documentInstances.find(instance => instance.document.id === currentDocumentId) ?? documentInstances[0];
++  if (!documentInstance) {
++    return null;
++  }
++  return /*#__PURE__*/jsxRuntime.jsx(Renderer, {
++    documentInstance: documentInstance,
++    simulatorRenderer: simulatorRenderer
++  }, documentInstance.document.id);
+ });
+ const Renderer = mobxReact.observer(class Renderer extends React3.Component {
+   startTime = null;
+@@ -6506,6 +6523,7 @@ class SimulatorRendererContainer {
+   autoRender = (_init_extra__componentsMap(this), true);
+   autoRepaintNode = true;
+   _running = false;
++  _root;
+   host;
+   mount(host) {
+     this.host = host;
+@@ -6532,21 +6550,36 @@ class SimulatorRendererContainer {
+     }));
+     const documentInstanceMap = new Map();
+     this.disposeFunctions.push(this.host.autorun(() => {
++      const staleDocumentInstances = [];
+       mobx.runInAction(() => {
+-        this._documentInstances = this.host.project.documents.map(doc => {
+-          let inst = documentInstanceMap.get(doc.id);
+-          if (!inst) {
+-            inst = new DocumentInstance(this, doc);
+-            documentInstanceMap.set(doc.id, inst);
++        const nextDocumentInstanceMap = new Map();
++        this._documentInstances = this.host.project.documents.map(document => {
++          const cachedInstance = documentInstanceMap.get(document.id);
++          if (cachedInstance?.document === document) {
++            nextDocumentInstanceMap.set(document.id, cachedInstance);
++            return cachedInstance;
+           }
+-          return inst;
++          if (cachedInstance) {
++            staleDocumentInstances.push(cachedInstance);
++          }
++          const nextInstance = new DocumentInstance(this, document);
++          nextDocumentInstanceMap.set(document.id, nextInstance);
++          return nextInstance;
+         });
++        for (const [documentId, documentInstance] of documentInstanceMap) {
++          if (!nextDocumentInstanceMap.has(documentId)) {
++            staleDocumentInstances.push(documentInstance);
++          }
++        }
++        documentInstanceMap.clear();
++        for (const [documentId, documentInstance] of nextDocumentInstanceMap) {
++          documentInstanceMap.set(documentId, documentInstance);
++        }
+       });
++      staleDocumentInstances.forEach(documentInstance => documentInstance.dispose());
+       const path = this.host.project.currentDocument ? documentInstanceMap.get(this.host.project.currentDocument.id).path : '/';
+       if (this.history.location.pathname !== path) {
+-        this.history.push(path, {
+-          replace: true
+-        });
++        this.history.replace(path);
+       }
+     }));
+     const history = createMemoryHistory({
+@@ -6616,7 +6649,8 @@ class SimulatorRendererContainer {
+         container.id = containerId;
+       }
+     }
+-    client.createRoot(container).render(/*#__PURE__*/React3.createElement(SimulatorRendererView, {
++    this._root = client.createRoot(container);
++    this._root.render(/*#__PURE__*/React3.createElement(SimulatorRendererView, {
+       simulatorRenderer: this
+     }));
+     this.host.project.setRendererReady(this);
+@@ -6634,13 +6668,23 @@ class SimulatorRendererContainer {
+     this.autoRepaintNode = true;
+   }
+   dispose() {
+-    this.disposeFunctions.forEach(fn => fn());
++    this.disposeFunctions.splice(0).forEach(fn => fn());
++    this._root?.unmount();
++    this._root = undefined;
++    this._running = false;
+     this.documentInstances.forEach(docInst => docInst.dispose());
+-    mobx.untracked(() => {
++    mobx.runInAction(() => {
++      this._documentInstances = [];
++      this._layout = null;
++      this._libraryMap = {};
+       this._componentsMap = {};
+       this._components = null;
+       this._appContext = {};
+     });
++    if (this.host?.renderer === this) {
++      this.host.purge();
++      this.host.project.isRendererReady = false;
++    }
+   }
+ }
+ const getReactInternalFiber = el => {
+@@ -8463,6 +8507,7 @@ const Canvas = mobxReact.observer(({
+   const {
+     viewport
+   } = host;
++  const [renderer] = React3.useState(() => new SimulatorRendererContainer());
+   const canvasRef = React3.useRef(null);
+   const viewportRef = React3.useRef(null);
+   const {
+@@ -8496,8 +8541,9 @@ const Canvas = mobxReact.observer(({
+ 
+   React3.useEffect(() => {
+     viewport.mount(viewportRef.current);
+-    simulatorRenderer.mount(host);
+-  }, []);
++    renderer.mount(host);
++    return () => setTimeout(() => renderer.dispose(), 0);
++  }, [host, renderer, viewport]);
+   return /*#__PURE__*/jsxRuntime.jsx("div", {
+     ref: canvasRef,
+     className: classnames('lc-simulator-canvas', `lc-simulator-device-${host.device}`, host.deviceClassName),
+diff --git a/dist/index.js b/dist/index.js
+index a9b75de33c9291d0afa453f6160e334bd33f816d..73e334fbcbac4b8abf164a628698316b88deaa80 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -6057,19 +6057,36 @@ const Layout = observer(props => {
+     children: children
+   });
+ });
+-const RouteList = observer(props => {
+-  const {
+-    simulatorRenderer
+-  } = props;
++const RouteList = props => {
+   return /*#__PURE__*/jsx(Routes, {
+-    children: simulatorRenderer.documentInstances.map(inst => /*#__PURE__*/jsx(Route, {
+-      path: inst.path,
+-      element: /*#__PURE__*/jsx(Renderer, {
+-        documentInstance: inst,
+-        simulatorRenderer: simulatorRenderer
++    children: /*#__PURE__*/jsx(Route, {
++      path: "*",
++      element: /*#__PURE__*/jsx(DocumentRoute, {
++        simulatorRenderer: props.simulatorRenderer
+       })
+-    }, inst.path))
++    })
+   });
++};
++const DocumentRoute = observer(props => {
++  const {
++    simulatorRenderer
++  } = props;
++  const {
++    pathname
++  } = useLocation();
++  const {
++    documentInstances,
++    host
++  } = simulatorRenderer;
++  const currentDocumentId = host.currentDocument?.id;
++  const documentInstance = documentInstances.find(instance => instance.path === pathname) ?? documentInstances.find(instance => instance.document.id === currentDocumentId) ?? documentInstances[0];
++  if (!documentInstance) {
++    return null;
++  }
++  return /*#__PURE__*/jsx(Renderer, {
++    documentInstance: documentInstance,
++    simulatorRenderer: simulatorRenderer
++  }, documentInstance.document.id);
+ });
+ const Renderer = observer(class Renderer extends Component {
+   startTime = null;
+@@ -6486,6 +6503,7 @@ class SimulatorRendererContainer {
+   autoRender = (_init_extra__componentsMap(this), true);
+   autoRepaintNode = true;
+   _running = false;
++  _root;
+   host;
+   mount(host) {
+     this.host = host;
+@@ -6512,21 +6530,36 @@ class SimulatorRendererContainer {
+     }));
+     const documentInstanceMap = new Map();
+     this.disposeFunctions.push(this.host.autorun(() => {
++      const staleDocumentInstances = [];
+       runInAction(() => {
+-        this._documentInstances = this.host.project.documents.map(doc => {
+-          let inst = documentInstanceMap.get(doc.id);
+-          if (!inst) {
+-            inst = new DocumentInstance(this, doc);
+-            documentInstanceMap.set(doc.id, inst);
++        const nextDocumentInstanceMap = new Map();
++        this._documentInstances = this.host.project.documents.map(document => {
++          const cachedInstance = documentInstanceMap.get(document.id);
++          if (cachedInstance?.document === document) {
++            nextDocumentInstanceMap.set(document.id, cachedInstance);
++            return cachedInstance;
+           }
+-          return inst;
++          if (cachedInstance) {
++            staleDocumentInstances.push(cachedInstance);
++          }
++          const nextInstance = new DocumentInstance(this, document);
++          nextDocumentInstanceMap.set(document.id, nextInstance);
++          return nextInstance;
+         });
++        for (const [documentId, documentInstance] of documentInstanceMap) {
++          if (!nextDocumentInstanceMap.has(documentId)) {
++            staleDocumentInstances.push(documentInstance);
++          }
++        }
++        documentInstanceMap.clear();
++        for (const [documentId, documentInstance] of nextDocumentInstanceMap) {
++          documentInstanceMap.set(documentId, documentInstance);
++        }
+       });
++      staleDocumentInstances.forEach(documentInstance => documentInstance.dispose());
+       const path = this.host.project.currentDocument ? documentInstanceMap.get(this.host.project.currentDocument.id).path : '/';
+       if (this.history.location.pathname !== path) {
+-        this.history.push(path, {
+-          replace: true
+-        });
++        this.history.replace(path);
+       }
+     }));
+     const history = createMemoryHistory({
+@@ -6596,7 +6629,8 @@ class SimulatorRendererContainer {
+         container.id = containerId;
+       }
+     }
+-    createRoot(container).render(/*#__PURE__*/createElement(SimulatorRendererView, {
++    this._root = createRoot(container);
++    this._root.render(/*#__PURE__*/createElement(SimulatorRendererView, {
+       simulatorRenderer: this
+     }));
+     this.host.project.setRendererReady(this);
+@@ -6614,13 +6648,23 @@ class SimulatorRendererContainer {
+     this.autoRepaintNode = true;
+   }
+   dispose() {
+-    this.disposeFunctions.forEach(fn => fn());
++    this.disposeFunctions.splice(0).forEach(fn => fn());
++    this._root?.unmount();
++    this._root = undefined;
++    this._running = false;
+     this.documentInstances.forEach(docInst => docInst.dispose());
+-    untracked(() => {
++    runInAction(() => {
++      this._documentInstances = [];
++      this._layout = null;
++      this._libraryMap = {};
+       this._componentsMap = {};
+       this._components = null;
+       this._appContext = {};
+     });
++    if (this.host?.renderer === this) {
++      this.host.purge();
++      this.host.project.isRendererReady = false;
++    }
+   }
+ }
+ const getReactInternalFiber = el => {
+@@ -8443,6 +8487,7 @@ const Canvas = observer(({
+   const {
+     viewport
+   } = host;
++  const [renderer] = useState(() => new SimulatorRendererContainer());
+   const canvasRef = useRef(null);
+   const viewportRef = useRef(null);
+   const {
+@@ -8476,8 +8521,9 @@ const Canvas = observer(({
+ 
+   useEffect(() => {
+     viewport.mount(viewportRef.current);
+-    simulatorRenderer.mount(host);
+-  }, []);
++    renderer.mount(host);
++    return () => setTimeout(() => renderer.dispose(), 0);
++  }, [host, renderer, viewport]);
+   return /*#__PURE__*/jsx("div", {
+     ref: canvasRef,
+     className: classnames('lc-simulator-canvas', `lc-simulator-device-${host.device}`, host.deviceClassName),

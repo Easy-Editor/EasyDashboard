@@ -6,14 +6,27 @@
   "license": "MIT",
   "version": "1.0.0",
   "author": "JinSo <kimjinso@qq.com>",
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
     "prepare": "husky",
-    "preinstall": "npx only-allow pnpm",
+    "preinstall": "only-allow pnpm",
     "format": "biome format --write .",
     "lint": "biome check .",
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "build:prod": "vite build",
+    "dev": "concurrently --kill-others-on-fail --names app,viewer,api --prefix-colors cyan,magenta,green \"pnpm dev:web\" \"pnpm dev:viewer\" \"pnpm dev:server\"",
+    "dev:web": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:viewer": "pnpm --dir viewer dev",
+    "dev:server": "pnpm --dir server dev",
+    "build": "pnpm build:web && pnpm build:viewer && pnpm build:server",
+    "build:web": "tsc -b && vite build",
+    "build:viewer": "pnpm --dir viewer build",
+    "build:server": "pnpm --dir server build",
+    "build:prod": "pnpm build",
+    "typecheck": "tsc -b && pnpm --dir viewer typecheck && pnpm --dir server typecheck",
+    "test": "pnpm test:unit && pnpm test:viewer && pnpm --dir server test",
+    "test:unit": "vitest run src",
+    "test:viewer": "vitest run viewer",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "preview": "vite preview",
     "add:ui": "pnpm dlx shadcn@canary add"
   },
@@ -80,18 +93,22 @@
     "@changesets/cli": "^2.29.8",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
+    "@playwright/test": "1.62.0",
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "10.0.4",
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.2",
+    "only-allow": "1.2.2",
+    "supabase": "2.110.0",
     "typescript": "~5.7.3",
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "vitest": "4.1.10"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=9.12.2"
+    "node": "22.x"
   }
 }

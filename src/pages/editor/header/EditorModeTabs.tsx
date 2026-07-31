@@ -1,10 +1,9 @@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { type EditorMode, useEditorMode } from '@/contexts/editor-mode-context'
-import { Code, Eye, LayoutDashboard } from 'lucide-react'
+import { Code, LayoutDashboard } from 'lucide-react'
 
 const modes: { value: EditorMode; label: string; icon: React.ElementType }[] = [
   { value: 'canvas', label: '画布', icon: LayoutDashboard },
-  { value: 'preview', label: '预览', icon: Eye },
   { value: 'code', label: '代码', icon: Code },
 ]
 
@@ -13,10 +12,14 @@ export function EditorModeTabs() {
 
   return (
     <Tabs value={mode} onValueChange={value => setMode(value as EditorMode)}>
-      <TabsList className='h-8 bg-muted/50'>
+      <TabsList className='h-7 rounded-md border border-[var(--ed-line)] bg-[var(--ed-canvas)] p-0.5'>
         {modes.map(({ value, label, icon: Icon }) => (
-          <TabsTrigger key={value} value={value} className='h-7 gap-1.5 px-3 text-xs'>
-            <Icon className='h-3.5 w-3.5' />
+          <TabsTrigger
+            key={value}
+            value={value}
+            className='h-6 gap-1.5 rounded-[4px] px-2.5 text-[11px] text-[var(--ed-ink-faint)] data-[state=active]:bg-[var(--ed-panel-raised)] data-[state=active]:text-[var(--ed-ink)]'
+          >
+            <Icon className='size-3' />
             {label}
           </TabsTrigger>
         ))}

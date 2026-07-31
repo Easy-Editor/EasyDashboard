@@ -33,7 +33,7 @@ const HotkeyPlugin: PluginCreator<HotkeyPluginOptions> = (options = {}) => {
       const groupHandlers = createGroupHandlers(project)
       const visibilityHandlers = createVisibilityHandlers(project)
       const movementHandlers = createMovementHandlers(project)
-      const projectHandlers = createProjectHandlers(project)
+      const projectHandlers = createProjectHandlers()
 
       // 返回 false 会阻止默认行为
       const handlers: Record<HotkeyAction, (e: KeyboardEvent) => any> = {

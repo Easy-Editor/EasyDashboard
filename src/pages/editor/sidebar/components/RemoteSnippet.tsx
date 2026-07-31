@@ -22,110 +22,119 @@ interface RemoteSnippetProps {
  */
 export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippetProps) => {
   const metadata = componentMeta.getMetadata()
+  const componentName = metadata.componentName
+  const npmPackage = metadata.npm?.package
+  const npmVersion = metadata.npm?.version
+  const npmGlobalName = metadata.npm?.globalName
+  const npmComponentName = metadata.npm?.componentName
+  const snippetSchema = snippet.schema
+  const snippetTitle = snippet.title
   const ref = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   // 使用 MobX 响应式数据来检测组件是否已加载
   const remoteComponentsMap = materialManager.remoteComponentsMap
-  const hasRemoteComponent = metadata.componentName ? !!remoteComponentsMap[metadata.componentName] : false
+  const hasRemoteComponent = componentName ? !!remoteComponentsMap[componentName] : false
 
   // 添加 Snippet 到画布上
-  const addSnippetToCanvas = (_pos?: Point) => {
-    if (!metadata.npm?.package || !metadata.npm?.globalName) {
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      // 1. 加载组件代码（如果未加载）
-      if (!hasRemoteComponent) {
-        // 修复：传入 version 参数，避免 cache key 不匹配
-        materialManager.addComponent(metadata.npm?.package, metadata.npm?.version)
+  const addSnippetToCanvas = useCallback(
+    async (_pos?: Point) => {
+      if (!npmPackage || !npmGlobalName) {
+        return
       }
 
-      // 2. 获取当前文档
-      const currentDocument = project.currentDocument
-      if (!currentDocument) {
-        throw new Error('No active document')
-      }
+      setIsLoading(true)
 
-      // 3. 验证 snippet.schema
-      if (!snippet.schema) {
-        throw new Error('Snippet schema is missing')
-      }
-
-      // 4. 如果提供坐标，则用 pos，否则放置在画布中心
-      let pos = _pos
-      if (!pos) {
-        const simulator = project.simulator
-        const viewport = simulator?.viewport
-
-        // 从 snippet 的 schema 中读取尺寸
-        const snippetRect = snippet.schema.$dashboard?.rect
-        const defaultWidth = snippetRect?.width ?? 200
-        const defaultHeight = snippetRect?.height ?? 100
-
-        let targetX = 100
-        let targetY = 100
-
-        if (viewport) {
-          // 计算画布中心坐标（组件左上角位置）
-          targetX = (viewport.width - defaultWidth) / 2
-          targetY = (viewport.height - defaultHeight) / 2
+      try {
+        // 1. 加载组件代码（如果未加载）
+        if (!hasRemoteComponent) {
+          // 修复：传入 version 参数，避免 cache key 不匹配
+          await materialManager.addComponent(npmPackage, npmVersion)
         }
-        pos = {
-          clientX: targetX,
-          clientY: targetY,
-        }
-      }
 
-      // 5. 创建节点 schema（基于 snippet，使用画布中心坐标）
-      const snippetRect = snippet.schema?.$dashboard?.rect
-      const nodeSchema = {
-        ...snippet.schema,
-        componentName: snippet.schema.componentName || metadata.componentName,
-        // 添加 npm 信息到 schema
-        npm: {
-          package: metadata.npm.package,
-          version: metadata.npm.version || 'latest',
-          globalName: metadata.npm.globalName,
-          componentName: metadata.npm.componentName || metadata.componentName,
-        },
-        // 覆盖位置信息
-        $dashboard: {
-          ...snippet.schema.$dashboard,
-          rect: {
-            ...snippetRect,
-            x: pos.clientX,
-            y: pos.clientY,
-            width: snippetRect?.width ?? 200,
-            height: snippetRect?.height ?? 100,
+        // 2. 获取当前文档
+        const currentDocument = project.currentDocument
+        if (!currentDocument) {
+          throw new Error('No active document')
+        }
+
+        // 3. 验证 snippet.schema
+        if (!snippetSchema) {
+          throw new Error('Snippet schema is missing')
+        }
+
+        // 4. 如果提供坐标，则用 pos，否则放置在画布中心
+        let pos = _pos
+        if (!pos) {
+          const simulator = project.simulator
+          const viewport = simulator?.viewport
+
+          // 从 snippet 的 schema 中读取尺寸
+          const snippetRect = snippetSchema.$dashboard?.rect
+          const defaultWidth = snippetRect?.width ?? 200
+          const defaultHeight = snippetRect?.height ?? 100
+
+          let targetX = 100
+          let targetY = 100
+
+          if (viewport) {
+            // 计算画布中心坐标（组件左上角位置）
+            targetX = (viewport.width - defaultWidth) / 2
+            targetY = (viewport.height - defaultHeight) / 2
+          }
+          pos = {
+            clientX: targetX,
+            clientY: targetY,
+          }
+        }
+
+        // 5. 创建节点 schema（基于 snippet，使用画布中心坐标）
+        const snippetRect = snippetSchema.$dashboard?.rect
+        const nodeSchema = {
+          ...snippetSchema,
+          componentName: snippetSchema.componentName || componentName,
+          // 添加 npm 信息到 schema
+          npm: {
+            package: npmPackage,
+            version: npmVersion || 'latest',
+            globalName: npmGlobalName,
+            componentName: npmComponentName || componentName,
           },
-        },
-      }
-
-      // 6. 添加到画布（添加到 Root 节点）
-      const rootNode = currentDocument.root
-      if (rootNode) {
-        const newNode = currentDocument.insertNode(rootNode, nodeSchema, -1)
-        // 选中新添加的节点
-        if (newNode) {
-          newNode.select()
+          // 覆盖位置信息
+          $dashboard: {
+            ...snippetSchema.$dashboard,
+            rect: {
+              ...snippetRect,
+              x: pos.clientX,
+              y: pos.clientY,
+              width: snippetRect?.width ?? 200,
+              height: snippetRect?.height ?? 100,
+            },
+          },
         }
-      } else {
-        throw new Error('Root node not found')
-      }
 
-      setIsLoading(false)
-    } catch (error) {
-      toast.error('添加组件失败', {
-        description: error instanceof Error ? error.message : String(error),
-        position: 'top-center',
-      })
-      setIsLoading(false)
-    }
-  }
+        // 6. 添加到画布（添加到 Root 节点）
+        const rootNode = currentDocument.root
+        if (rootNode) {
+          const newNode = currentDocument.insertNode(rootNode, nodeSchema, -1)
+          // 选中新添加的节点
+          if (newNode) {
+            newNode.select()
+          }
+        } else {
+          throw new Error('Root node not found')
+        }
+      } catch (error) {
+        toast.error('添加组件失败', {
+          description: error instanceof Error ? error.message : String(error),
+          position: 'top-center',
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [componentName, hasRemoteComponent, npmComponentName, npmGlobalName, npmPackage, npmVersion, snippetSchema],
+  )
 
   const handleCanvasDragOver = useCallback((e: DragEvent) => {
     e.preventDefault()
@@ -133,11 +142,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
 
   // 处理拖拽完成：在画布上监听 drop 事件
   useEffect(() => {
-    const npmPackage = metadata.npm?.package
-    const globalName = metadata.npm?.globalName
-    const snippetTitle = snippet.title
-
-    if (!npmPackage || !globalName) {
+    if (!npmPackage || !npmGlobalName) {
       return
     }
 
@@ -150,7 +155,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
     const handleCanvasDrop = async (e: DragEvent) => {
       // 检查是否是当前远程物料的拖拽
       const dragData = e.dataTransfer?.getData('text/plain')
-      const expectedDragData = `remote-material:${globalName}:${snippetTitle}`
+      const expectedDragData = `remote-material:${npmGlobalName}:${snippetTitle}`
 
       if (dragData !== expectedDragData) return
 
@@ -163,7 +168,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
       const y = e.clientY - rect.top
       const canvasPos = simulator.viewport.toLocalPoint({ clientX: x, clientY: y })
 
-      addSnippetToCanvas(canvasPos)
+      await addSnippetToCanvas(canvasPos)
     }
 
     canvasElement.addEventListener('drop', handleCanvasDrop)
@@ -173,17 +178,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
       canvasElement.removeEventListener('drop', handleCanvasDrop)
       canvasElement.removeEventListener('dragover', handleCanvasDragOver)
     }
-  }, [
-    metadata.npm?.package,
-    metadata.npm?.globalName,
-    metadata.npm?.version,
-    metadata.npm?.componentName,
-    metadata.componentName,
-    snippet.schema,
-    snippet.title,
-    hasRemoteComponent,
-    handleCanvasDragOver,
-  ])
+  }, [npmPackage, npmGlobalName, snippetTitle, addSnippetToCanvas, handleCanvasDragOver])
 
   // 处理拖拽开始：设置拖拽数据
   const handleDragStart = (e: React.DragEvent) => {
@@ -201,7 +196,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
 
     if (isLoading) return
 
-    addSnippetToCanvas()
+    await addSnippetToCanvas()
   }
 
   return (

@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="EasyDashboard code-native visual foundations and calibration boards."
+    />
+    <title>EasyDashboard · Visual Foundations</title>
+    <link rel="icon" href="../../public/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./foundations.css" />
+  </head>
+  <body>
+    <svg class="symbol-sprite" aria-hidden="true">
+      <symbol id="i-arrow-left" viewBox="0 0 24 24">
+        <path d="m15 18-6-6 6-6" />
+      </symbol>
+      <symbol id="i-pages" viewBox="0 0 24 24">
+        <path d="M6 3h9l3 3v15H6z" />
+        <path d="M14 3v4h4M9 11h6M9 15h6" />
+      </symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24">
+        <path d="m12 3 9 5-9 5-9-5z" />
+        <path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
+      </symbol>
+      <symbol id="i-components" viewBox="0 0 24 24">
+        <rect x="4" y="4" width="6" height="6" rx="1" />
+        <rect x="14" y="4" width="6" height="6" rx="1" />
+        <rect x="4" y="14" width="6" height="6" rx="1" />
+        <rect x="14" y="14" width="6" height="6" rx="1" />
+      </symbol>
+      <symbol id="i-code" viewBox="0 0 24 24">
+        <path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14" />
+      </symbol>
+      <symbol id="i-database" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
+      </symbol>
+      <symbol id="i-method" viewBox="0 0 24 24">
+        <path d="M13 2 5 14h6l-1 8 8-12h-6z" />
+      </symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24">
+        <path
+          d="M12 3a9 9 0 0 0 0 18h1.2a1.8 1.8 0 0 0 1.3-3.1 1.7 1.7 0 0 1 1.2-2.9H18a3 3 0 0 0 3-3 9 9 0 0 0-9-9Z"
+        />
+        <path d="M7.5 10h.01M9 6.5h.01M14 6.5h.01M17 10h.01" />
+      </symbol>
+      <symbol id="i-image" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="m21 15-5-5L5 20" />
+      </symbol>
+      <symbol id="i-history" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+        <path d="M3 3v5h5M12 7v5l3 2" />
+      </symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24">
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="2.5" />
+      </symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24">
+        <path d="M12 16V3M7 8l5-5 5 5M5 14v6h14v-6" />
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14" />
+      </symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24">
+        <path d="m8 10 4 4 4-4" />
+      </symbol>
+    </svg>
+
+    <a class="skip-link" href="#main">跳到主要内容</a>
+
+    <aside class="contract-rail">
+      <a class="brand" href="#north-star" aria-label="EasyDashboard 视觉契约首页">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>
+          <strong>EasyDashboard</strong>
+          <small>Visual contract · 0.1</small>
+        </span>
+      </a>
+
+      <nav class="board-nav" aria-label="标定页导航">
+        <a href="#north-star"><span>00</span>North star</a>
+        <a href="#palette"><span>01</span>Signal palette</a>
+        <a href="#surfaces"><span>02</span>Surface & depth</a>
+        <a href="#type"><span>03</span>Type & data</a>
+        <a href="#geometry"><span>04</span>Geometry</a>
+        <a href="#signals"><span>05</span>Interaction</a>
+        <a href="#canvas"><span>06</span>Canvas calibration</a>
+        <a href="#boundary"><span>07</span>Theme boundary</a>
+      </nav>
+
+      <div class="rail-footer">
+        <span>DESKTOP / MULTI-PAGE</span>
+        <span>1440—2560 PX</span>
+        <span class="rail-status"><i></i>PHASE 0 LOCKED</span>
+      </div>
+    </aside>
+
+    <main id="main">
+      <section class="board cover-board" id="north-star" aria-labelledby="north-star-title">
+        <div class="board-index">00 / NORTH STAR</div>
+        <div class="cover-copy">
+          <p class="eyebrow">MULTI-PAGE SCREEN WORKSPACE</p>
+          <h1 id="north-star-title">把大屏当作项目，<br />而不是一张画布。</h1>
+          <p class="lede">
+            在同一个项目中组织多个页面，保存可恢复版本，
+            并发布一个持续更新的访问地址。
+          </p>
+          <div class="thesis-data" aria-label="视觉方向">
+            <span><b>INK</b>#070A0F</span>
+            <span><b>SIGNAL</b>#6DDCF3</span>
+            <span><b>SELECT</b>#4F8CFF</span>
+          </div>
+        </div>
+
+        <div class="multi-page-scene" aria-label="三页大屏项目标定场景">
+          <div class="scene-axis scene-axis-x"></div>
+          <div class="scene-axis scene-axis-y"></div>
+          <article class="screen-plane plane-back">
+            <header><span>PAGE 03 / DEVICE</span><b>1920 × 1080</b></header>
+            <div class="screen-grid">
+              <i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </article>
+          <article class="screen-plane plane-mid">
+            <header><span>PAGE 02 / REGION</span><b>1920 × 1080</b></header>
+            <div class="map-trace" aria-hidden="true"></div>
+          </article>
+          <article class="screen-plane plane-front">
+            <header><span>PAGE 01 / OVERVIEW</span><b>START PAGE</b></header>
+            <div class="metric-row">
+              <span><small>在线设备</small><strong>2,846</strong></span>
+              <span><small>实时告警</small><strong>018</strong></span>
+              <span><small>覆盖区域</small><strong>12</strong></span>
+            </div>
+            <div class="trace-chart" aria-hidden="true">
+              <svg viewBox="0 0 500 150" preserveAspectRatio="none">
+                <polyline
+                  points="0,112 35,96 70,102 105,64 140,72 175,45 210,78 245,54 280,62 315,28 350,52 385,31 420,40 455,16 500,24"
+                />
+              </svg>
+            </div>
+          </article>
+          <div class="scene-readout">
+            <span>CALIBRATION VIEWPORT</span>
+            <strong>03 PAGES · DRAFT SAVED</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="board" id="palette" aria-labelledby="palette-title">
+        <div class="board-index">01 / SIGNAL PALETTE</div>
+        <header class="board-heading">
+          <div>
+            <p class="eyebrow">RESPONSIBILITY, NOT DECORATION</p>
+            <h2 id="palette-title">颜色先说明职责，再说明好不好看。</h2>
+          </div>
+          <p>
+            品牌青标记产品、焦点和活动区域；精度蓝只用于选区、控制柄与变换反馈。
+          </p>
+        </header>
+
+        <div class="surface-spectrum" aria-label="产品表面色阶">
+          <article style="--sample: var(--ed-canvas)">
+            <span>Canvas</span><code>#070A0F</code>
+          </article>
+          <article style="--sample: var(--ed-rail)">
+            <span>Rail</span><code>#0A0E14</code>
+          </article>
+          <article style="--sample: var(--ed-panel)">
+            <span>Panel</span><code>#0D131B</code>
+          </article>
+          <article style="--sample: var(--ed-panel-raised)">
+            <span>Raised</span><code>#121B26</code>
+          </article>
+        </div>
+
+        <div class="palette-lab">
+          <article class="signal-sample brand-signal">
+            <div class="signal-line"></div>
+            <p>BRAND / FOCUS / ACTIVE NAVIGATION</p>
+            <strong>Ice Signal</strong>
+            <code>#6DDCF3</code>
+          </article>
+          <article class="signal-sample select-signal">
+            <div class="selection-demo">
+              <i></i><i></i><i></i><i></i>
+              <span>SELECTED OBJECT</span>
+            </div>
+            <p>SELECTION / MARQUEE / HANDLES</p>
+            <strong>Precision Blue</strong>
+            <code>#4F8CFF</code>
+          </article>
+          <article class="status-sample">
+            <p>SEMANTIC STATUS</p>
+            <ul>
+              <li><i class="success"></i><span>已保存</span><code>#52D28B</code></li>
+              <li><i class="warning"></i><span>未保存</span><code>#F59E0B</code></li>
+              <li><i class="error"></i><span>发布失败</span><code>#FF7F8A</code></li>
+              <li><i class="conflict"></i><span>版本冲突</span><code>#D99A4E</code></li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="board" id="surfaces" aria-labelledby="surfaces-title">
+        <div class="board-index">02 / SURFACE & DEPTH</div>
+        <header class="board-heading">
+          <div>
+            <p class="eyebrow">DARK DOES NOT MEAN FLAT</p>
+            <h2 id="surfaces-title">靠层级读懂界面，而不是靠一片发光。</h2>
+          </div>
+          <p>固定区域用明度和细线分层；阴影只属于浮层、菜单和画布 HUD。</p>
+        </header>
+
+        <div class="depth-lab">
+          <div class="depth-stack" aria-label="产品表面层级示意">
+            <div class="depth-card depth-canvas"><span>01</span><b>Canvas</b><code>#070A0F</code></div>
+            <div class="depth-card depth-rail"><span>02</span><b>Rail</b><code>#0A0E14</code></div>
+            <div class="depth-card depth-panel"><span>03</span><b>Panel</b><code>#0D131B</code></div>
+            <div class="depth-card depth-raised"><span>04</span><b>Raised</b><code>#121B26</code></div>
+          </div>
+          <div class="floating-lab">
+            <div class="inspector-fragment">
+              <header><span>属性配置</span><small>POSITION / 01</small></header>
+              <label>组件名称 <input value="核心指标卡" readonly /></label>
+              <div class="field-pair">
+                <label>X <input value="468" readonly /></label>
+                <label>Y <input value="216" readonly /></label>
+              </div>
+              <label>背景颜色 <button type="button"><i></i>#0D131B</button></label>
+            </div>
+            <div class="floating-menu">
+              <small>PAGE ACTIONS</small>
+              <button type="button">复制页面 <kbd>⌘D</kbd></button>
+              <button type="button">设为起始页</button>
+              <button type="button" class="danger">删除页面</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="board" id="type" aria-labelledby="type-title">
+        <div class="board-index">03 / TYPE & DATA</div>
+        <header class="board-heading">
+          <div>
+            <p class="eyebrow">CHINESE UI + TECHNICAL READOUT</p>
+            <h2 id="type-title">文字负责导航，数据负责被快速扫描。</h2>
+          </div>
+          <p>仓库内置 Alibaba 字体；分辨率、坐标、时间和版本号使用等宽字体。</p>
+        </header>
+
+        <div class="type-grid">
+          <article class="type-display">
+            <span>DISPLAY / ALIBABA SANS / 40—48</span>
+            <strong>EasyDashboard</strong>
+            <p>多页面大屏工作空间</p>
+          </article>
+          <article class="type-specimens">
+            <div><code>H1 / 28 / 36</code><strong>Chrome 多页面归档</strong></div>
+            <div><code>H2 / 20 / 28</code><strong>发布与分享</strong></div>
+            <div><code>BODY / 14 / 22</code><p>发布后，稳定地址会持续指向最新版本。</p></div>
+            <div><code>LABEL / 12 / 18</code><span>最近保存</span></div>
+          </article>
+          <article class="data-specimens">
+            <div><span>RESOLUTION</span><strong>1920 × 1080</strong></div>
+            <div><span>POSITION</span><strong>X 0468 · Y 0216</strong></div>
+            <div><span>LAST SAVED</span><strong>11:53:08</strong></div>
+            <div><span>RELEASE</span><strong>RLS-0007</strong></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="board" id="geometry" aria-labelledby="geometry-title">
+        <div class="board-index">04 / GEOMETRY & RHYTHM</div>
+        <header class="board-heading">
+          <div>
+            <p class="eyebrow">DENSE, NOT CRAMPED</p>
+            <h2 id="geometry-title">工具要紧凑，动作仍要有清楚的边界。</h2>
+          </div>
+          <p>四像素网格负责秩序，两像素调整负责编辑器精度。</p>
+        </header>
+
+        <div class="geometry-grid">
+          <article class="spacing-scale">
+            <h3>Spacing scale</h3>
+            <div><i style="--size: 2px"></i><span>02</span></div>
+            <div><i style="--size: 4px"></i><span>04</span></div>
+            <div><i style="--size: 8px"></i><span>08</span></div>
+            <div><i style="--size: 12px"></i><span>12</span></div>
+            <div><i style="--size: 16px"></i><span>16</span></div>
+            <div><i style="--size: 24px"></i><span>24</span></div>
+            <div><i style="--size: 32px"></i><span>32</span></div>
+            <div><i style="--size: 48px"></i><span>48</span></div>
+          </article>
+
+          <article class="control-scale">
+            <h3>Control height</h3>
+            <button class="h28" type="button">28 <span>Compact</span></button>
+            <button class="h32" type="button">32 <span>Editor</span></button>
+            <button class="h36" type="button">36 <span>Product</span></button>
+            <button class="h44 primary-control" type="button">44 <span>Primary</span></button>
+          </article>
+
+          <article class="radius-scale">
+            <h3>Radius</h3>
+            <div><i style="--radius: 4px"></i><span>04 · icon</span></div>
+            <div><i style="--radius: 6px"></i><span>06 · editor</span></div>
+            <div><i style="--radius: 8px"></i><span>08 · control</span></div>
+            <div><i style="--radius: 10px"></i><span>10 · panel</span></div>
+            <div><i style="--radius: 12px"></i><span>12 · dialog</span></div>
+            <div><i style="--radius: 16px"></i><span>16 · viewport</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="board" id="signals" aria-labelledby="signals-title">
+        <div class="board-index">05 / INTERACTION SIGNALS</div>
+        <header class="board-heading">
+          <div>
+            <p class="eyebrow">ONE STATE, ONE LEGIBLE SIGNAL</p>
+            <h2 id="signals-title">交互反馈需要能被读懂，而不是被猜到。</h2>
+          </div>
+          <p>悬浮、选中、焦点、拖拽和冲突各自使用稳定的视觉语法。</p>
+        </header>
+
+        <div class="signal-grid">
+          <article>
+            <span>DEFAULT</span>
+            <button type="button">页面设置</button>
+          </article>
+          <article>
+            <span>HOVER</span>
+            <button class="is-hover" type="button">页面设置</button>
+          </article>
+          <article>
+            <span>ACTIVE NAV</span>
+            <button class="is-active" type="button">
+              <i></i>
+              <svg><use href="#i-components"></use></svg>
+              组件
+            </button>
+          </article>
+          <article>
+            <span>KEYBOARD FOCUS</span>
+            <button class="is-focus" type="button">保存</button>
+          </article>
+          <article>
+            <span>DRAG TARGET</span>
+            <div class="drag-target"><i></i><strong>放置到页面 03</strong></div>
+          </article>
+          <article>
+            <span>CONFLICT</span>
+            <div class="conflict-banner">
+              <i></i>
+              <strong>远端草稿已更新</strong>
+              <small>比较更改</small>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="board canvas-board" id="canvas" aria-labelledby="canvas-title">
+        <div class="board-index">06 / CANVAS CALIBRATION</div>
+        <header class="board-heading">
+          <div>
+            <p class="eyebrow">THE PRIMARY PRODUCT SURFACE</p>
+            <h2 id="canvas-title">大屏编辑器的各个区域必须像一台完整设备。</h2>
+          </div>
+          <p>图标轨、页面面板、画布、属性面板和底部 HUD 共同服务当前页面。</p>
+        </header>
+
+        <div class="workbench" role="region" aria-label="EasyDashboard 编辑器标定示例">
+          <header class="workbench-header">
+            <div class="project-id">
+              <button type="button" aria-label="返回我的项目">
+                <svg><use href="#i-arrow-left"></use></svg>
+              </button>
+              <span>Chrome 多页面归档</span>
+              <small>页面 01 / 03</small>
+            </div>
+            <div class="save-state"><i></i>已保存 · 11:53</div>
+            <div class="mode-switch"><b>画布</b><span>代码</span></div>
+            <div class="header-actions">
+              <button type="button"><svg><use href="#i-eye"></use></svg>预览</button>
+              <button type="button">保存</button>
+              <button type="button" class="delivery-action">发布与分享</button>
+            </div>
+          </header>
+
+          <div class="workbench-body">
+            <nav class="tool-rail" aria-label="编辑器工具">
+              <button class="active" type="button" aria-label="页面">
+                <svg><use href="#i-pages"></use></svg>
+              </button>
+              <button type="button" aria-label="大纲"><svg><use href="#i-layers"></use></svg></button>
+              <button type="button" aria-label="组件"><svg><use href="#i-components"></use></svg></button>
+              <button type="button" aria-label="代码"><svg><use href="#i-code"></use></svg></button>
+              <button type="button" aria-label="数据源"><svg><use href="#i-database"></use></svg></button>
+              <button type="button" aria-label="方法与状态"><svg><use href="#i-method"></use></svg></button>
+              <button type="button" aria-label="主题"><svg><use href="#i-palette"></use></svg></button>
+              <button type="button" aria-label="缩略图"><svg><use href="#i-image"></use></svg></button>
+              <button type="button" aria-label="版本"><svg><use href="#i-history"></use></svg></button>
+            </nav>
+
+            <aside class="active-panel">
+              <header>
+                <div><i></i><strong>页面</strong></div>
+                <button type="button" aria-label="新增页面"><svg><use href="#i-plus"></use></svg></button>
+              </header>
+              <div class="page-list">
+                <button class="current" type="button">
+                  <span class="page-thumb page-thumb-a"></span>
+                  <span><strong>总览</strong><small>起始页 · 已保存</small></span>
+                  <b>01</b>
+                </button>
+                <button type="button">
+                  <span class="page-thumb page-thumb-b"></span>
+                  <span><strong>区域态势</strong><small>已保存</small></span>
+                  <b>02</b>
+                </button>
+                <button type="button">
+                  <span class="page-thumb page-thumb-c"></span>
+                  <span><strong>设备状态</strong><small>2 项未保存</small></span>
+                  <b>03</b>
+                </button>
+              </div>
+              <footer><span>3 个页面</span><button type="button">管理页面</button></footer>
+            </aside>
+
+            <div class="canvas-world">
+              <div class="ruler ruler-top"></div>
+              <div class="ruler ruler-left"></div>
+              <div class="artboard">
+                <div class="artboard-title">城市运行总览</div>
+                <div class="artboard-metrics">
+                  <span><small>今日事件</small><b>1,286</b><i>+12.6%</i></span>
+                  <span><small>在线设备</small><b>2,846</b><i>99.2%</i></span>
+                  <span><small>平均响应</small><b>08:42</b><i>-01:18</i></span>
+                </div>
+                <div class="artboard-chart">
+                  <svg viewBox="0 0 600 180" preserveAspectRatio="none">
+                    <path d="M0 142 50 128 100 138 150 90 200 102 250 68 300 82 350 46 400 72 450 34 500 48 550 22 600 32" />
+                    <path class="area" d="M0 142 50 128 100 138 150 90 200 102 250 68 300 82 350 46 400 72 450 34 500 48 550 22 600 32V180H0Z" />
+                  </svg>
+                </div>
+                <div class="selected-object">
+                  <i></i><i></i><i></i><i></i>
+                  <span>核心指标组 · 468 × 168</span>
+                </div>
+                <div class="guide guide-x"></div>
+                <div class="guide guide-y"></div>
+              </div>
+              <div class="canvas-hud">
+                <button type="button">
+                  <span>▣</span>1920 × 1080
+                  <svg><use href="#i-chevron"></use></svg>
+                </button>
+                <i></i>
+                <button type="button">−</button>
+                <div class="zoom-track"><span></span></div>
+                <strong>67%</strong>
+                <button type="button">＋</button>
+              </div>
+            </div>
+
+            <aside class="inspector">
+              <header><strong>属性配置</strong><small>ROOT / SELECTION</small></header>
+              <div class="inspector-tabs"><b>配置</b><span>高级</span></div>
+              <section>
+                <h3>布局</h3>
+                <label>组件名称 <input value="核心指标组" readonly /></label>
+                <div class="field-pair">
+                  <label>X <input value="468" readonly /></label>
+                  <label>Y <input value="216" readonly /></label>
+                </div>
+                <div class="field-pair">
+                  <label>宽度 <input value="468" readonly /></label>
+                  <label>高度 <input value="168" readonly /></label>
+                </div>
+              </section>
+              <section>
+                <h3>外观</h3>
+                <label>背景颜色 <button type="button"><i></i>#0D131B</button></label>
+                <label>圆角 <input value="8" readonly /></label>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="board boundary-board" id="boundary" aria-labelledby="boundary-title">
+        <div class="board-index">07 / THEME BOUNDARY</div>
+        <header class="board-heading">
+          <div>
+            <p class="eyebrow">PRODUCT CHROME ≠ USER SCREEN</p>
+            <h2 id="boundary-title">EasyDashboard 有自己的主题，大屏也有自己的主题。</h2>
+          </div>
+          <p>产品色负责编辑环境；发布后的大屏只遵循项目文档和用户选择。</p>
+        </header>
+
+        <div class="boundary-demo">
+          <article class="shell-sample">
+            <header>
+              <span class="mini-mark"></span>
+              <strong>EasyDashboard</strong>
+              <small>PRODUCT SHELL</small>
+            </header>
+            <div class="shell-layout">
+              <nav><i></i><i></i><i></i><i></i></nav>
+              <div>
+                <span class="shell-line long"></span>
+                <span class="shell-line"></span>
+                <span class="shell-line short"></span>
+              </div>
+            </div>
+            <footer><b>#6DDCF3</b> BRAND SIGNAL</footer>
+          </article>
+
+          <div class="boundary-rule">
+            <span>NO AUTOMATIC THEME LEAK</span>
+            <i></i>
+            <strong>INDEPENDENT</strong>
+          </div>
+
+          <article class="screen-theme-sample">
+            <header><span>USER SCREEN THEME</span><strong>Published</strong></header>
+            <div class="screen-theme-content">
+              <div class="theme-orbit"></div>
+              <div class="theme-copy">
+                <small>URBAN OPERATIONS</small>
+                <strong>城市运行态势</strong>
+                <span>用户可以选择任何适合内容的主题。</span>
+              </div>
+              <div class="theme-metrics">
+                <span><b>82</b><small>区域</small></span>
+                <span><b>99.2%</b><small>在线率</small></span>
+              </div>
+            </div>
+            <footer><b>#9B7BFF</b> USER-DEFINED ACCENT</footer>
+          </article>
+        </div>
+
+        <footer class="contract-footer">
+          <div>
+            <span class="brand-mark" aria-hidden="true"></span>
+            <strong>EasyDashboard</strong>
+          </div>
+          <p>Phase 0 visual contract · desktop · code-native · 2026-07-30</p>
+        </footer>
+      </section>
+    </main>
+
+    <script>
+      const navLinks = [...document.querySelectorAll(".board-nav a")];
+      const boards = [...document.querySelectorAll(".board")];
+      let navigationFrame = 0;
+
+      const updateNavigation = () => {
+        const readingLine = window.innerHeight * 0.36;
+        const current =
+          boards.find((board) => {
+            const bounds = board.getBoundingClientRect();
+            return bounds.top <= readingLine && bounds.bottom > readingLine;
+          }) ?? boards[0];
+
+        navLinks.forEach((link) => {
+          const active = link.getAttribute("href") === `#${current.id}`;
+          if (active) {
+            link.setAttribute("aria-current", "page");
+          } else {
+            link.removeAttribute("aria-current");
+          }
+        });
+      };
+
+      const scheduleNavigationUpdate = () => {
+        if (navigationFrame) return;
+        navigationFrame = window.requestAnimationFrame(() => {
+          updateNavigation();
+          navigationFrame = 0;
+        });
+      };
+
+      window.addEventListener("scroll", scheduleNavigationUpdate, { passive: true });
+      window.addEventListener("resize", scheduleNavigationUpdate);
+      window.addEventListener("hashchange", scheduleNavigationUpdate);
+      updateNavigation();
+    </script>
+  </body>
+</html>

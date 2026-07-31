@@ -6,112 +6,151 @@ English | [简体中文](./README-zh_CN.md)
 
 </div>
 
-EasyDashboard is a data visualization dashboard solution developed based on the [EasyEditor](https://github.com/Easy-Editor/EasyEditor) low-code engine. This project demonstrates how to quickly build professional data visualization applications using EasyEditor's Dashboard plugin and React renderer.
-
-It ships with 20+ pre-built components, AI-powered design generation, multi-page support, and real-time preview — built with React 19, Tailwind CSS v4, and shadcn/ui.
+EasyDashboard is a personal workspace for building and publishing data
+visualization dashboards with the
+[EasyEditor](https://github.com/Easy-Editor/EasyEditor) low-code engine. The
+repository contains a React editor, a Hono API, and a separate cookie-less
+public viewer.
 
 <div align="center">
-  <img src=".github/assets/page.png" width='1000' />
+  <img src=".github/assets/page.png" width="1000" alt="EasyDashboard editor" />
 </div>
 
-## Features
+## Current capabilities
 
-### Design & Editing
+- Create, search, favorite, duplicate, trash, and restore projects in a
+  server-provisioned personal space.
+- Build multi-page dashboards with drag-and-drop editing, property
+  configuration, JSON schema editing, page ordering, and a configurable start
+  page.
+- Save drafts to PostgreSQL with optimistic concurrency. Project documents are
+  not persisted to LocalStorage.
+- Create manual restore points, retain periodic automatic restore points, and
+  restore a previous snapshot without deleting the existing history.
+- Generate automatic project thumbnails or upload a custom thumbnail through a
+  private Supabase Storage bucket and signed URLs.
+- Publish the saved draft to both a stable viewer URL and a versioned URL backed
+  by an immutable release snapshot.
+- Sign in with email and password, GitHub, or Google. The Hono API keeps
+  Supabase sessions in secure host-only cookies.
 
-- **Drag-and-Drop Canvas** with multi-page support and configurable resolution (default 1920x1080)
-- **Real-Time Property Inspector** with 20+ setter types for fine-grained component configuration
-- **Keyboard Shortcuts** for copy, paste, undo/redo, alignment, grouping, layer ordering, and more
-- **Smart Guidelines** for automatic alignment and precise positioning
-- **Three Editing Modes**: Design Canvas, Code (JSON schema editor), and Preview
+Agent execution, templates as a product workflow, team collaboration, and 3D
+editing are not part of the current application.
 
-### Components & Materials
+## Workspace
 
-- **20 Pre-Built Components** across 7 categories:
-  - **Basic**: Text
-  - **Charts**: Bar, Line, Pie, Gauge, Radar, Scatter
-  - **Display**: Carousel, Number Flip, Progress, Scroll List
-  - **Media**: Audio, Video, Image, Filter
-  - **Interaction**: Button
-  - **Maps**: Fly Line, Geo Map
-- **On-Demand Remote Loading** — materials are fetched from npm CDN as needed
-- **Extensible Material System** — build and register your own components
+This repository is a pnpm workspace:
 
-### Data & Interactivity
-
-- **Multiple Data Sources**: static data, REST API, and global shared data
-- **Dynamic Visibility Control** with JavaScript expressions
-- **Event Binding** to trigger actions and component methods
-
-### Developer Experience
-
-- **AI Assistant** — describe what you want in natural language, and the AI generates components directly on the canvas
-- **Auto-Save** — project schemas are automatically persisted to LocalStorage
-- **Dark Mode** with system preference detection
-- **Import/Export** project schemas as JSON
-
-## Showcase
-
-- **Component Drag and Drop:** Quickly drag and drop components and data elements onto the design panel for easy layout.
-
-![gif_dnd.gif](.github/assets/gif_dnd.gif)
-
-- **Guidelines:** Automatically displayed guidelines ensure precise component alignment, enhancing design efficiency.
-
-![gif_guideline.gif](.github/assets/gif_guideline.gif)
-
-- **Multiple Pages:** Support for multiple page designs to create complete interactive data dashboards.
-
-![gif_multipage.gif](.github/assets/gif_multipage.gif)
-
-- **Visibility Control:** Implement dynamic visibility control of components for more flexible data presentation.
-
-![gif_js.gif](.github/assets/gif_js.gif)
-
-There are many more features waiting for you to discover and explore.
-
-## Getting Started
-
-### Environment Requirements
-
-- Node.js >= 18.0.0
-- pnpm >= 9.12.2
-
-### Local Development
-
-```bash
-# Clone the project
-git clone https://github.com/Easy-Editor/EasyDashboard
-
-# Navigate to the project directory
-cd EasyDashboard
-
-# Install dependencies
-pnpm install
-
-# Start the development server
-pnpm dev
+```text
+EasyDashboard/
+├── api/                     # thin Vercel Function adapter
+├── server/                  # portable Hono API and Node development adapter
+├── src/                     # authenticated React application and editor
+├── supabase/migrations/     # ordered database and storage migrations
+├── viewer/                  # separate cookie-less public viewer
+└── pnpm-workspace.yaml
 ```
 
-### Available Scripts
+## Requirements
+
+- Node.js 22.x (the exact CI version is recorded in `.node-version`)
+- pnpm 10.28.2
+- Docker for the local Supabase stack
+- A separate Supabase project for each hosted environment
+
+## Local development
+
+1. Install the workspace dependencies:
+
+   ```bash
+   pnpm install --frozen-lockfile
+   ```
+
+2. Start the repository-pinned Supabase CLI:
+
+   ```bash
+   pnpm exec supabase start
+   pnpm exec supabase status -o env \
+     --override-name api.url=SUPABASE_URL,auth.publishable_key=SUPABASE_PUBLISHABLE_KEY
+   ```
+
+   A fresh local stack applies `supabase/roles.sql` and the ordered migrations.
+   `roles.sql` contains a local/CI-only runtime password; hosted environments
+   must provision their own strong random password. If an existing local stack
+   contains development data, do not run `supabase db reset` just to update the
+   role. Apply the local-only role file without deleting data:
+
+   ```bash
+   pnpm exec supabase db query --local --file supabase/roles.sql
+   ```
+
+3. Create `.env` from [`.env.example`](./.env.example). Use the local values
+   reported by `supabase status` and these origins:
+
+   ```text
+   APP_ORIGIN=http://127.0.0.1:5173
+   PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+   PORT=8787
+   VITE_PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
+   VITE_PUBLIC_API_ORIGIN=http://127.0.0.1:5173
+   SUPABASE_URL=<SUPABASE_URL reported by supabase status>
+   SUPABASE_PUBLISHABLE_KEY=<SUPABASE_PUBLISHABLE_KEY reported by supabase status>
+   DATABASE_URL=postgresql://easy_dashboard_runtime:easy_dashboard_ci_local_only@127.0.0.1:54322/postgres
+   ```
+
+   The browser calls the API through the app's same-origin `/api` path. Vite
+   proxies that path to the Hono development server on port `8787`.
+
+4. Start all three development processes:
+
+   ```bash
+   pnpm dev
+   ```
+
+Open the authenticated app at `http://127.0.0.1:5173` and the public viewer at
+`http://view.localhost:5174`.
+
+## Local verification
+
+Install Chromium once, then run the product-lifecycle browser test:
 
 ```bash
-pnpm dev          # Start development server
-pnpm build        # Build for production (with type checking)
-pnpm build:prod   # Build for production (skip type checking)
-pnpm preview      # Preview production build
-pnpm lint         # Run code quality checks
-pnpm format       # Format code with Biome
-pnpm add:ui       # Add shadcn/ui components
+pnpm exec playwright install chromium
+pnpm test:e2e
 ```
+
+The test creates a uniquely named local E2E account and project, permanently
+deletes the project, and does not reset developer data.
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm dev` | Start the app, viewer, and API |
+| `pnpm dev:web` | Start only the authenticated app |
+| `pnpm dev:viewer` | Start only the public viewer |
+| `pnpm dev:server` | Start only the Hono API |
+| `pnpm build` | Build the app, viewer, and server |
+| `pnpm typecheck` | Type-check all three workspace applications |
+| `pnpm test` | Run the web, public Viewer, and server test suites |
+| `pnpm test:e2e` | Run the Chromium product-lifecycle test |
+| `pnpm test:e2e:ui` | Open the Playwright test UI |
+| `pnpm lint` | Run Biome checks |
+| `pnpm format` | Format the workspace with Biome |
+
+## Architecture and deployment
+
+- [Architecture](./docs/ARCHITECTURE.md)
+- [Product design](./docs/PRODUCT-DESIGN.md)
+- [Supabase and Vercel deployment](./docs/DEPLOYMENT.md)
+- [Remote materials](./docs/remote-materials.md)
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues and pull requests to help improve this project.
+Contributions are welcome. Open an issue or pull request with a focused change
+and its verification evidence.
 
 ## License
 
-[MIT](./LICENSE) License &copy; 2024-PRESENT [JinSo](https://github.com/JinSooo)
-
-## Related Links
-
-This project is developed based on the [EasyEditor](https://github.com/Easy-Editor/EasyEditor) low-code engine, demonstrating how to use EasyEditor to build professional data visualization applications.
+[MIT](./LICENSE) License &copy; 2024-PRESENT
+[JinSo](https://github.com/JinSooo)

@@ -173,7 +173,7 @@ export class SetterLoader {
       this.loadedCSS.add(cssKey)
     } catch (error) {
       // CSS 加载失败不阻塞
-      console.warn(`[SetterLoader] CSS load failed (non-blocking):`, error)
+      console.warn('[SetterLoader] CSS load failed (non-blocking):', error)
     }
   }
 

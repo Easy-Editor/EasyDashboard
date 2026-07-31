@@ -72,7 +72,12 @@ export const LocalMaterialDebugDialog = observer(
         }
       }
 
-      const handleError = ({ error }: { error: Error }) => {
+      const handleError = (...args: unknown[]) => {
+        const event = args[0]
+        const error =
+          typeof event === 'object' && event !== null && 'error' in event && event.error instanceof Error
+            ? event.error
+            : new Error('Local material connection failed')
         setStatus('error')
         setErrorMessage(error.message)
       }
@@ -145,7 +150,7 @@ export const LocalMaterialDebugDialog = observer(
 
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className='sm:max-w-md'>
+        <DialogContent data-ed-shell='editor' className='sm:max-w-md'>
           <DialogHeader>
             <DialogTitle>本地物料调试</DialogTitle>
             <DialogDescription>连接本地物料开发服务器进行实时调试</DialogDescription>

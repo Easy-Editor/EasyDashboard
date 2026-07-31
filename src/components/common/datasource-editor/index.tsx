@@ -11,10 +11,10 @@ import { observer } from 'mobx-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { BasicInfoSection } from './BasicInfoSection'
-import { createDefaultFormData } from './constants'
-import { formDataToDataSourceConfig, parseDataSourceToFormData } from './formUtils'
 import { FunctionConfigSection } from './FunctionConfigSection'
 import { RequestConfigSection } from './RequestConfigSection'
+import { createDefaultFormData } from './constants'
+import { formDataToDataSourceConfig, parseDataSourceToFormData } from './formUtils'
 import type { DataSourceEditorModalProps, DataSourceFormData } from './types'
 
 export const DataSourceEditorModal = observer((props: DataSourceEditorModalProps) => {
@@ -83,20 +83,21 @@ export const DataSourceEditorModal = observer((props: DataSourceEditorModalProps
       <DialogContent className='!max-w-[1200px] max-h-[90vh] overflow-y-auto'>
         <DialogHeader>
           <DialogTitle>数据源{isEdit ? `编辑 - ${formData.id}` : '新增'}</DialogTitle>
-          <DialogDescription className='flex flex-col gap-4 mt-2'>
-            <BasicInfoSection formData={formData} isEdit={isEdit} updateField={updateField} />
-
-            <RequestConfigSection
-              formData={formData}
-              updateField={updateField}
-              updateArrayField={updateArrayField}
-              addArrayItem={addArrayItem}
-              removeArrayItem={removeArrayItem}
-            />
-
-            <FunctionConfigSection formData={formData} updateField={updateField} />
-          </DialogDescription>
+          <DialogDescription>配置数据源的基础信息、请求参数和数据处理函数。</DialogDescription>
         </DialogHeader>
+        <div className='mt-2 flex flex-col gap-4'>
+          <BasicInfoSection formData={formData} isEdit={isEdit} updateField={updateField} />
+
+          <RequestConfigSection
+            formData={formData}
+            updateField={updateField}
+            updateArrayField={updateArrayField}
+            addArrayItem={addArrayItem}
+            removeArrayItem={removeArrayItem}
+          />
+
+          <FunctionConfigSection formData={formData} updateField={updateField} />
+        </div>
         <DialogFooter>
           <Button type='submit' onClick={handleConfirm} className='h-8 text-xs px-4 py-[5px]'>
             确定

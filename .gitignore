@@ -13,6 +13,8 @@ lerna-debug.log*
 # Caches
 
 .cache
+.playwright-cli/
+output/
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 
@@ -106,6 +108,10 @@ web_modules/
 .env.production.local
 .env.local
 
+# Supabase CLI local branch state
+
+supabase/.branches/
+
 # parcel-bundler cache (https://parceljs.org/)
 
 .parcel-cache
@@ -119,6 +125,7 @@ out
 
 .nuxt
 dist
+dist-viewer/
 
 # Gatsby files
 
@@ -176,3 +183,4 @@ dist
 
 # turbo
 .turbo
+.vercel/

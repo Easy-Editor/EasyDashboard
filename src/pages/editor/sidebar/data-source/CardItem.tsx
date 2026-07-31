@@ -47,6 +47,7 @@ export const CardItem = ({
         </Button>
         <Separator orientation='vertical' />
         <AlertModal
+          editorScoped
           title='确定删除吗？'
           description='删除后，该状态将无法恢复。'
           trigger='删除'
@@ -55,6 +56,7 @@ export const CardItem = ({
         />
         <Separator orientation='vertical' />
         <AlertModal
+          editorScoped
           title='确定删除吗？'
           description='复制后，该状态将新增一个副本。'
           trigger='复制'

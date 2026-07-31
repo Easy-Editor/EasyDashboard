@@ -1,11 +1,7 @@
-import { saveProjectSchemaToLocalStorage } from '@/lib/schema'
-import { type Project, TRANSFORM_STAGE } from '@easy-editor/core'
-import { toast } from 'sonner'
+import { requestEditorSave } from '@/editor/persistence/editor-events'
 
-export const createProjectHandlers = (project: Project) => ({
+export const createProjectHandlers = () => ({
   save: () => {
-    const schema = project.export(TRANSFORM_STAGE.SAVE)
-    saveProjectSchemaToLocalStorage(schema)
-    toast.success('保存成功')
+    requestEditorSave()
   },
 })

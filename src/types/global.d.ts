@@ -23,3 +23,5 @@ declare global {
     $EasyEditor?: Record<string, unknown>
   }
 }
+
+export {}

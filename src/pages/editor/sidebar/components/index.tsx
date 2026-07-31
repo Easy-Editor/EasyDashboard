@@ -108,7 +108,7 @@ export const ComponentSidebar = observer(() => {
   }, [componentMetasMap, searchTerm])
 
   // 分离调试组和普通组
-  const debugCategoryMap = groupCategoryMap.get(DEBUG_GROUP) || new Map()
+  const debugCategoryMap = groupCategoryMap.get(DEBUG_GROUP) ?? new Map<string, ComponentMeta[]>()
   const hasMultipleDebugCategories = debugCategoryMap.size > 1 || !debugCategoryMap.has('default')
   groupCategoryMap.delete(DEBUG_GROUP)
 

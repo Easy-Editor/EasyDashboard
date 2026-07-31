@@ -3,12 +3,12 @@
  * 将 React、ReactDOM、echarts 等暴露到 window 对象，供 UMD 组件使用
  */
 
-import * as React from 'react'
-import * as ReactDOM from 'react-dom'
-import * as echarts from 'echarts/core'
 import * as echartsCharts from 'echarts/charts'
 import * as echartsComponents from 'echarts/components'
+import * as echarts from 'echarts/core'
 import * as echartsRenderers from 'echarts/renderers'
+import * as React from 'react'
+import * as ReactDOM from 'react-dom'
 
 /**
  * 初始化全局变量

@@ -117,7 +117,7 @@ export class ScriptLoader {
     version: string,
     file: string,
     context: LoadContext,
-    resourceType: ResourceType,
+    _resourceType: ResourceType,
   ): Promise<void> {
     const cssKey = `${pkg}@${version}-${file.replace(/[/.]/g, '-')}`
 
@@ -128,7 +128,7 @@ export class ScriptLoader {
 
     const url = this.cdnManager.buildUrl(pkg, version, file, context.cdnIndex)
 
-    return new Promise((resolve, reject) => {
+    return new Promise(resolve => {
       // 检查 DOM 中是否已存在
       const existingLink = document.getElementById(`cdn-css-${cssKey}`)
       if (existingLink) {

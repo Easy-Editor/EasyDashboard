@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react'
  * DataTableView - 表格视图
  * 使用 react-data-grid 实现 Excel 风格的数据表格
  */
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { type Column, DataGrid, type RenderEditCellProps } from 'react-data-grid'
 import 'react-data-grid/lib/styles.css'
 import type { ExpectedField } from './types'
@@ -19,9 +19,16 @@ interface DataTableViewProps {
 
 // 自定义文本编辑器
 function TextEditor<TRow, TSummaryRow>({ row, column, onRowChange, onClose }: RenderEditCellProps<TRow, TSummaryRow>) {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
   return (
     <input
-      className='w-full h-full px-2 border-none outline-none bg-background text-foreground text-xs'
+      ref={inputRef}
+      className='ed-data-grid-editor h-full w-full border-none bg-background px-2 text-xs text-foreground outline-none'
       value={(row as any)[column.key] ?? ''}
       onChange={e => onRowChange({ ...row, [column.key]: e.target.value })}
       onBlur={() => onClose(true)}
@@ -32,7 +39,6 @@ function TextEditor<TRow, TSummaryRow>({ row, column, onRowChange, onClose }: Re
           onClose(false)
         }
       }}
-      autoFocus
     />
   )
 }
@@ -71,9 +77,9 @@ export const DataTableView = (props: DataTableViewProps) => {
     const indexColumn: Column<any> = {
       key: '__rowIndex',
       name: '#',
-      width: 40,
-      minWidth: 40,
-      maxWidth: 40,
+      width: 32,
+      minWidth: 32,
+      maxWidth: 32,
       frozen: true,
       resizable: false,
       renderCell: ({ row }: { row: any }) => row.__index + 1,
@@ -97,8 +103,8 @@ export const DataTableView = (props: DataTableViewProps) => {
         }
         return String(value)
       },
-      width: 100,
-      minWidth: 80,
+      width: 'minmax(112px, 1fr)',
+      minWidth: 112,
     }))
 
     return [indexColumn, ...dataColumns]
@@ -131,6 +137,8 @@ export const DataTableView = (props: DataTableViewProps) => {
     onChange([...(data as any[]), newRow])
   }, [data, onChange, fieldKeys])
 
+  const gridHeight = 28 + Math.min(rows.length, 6) * 30
+
   if (rows.length === 0) {
     return (
       <div className='flex flex-col items-center justify-center py-8 px-4 text-muted-foreground text-xs'>
@@ -151,11 +159,14 @@ export const DataTableView = (props: DataTableViewProps) => {
         columns={columns}
         rows={rows}
         onRowsChange={handleRowsChange}
-        className='text-xs !border-none w-full !h-[300px]'
+        className='ed-data-grid w-full !border-none text-xs'
+        headerRowHeight={28}
+        rowHeight={30}
+        style={{ blockSize: gridHeight }}
         rowKeyGetter={(row: { __index: number }) => row.__index}
         enableVirtualization={rows.length > 50}
       />
-      <div className='flex items-center justify-between px-3 py-1.5 text-[11px] text-muted-foreground bg-muted border-t border-border'>
+      <div className='flex h-7 items-center justify-between border-t border-[var(--ed-line)] bg-[var(--ed-panel-raised)] px-2.5 text-[11px] text-[var(--ed-ink-muted)]'>
         {data.length > limit ? (
           <span>
             显示前 {limit} 条，共 {data.length} 条数据
@@ -164,7 +175,12 @@ export const DataTableView = (props: DataTableViewProps) => {
           <span>共 {data.length} 条数据</span>
         )}
         {editable && (
-          <Button variant='ghost' size='sm' className='text-[11px] h-[22px] px-2' onClick={handleAddRow}>
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-[22px] px-2 text-[11px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-blue)]/10 hover:text-[var(--ed-ink)]'
+            onClick={handleAddRow}
+          >
             <Plus className='h-3 w-3 mr-1' />
             添加行
           </Button>

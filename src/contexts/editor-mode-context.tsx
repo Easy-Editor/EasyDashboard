@@ -1,6 +1,6 @@
 import { type ReactNode, createContext, useContext, useState } from 'react'
 
-export type EditorMode = 'canvas' | 'preview' | 'code'
+export type EditorMode = 'canvas' | 'code'
 
 interface EditorModeContextValue {
   mode: EditorMode

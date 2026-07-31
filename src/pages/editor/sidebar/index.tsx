@@ -12,15 +12,18 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Code, Component, Database, File, ListTree, Wand, X } from 'lucide-react'
+import { Code, Component, Database, File, History, Image, ListTree, Palette, Wand, X } from 'lucide-react'
 import type * as React from 'react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { MaterialsSidebar } from './Materials'
+import { OutlineSidebar } from './Outline'
 import { ComponentSidebar } from './components'
 import { DataSourceSidebar } from './data-source'
-import { MaterialsSidebar } from './Materials'
 import { MethodStateSidebar } from './method-state'
-import { OutlineSidebar } from './Outline'
 import { PageSidebar } from './page'
+import { ThemeSidebar } from './theme'
+import { ThumbnailSidebar } from './thumbnail'
+import { VersionsSidebar } from './versions'
 
 const data = {
   navTop: [
@@ -60,16 +63,30 @@ const data = {
       icon: Wand,
       component: <MaterialsSidebar />,
     },
+    {
+      key: 'theme',
+      title: '外观',
+      icon: Palette,
+      component: <ThemeSidebar />,
+    },
+    {
+      key: 'thumbnail',
+      title: '封面',
+      icon: Image,
+      component: <ThumbnailSidebar />,
+    },
+    {
+      key: 'versions',
+      title: '版本记录',
+      icon: History,
+      component: <VersionsSidebar />,
+    },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [activeItem, setActiveItem] = useState(data.navTop[2])
+  const [activeItem, setActiveItem] = useState(data.navTop[0])
   const { open, setOpen } = useSidebar()
-
-  useEffect(() => {
-    setOpen(true)
-  }, [])
 
   return (
     <Sidebar
@@ -80,18 +97,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       style={
         {
           ...props.style,
-          '--sidebar-width': '350px',
+          '--sidebar-width': 'calc(var(--ed-tool-rail-width) + var(--ed-left-panel-width))',
+          '--sidebar-width-icon': 'var(--ed-tool-rail-width)',
         } as React.CSSProperties
       }
     >
-      <Sidebar collapsible='none' className='!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r'>
+      <Sidebar
+        collapsible='none'
+        data-editor-tool-rail
+        className='shrink-0 border-r border-[var(--ed-line)] bg-[var(--ed-rail)]'
+        style={{ width: 'var(--ed-tool-rail-width)' }}
+      >
         <SidebarContent>
-          <SidebarGroup className='h-full'>
-            <SidebarGroupContent className='h-full px-1.5 md:px-0'>
-              <SidebarMenu>
+          <SidebarGroup className='h-full px-1 py-2'>
+            <SidebarGroupContent className='h-full'>
+              <SidebarMenu className='gap-1.5'>
                 {data.navTop.map(item => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
+                      id={`editor-tool-${item.key}`}
+                      aria-label={item.title}
+                      aria-controls='editor-tool-panel'
+                      aria-expanded={activeItem?.key === item.key && open}
+                      aria-pressed={activeItem?.key === item.key}
                       tooltip={{
                         children: item.title,
                         hidden: false,
@@ -102,10 +130,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       }}
                       isActive={activeItem?.key === item.key}
                       data-active={activeItem?.key === item.key}
-                      className='px-2.5 md:px-2 transition-all duration-200 [transition-timing-function:var(--ease-out)] hover:scale-105 active:scale-95'
+                      className='mx-auto size-9 justify-center rounded-md p-0 text-[var(--ed-ink-faint)] transition-colors hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink-soft)] data-[active=true]:bg-[var(--ed-panel-raised)] data-[active=true]:text-[var(--ed-cyan)]'
                     >
-                      <item.icon className='transition-all duration-200 [transition-timing-function:var(--ease-out)] group-hover:scale-110' />
-                      <span>{item.title}</span>
+                      <item.icon className='size-4' />
+                      <span className='sr-only'>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -116,29 +144,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarFooter>{/* <ThemeToggle /> */}</SidebarFooter>
       </Sidebar>
 
-      <Sidebar collapsible='none' className='hidden flex-1 md:flex'>
-        <SidebarHeader className='h-12 px-4 border-b border-border/60 flex items-center justify-between'>
-          <div className='flex items-center gap-2'>
-            <div className='w-1 h-4 bg-foreground rounded-full' />
-            <h2 className='text-sm font-semibold'>{activeItem?.title}</h2>
-          </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant='ghost'
-                size='icon'
-                onClick={() => setOpen(false)}
-                className='h-7 w-7 transition-all duration-200 [transition-timing-function:var(--ease-out)]'
-              >
-                <X className='w-4 h-4' />
-                <span className='sr-only'>关闭</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>关闭</TooltipContent>
-          </Tooltip>
-        </SidebarHeader>
-        <SidebarContent>{activeItem?.component}</SidebarContent>
-      </Sidebar>
+      {open ? (
+        <Sidebar
+          collapsible='none'
+          id='editor-tool-panel'
+          aria-labelledby={`editor-tool-${activeItem.key}`}
+          className='hidden shrink-0 border-r border-[var(--ed-line)] bg-[var(--ed-panel)] md:flex'
+          style={{ width: 'var(--ed-left-panel-width)' }}
+        >
+          <SidebarHeader className='flex h-[var(--ed-panel-header-height)] shrink-0 items-center justify-between border-b border-[var(--ed-line)] px-3'>
+            <div className='flex items-center gap-2'>
+              <div className='h-3.5 w-0.5 rounded-full bg-[var(--ed-cyan)]' />
+              <h2 className='text-[12px] font-medium tracking-wide text-[var(--ed-ink-soft)]'>{activeItem?.title}</h2>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  onClick={() => setOpen(false)}
+                  className='size-7 text-[var(--ed-ink-faint)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+                >
+                  <X className='w-4 h-4' />
+                  <span className='sr-only'>关闭</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>关闭</TooltipContent>
+            </Tooltip>
+          </SidebarHeader>
+          <SidebarContent className='bg-[var(--ed-panel)] text-[var(--ed-ink)]'>{activeItem?.component}</SidebarContent>
+        </Sidebar>
+      ) : null}
     </Sidebar>
   )
 }

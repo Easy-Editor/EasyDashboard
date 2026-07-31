@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { normalizeExtraPropRecord } from '@/editor/extra-prop-record'
 import { cn } from '@/lib/utils'
 import type { JSExpression, SettingField } from '@easy-editor/core'
 import { SquareCode } from 'lucide-react'
@@ -40,7 +41,10 @@ export interface VariableBindProps {
 export const VariableBind = observer((props: VariableBindProps) => {
   const { field } = props
   const originValue = field.getValue() as boolean | JSExpression
-  const state = field.designer?.currentDocument?.rootNode?.getExtraPropValue('state') as Record<string, JSExpression>
+  const state = field.designer?.currentDocument?.rootNode?.getExtraPropValue('state') as
+    | Record<string, JSExpression>
+    | null
+    | undefined
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>(Tab.STATE)
   const [value, setValue] = useState('')
@@ -49,7 +53,7 @@ export const VariableBind = observer((props: VariableBindProps) => {
     if (tab === Tab.BUILTIN) {
       return builtinState
     }
-    return state
+    return normalizeExtraPropRecord(state)
   }, [tab, state])
 
   const addVariable = (key: string) => {
@@ -105,7 +109,7 @@ export const VariableBind = observer((props: VariableBindProps) => {
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DialogContent className='!max-w-[800px]'>
+      <DialogContent data-ed-shell='editor' className='!max-w-[800px]'>
         <DialogHeader>
           <DialogTitle>变量绑定</DialogTitle>
           <DialogDescription className='mt-2'>
@@ -148,7 +152,7 @@ export const VariableBind = observer((props: VariableBindProps) => {
               <div className='flex-1 flex flex-col gap-2'>
                 <div className='font-bold'>绑定</div>
                 <div className='relative w-full h-full'>
-                  <CodeEditor language='javascript' value={value} onChange={setValue} />
+                  <CodeEditor language='javascript' value={value} onChange={nextValue => setValue(nextValue ?? '')} />
                 </div>
               </div>
             </div>

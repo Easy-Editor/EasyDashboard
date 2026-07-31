@@ -1,8 +1,8 @@
+import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import path from 'node:path'
 import ReactComponentName from 'react-scan/react-component-name/vite'
-import { defineConfig } from 'vite'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -37,7 +37,20 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: false,
+      },
+    },
+  },
   build: {
     target: 'esnext',
+  },
+  test: {
+    exclude: [...configDefaults.exclude, '**/dist/**'],
   },
 })

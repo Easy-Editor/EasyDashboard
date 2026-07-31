@@ -27,6 +27,8 @@ export interface DataSetterValue {
   // ===== 数据源模式 (datasource) / 全局数据源模式 (global) =====
   /** 引用的数据源 ID */
   datasourceId?: string
+  /** 从数据源响应中提取数据的可选路径 */
+  dataPath?: string
 
   // ===== 通用 =====
   /** 字段映射配置 */

@@ -1,6 +1,6 @@
 import { DataSourceEditorModal, type DataSourceEditorModalProps } from '@/components/common/datasource-editor'
-import type { DataSource, DataSourceItem, Node } from '@easy-editor/core'
-import type { InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
+import type { Node } from '@easy-editor/core'
+import type { InterpretDataSource, InterpretDataSourceConfig } from '@easy-editor/plugin-datasource'
 import { Plus } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { useState } from 'react'
@@ -9,12 +9,12 @@ import { genId } from '.'
 import { CardItem } from './CardItem'
 
 export const DataSourceList: React.FC<{ rootNode: Node }> = observer(({ rootNode }) => {
-  const dataSource = rootNode.getExtraPropValue('dataSource') as DataSource
-  const dataSourceList = dataSource?.list || []
+  const dataSource = rootNode.getExtraPropValue('dataSource') as InterpretDataSource | undefined
+  const dataSourceList = dataSource?.list ?? []
   const [open, setOpen] = useState(false)
-  const [currentDataSource, setCurrentDataSource] = useState<DataSourceItem | InterpretDataSourceConfig>()
+  const [currentDataSource, setCurrentDataSource] = useState<InterpretDataSourceConfig>()
 
-  const updateDataSourceList = (list: (DataSourceItem | InterpretDataSourceConfig)[]) => {
+  const updateDataSourceList = (list: InterpretDataSourceConfig[]) => {
     rootNode.setExtraPropValue('dataSource', {
       ...dataSource,
       list,
@@ -84,9 +84,16 @@ export const DataSourceList: React.FC<{ rootNode: Node }> = observer(({ rootNode
       onConfirm={handleEditConfirm}
     >
       <div className='space-y-4'>
-        <h3 className='text-xs font-medium text-muted-foreground tracking-wide uppercase flex justify-end items-center m-0'>
-          <Plus className='w-4 h-4 cursor-pointer' onClick={handleAdd} />
-        </h3>
+        <div className='flex items-center justify-end'>
+          <button
+            type='button'
+            aria-label='新增数据源'
+            onClick={handleAdd}
+            className='inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          >
+            <Plus className='size-4' aria-hidden='true' />
+          </button>
+        </div>
         {dataSourceList.length > 0 ? (
           dataSourceList.map(dataSourceConfig => (
             <CardItem
