@@ -18,6 +18,7 @@ export type PublishedProjectRelease = ProjectRelease & {
   slug: string
   stablePath: string
   versionPath: string
+  previewSource?: 'agent_executor' | 'editor_renderer_artifact' | 'editor_blueprint_artifact'
 }
 
 export type RestoredProjectReleaseDraft = {
@@ -91,7 +92,9 @@ export async function publishProjectRelease(
   const projectPath = `/api/projects/${encodeURIComponent(projectId)}`
   const snapshotResponse = await apiRequest<{
     snapshot: { id: string; documentSha256: string }
-    previewRun: unknown | null
+    previewRun: {
+      source: 'agent_executor' | 'editor_renderer_artifact' | 'editor_blueprint_artifact'
+    } | null
   }>(`${projectPath}/agent/publish-snapshots`, {
     method: 'POST',
     body: jsonBody({ draftVersion: expectedVersion }),
@@ -99,7 +102,7 @@ export async function publishProjectRelease(
   if (!snapshotResponse.previewRun) {
     throw new ApiError(409, {
       code: 'PUBLISH_PREVIEW_REQUIRED',
-      message: '发布前需要等待当前草稿生成真实渲染预览',
+      message: '发布前需要等待当前草稿生成可验证的预览证据',
     })
   }
   await apiRequest(
@@ -125,6 +128,7 @@ export async function publishProjectRelease(
     slug: release.slug,
     stablePath: release.stablePath,
     versionPath: release.versionPath,
+    previewSource: snapshotResponse.previewRun.source,
   }
 }
 

@@ -21,6 +21,7 @@ import {
   agentRequiresRemoveForProviderInput,
   agentRequiresRemoveForRequest,
   agentRunInputDigest,
+  createAgentClarificationHistoryProviderInputSnapshot,
   createAgentProviderInputSnapshot,
   createAgentResponseProviderInputSnapshot,
   estimateAgentProviderInputTokens,
@@ -28,18 +29,32 @@ import {
 } from '../agent/change-set-model.js'
 import { agentChangeSetModelOutputSchema, planStrictChangeSet } from '../agent/change-set-planner.js'
 import { derivePublicCost } from '../agent/cost-accuracy.js'
+import {
+  type AgentTaskPlanningDecision,
+  AgentTaskPlanningProviderError,
+  AgentTaskPlanningProviderResponseError,
+  agentTaskPlanningDecisionSchema,
+  requestAgentTaskPlanningDecision,
+} from '../agent/task-planning-model.js'
 import { parseAgentProjectWorkspacePayload } from '../agent/workspace-contract.js'
+import { canonicalJsonSha256 } from '../db/agent-stage-commit.js'
 import type { AppEnv } from '../env.js'
 import { ApiError, readJson } from '../http.js'
 import type { AppVariables } from '../middleware/auth.js'
 import type { AgentExecutorRunner } from '../services/agent-executor-runner.js'
 import type { AgentRunDispatchControl, AgentRunDispatcher } from '../services/agent-run-dispatcher.js'
+import type { AgentTaskTransitionClaim } from '../services/agent-task-orchestrator.js'
+import { AgentTaskPlanningFailure, type AgentTaskPlanningResult } from '../services/agent-task-orchestrator.js'
 import type {
   AgentAssetRecord,
   AgentProviderInputSnapshot,
   AgentRunCostRecord,
   AgentRunDispatchRecord,
   AgentSpikeOperationRecord,
+  AgentTaskEventRecord,
+  AgentTaskEventTechnicalDetails,
+  AgentTaskPublicEventRecord,
+  AgentTaskRunDetailRecord,
   DurableAgentTurnRecord as DurableAgentTurnRecordType,
   DurableProviderAttemptRecord,
   Repository,
@@ -111,6 +126,26 @@ const respondSchema = z
   })
   .strict()
 
+const taskRunRequestSchema = requestSchema.extend({
+  idempotencyKey: z.string().trim().min(1).max(160).optional(),
+})
+
+const taskRunContinueSchema = z
+  .object({
+    questionId: z.string().trim().min(1).max(160),
+    response: z.string().trim().min(1).max(4_000),
+    attachmentIds: z.array(z.uuid()).max(12).default([]),
+    idempotencyKey: z.string().trim().min(1).max(160).optional(),
+  })
+  .strict()
+
+const taskRunEventsQuerySchema = z
+  .object({
+    afterSeq: z.coerce.number().int().nonnegative().default(0),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .strict()
+
 const checkpointUsageSchema = z
   .object({
     promptTokens: z.number().int().nonnegative().optional(),
@@ -161,6 +196,8 @@ export interface AgentRunRouteOptions {
   model?: typeof requestAgentChangeSet
   modelConfig?: Pick<AgentConfigRouteOptions, 'resolveHost' | 'now'>
   planningAttempt?: { dispatchId: string; workerId: string; leaseGeneration: number }
+  wakeTaskOrchestrator?: () => void
+  taskOrchestratorLogger?: Pick<Console, 'warn'>
 }
 
 export function agentRunRequiresRemove(input: {
@@ -201,6 +238,471 @@ function durableRepository(repository: Repository): DurableTurnRepository | null
     typeof candidate.completeAgentProviderAttempt === 'function'
     ? (candidate as DurableTurnRepository)
     : null
+}
+
+type SemanticTaskRunRepository = Repository &
+  Required<
+    Pick<Repository, 'createAgentTaskRun' | 'getAgentTaskRunDetail' | 'listAgentTaskEventPage' | 'continueAgentTaskRun'>
+  >
+
+function semanticTaskRunRepository(repository: Repository): SemanticTaskRunRepository | null {
+  const candidate = repository as Partial<SemanticTaskRunRepository>
+  return typeof candidate.createAgentTaskRun === 'function' &&
+    typeof candidate.getAgentTaskRunDetail === 'function' &&
+    typeof candidate.listAgentTaskEventPage === 'function' &&
+    typeof candidate.continueAgentTaskRun === 'function'
+    ? (candidate as SemanticTaskRunRepository)
+    : null
+}
+
+function publicTaskRunDetail(detail: AgentTaskRunDetailRecord) {
+  const { run, activePlan, waitingReason, latestEventSequence } = detail
+  const question = waitingReason?.publicPayload.question
+  return {
+    id: run.id,
+    projectId: run.projectId,
+    conversationId: run.conversationId,
+    taskId: run.taskId,
+    status: run.status,
+    activePlanVersion: run.activePlanVersion,
+    currentTransitionKey: run.currentTransitionKey,
+    modelBinding: {
+      id: run.modelBindingId,
+      provider: run.provider,
+      model: run.model,
+      profileId: run.profileId,
+      configDigest: run.configDigest,
+    },
+    bounds: run.bounds,
+    accounting: {
+      providerTurns: run.providerTurns,
+      executorRetries: run.executorRetries,
+      semanticRevisions: run.semanticRevisions,
+      promptTokens: run.promptTokens,
+      completionTokens: run.completionTokens,
+      costMicros: run.costMicros,
+    },
+    taskStartDocumentRevision: run.taskStartDocumentRevision,
+    plan: activePlan?.plan ?? null,
+    steps: activePlan?.steps ?? [],
+    waiting:
+      question && typeof question === 'object' && !Array.isArray(question)
+        ? { summary: waitingReason.summary, question }
+        : null,
+    latestEventSequence,
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt,
+    completedAt: run.completedAt,
+  }
+}
+
+const safeTechnicalIdentifier = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/u
+const sensitiveTechnicalIdentifier =
+  /(?:authorization|bearer|cookie|credential|password|secret|token|api[-_]?key)|(?:^sk-(?:proj-)?)|(?:^[\w-]+\.[\w-]+\.[\w-]+$)/iu
+
+function allowlistedTechnicalIdentifier(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  return safeTechnicalIdentifier.test(normalized) && !sensitiveTechnicalIdentifier.test(normalized)
+    ? normalized
+    : undefined
+}
+
+function publicTaskEventTechnicalDetails(event: AgentTaskEventRecord): AgentTaskEventTechnicalDetails | undefined {
+  const technical = event.technicalPayload
+  const errorCode = allowlistedTechnicalIdentifier(technical.errorCode ?? event.publicPayload.code)
+  const operationId = allowlistedTechnicalIdentifier(technical.operationId)
+  const receiptId = allowlistedTechnicalIdentifier(technical.receiptId ?? technical.receipt)
+  const rawCost =
+    technical.cost && typeof technical.cost === 'object' && !Array.isArray(technical.cost)
+      ? (technical.cost as Record<string, unknown>)
+      : technical
+  const amountMicros = rawCost.amountMicros ?? rawCost.costMicros
+  const accuracy = rawCost.accuracy
+  const cost: AgentTaskEventTechnicalDetails['cost'] =
+    typeof amountMicros === 'number' && Number.isSafeInteger(amountMicros) && amountMicros >= 0
+      ? {
+          amountMicros,
+          ...(accuracy === 'actual' || accuracy === 'estimated' || accuracy === 'billing_indeterminate'
+            ? { accuracy }
+            : {}),
+        }
+      : undefined
+  const details = {
+    ...(errorCode ? { errorCode } : {}),
+    ...(operationId ? { operationId } : {}),
+    ...(receiptId ? { receiptId } : {}),
+    ...(cost ? { cost } : {}),
+  }
+  return Object.keys(details).length ? details : undefined
+}
+
+function publicTaskEvent(event: AgentTaskEventRecord): AgentTaskPublicEventRecord {
+  const technicalDetails = publicTaskEventTechnicalDetails(event)
+  return {
+    taskRunId: event.taskRunId,
+    seq: event.seq,
+    eventKey: event.eventKey,
+    stepId: event.stepId,
+    type: event.type,
+    summary: event.summary,
+    publicPayload: event.publicPayload,
+    ...(technicalDetails ? { technicalDetails } : {}),
+    redactionVersion: event.redactionVersion,
+    createdAt: event.createdAt,
+  }
+}
+
+function agentTaskRuntimeConfigDigest(runtime: ResolvedAgentModelRuntime): string {
+  return canonicalJsonSha256({
+    provider: runtime.provider,
+    model: runtime.model,
+    profileId: runtime.profileId,
+    endpoint: runtime.endpoint.toString(),
+    capabilities: runtime.capabilities,
+    budget: runtime.budget,
+    billingScope: runtime.billingScope,
+    payerId: runtime.payerId,
+  })
+}
+
+function stablePlanningStepId(transition: AgentTaskTransitionClaim, ordinal: number, title: string): string {
+  const hex = canonicalJsonSha256({
+    taskRunId: transition.taskRunId,
+    transitionKey: transition.transitionKey,
+    ordinal,
+    title,
+  })
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}
+
+function planningResultFromOutput(
+  output: AgentTaskPlanningDecision,
+  transition: AgentTaskTransitionClaim,
+): AgentTaskPlanningResult {
+  if (output.action === 'ask_user') {
+    return { action: 'ask_user', summary: output.summary, question: output.question }
+  }
+  return {
+    action: 'execute',
+    summary: output.summary,
+    assumptions: output.assumptions,
+    risks: output.risks,
+    verification: output.verification,
+    steps: output.steps.map((step, index) => ({
+      semanticId: stablePlanningStepId(transition, index + 1, step.semanticKey),
+      ordinal: index + 1,
+      title: step.title,
+      intent: { purpose: step.semanticKey, description: step.intent },
+    })),
+  }
+}
+
+const persistedPlanningInputSchema = z
+  .object({
+    purpose: z.literal('planning'),
+    prompt: z.string().trim().min(1).max(4_000),
+    attachmentIds: z.array(z.uuid()).max(12),
+    providerInputSnapshot: z.custom<AgentProviderInputSnapshot>(value =>
+      Boolean(value && typeof value === 'object' && !Array.isArray(value)),
+    ),
+    clarificationHistory: z
+      .array(
+        z
+          .object({
+            question: z.object({ id: z.string().min(1), text: z.string().min(1) }).strict(),
+            response: z.string().trim().min(1).max(4_000),
+            attachmentIds: z.array(z.uuid()).max(12),
+            images: z
+              .array(z.object({ assetId: z.uuid(), sha256: z.string().regex(/^[a-f0-9]{64}$/u) }).strict())
+              .max(12),
+          })
+          .strict(),
+      )
+      .max(8)
+      .default([]),
+  })
+  .strict()
+
+type TaskPlannerRepository = Repository &
+  Required<
+    Pick<
+      Repository,
+      | 'getAgentTaskRun'
+      | 'getAgentTaskTransitionProviderResult'
+      | 'prepareAgentProviderAttempt'
+      | 'markAgentProviderAttemptStarted'
+      | 'completeAgentProviderAttempt'
+    >
+  >
+
+function taskPlannerRepository(repository: Repository): TaskPlannerRepository | null {
+  const candidate = repository as Partial<TaskPlannerRepository>
+  return typeof candidate.getAgentTaskRun === 'function' &&
+    typeof candidate.getAgentTaskTransitionProviderResult === 'function' &&
+    typeof candidate.prepareAgentProviderAttempt === 'function' &&
+    typeof candidate.markAgentProviderAttemptStarted === 'function' &&
+    typeof candidate.completeAgentProviderAttempt === 'function'
+    ? (candidate as TaskPlannerRepository)
+    : null
+}
+
+/**
+ * Real planner adapter for the durable task loop. Provider I/O is fenced by
+ * the claimed transition and is accounted without an operation id.
+ */
+export function createAgentTaskPlanningProvider(options: {
+  repository: Repository
+  env: AppEnv
+  workerId: string
+  model?: typeof requestAgentTaskPlanningDecision
+  modelConfig?: Pick<AgentConfigRouteOptions, 'resolveHost' | 'now'>
+}): (transition: AgentTaskTransitionClaim) => Promise<AgentTaskPlanningResult> {
+  const repository = taskPlannerRepository(options.repository)
+  if (!repository) throw new Error('Agent task planner persistence is unavailable')
+  const model = options.model ?? requestAgentTaskPlanningDecision
+
+  return async transition => {
+    if (!transition.leaseToken) throw new Error('Claimed Agent planning transition is missing its lease token')
+    const frozen = persistedPlanningInputSchema.parse(transition.input)
+    const [run, project] = await Promise.all([
+      repository.getAgentTaskRun(transition.actorId, transition.taskRunId),
+      repository.getProject(transition.actorId, transition.projectId),
+    ])
+    if (!run || run.projectId !== transition.projectId) {
+      throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    }
+    if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    if (project.draftVersion !== run.taskStartDocumentRevision) {
+      throw new ApiError(409, 'AGENT_TASK_PROJECT_STALE', 'Project changed before planning could complete')
+    }
+    const checkpoint = await repository.getAgentTaskTransitionProviderResult(
+      transition.actorId,
+      transition.taskRunId,
+      transition.id,
+    )
+    if (checkpoint) {
+      const outputEnvelope = checkpoint.decisionOutput
+      const checkpointError =
+        outputEnvelope.purpose === 'planning' &&
+        outputEnvelope.error &&
+        typeof outputEnvelope.error === 'object' &&
+        !Array.isArray(outputEnvelope.error)
+          ? (outputEnvelope.error as Record<string, unknown>)
+          : null
+      if (checkpointError?.code === 'provider_response_invalid') {
+        throw new AgentTaskPlanningFailure('provider_response_invalid', false)
+      }
+      const parsedOutput =
+        outputEnvelope.purpose === 'planning'
+          ? agentTaskPlanningDecisionSchema.safeParse(outputEnvelope.output)
+          : { success: false as const }
+      if (!parsedOutput.success) {
+        throw new AgentTaskPlanningFailure('provider_checkpoint_invalid', false)
+      }
+      return planningResultFromOutput(parsedOutput.data, transition)
+    }
+    const runtime = await resolveAgentModelRuntime(
+      { repository, env: options.env, ...options.modelConfig },
+      transition.actorId,
+      transition.projectId,
+    )
+    if (
+      runtime.provider !== run.provider ||
+      runtime.model !== run.model ||
+      runtime.profileId !== run.profileId ||
+      agentTaskRuntimeConfigDigest(runtime) !== run.configDigest
+    ) {
+      throw new ApiError(409, 'AGENT_MODEL_BINDING_DRIFT', 'Conversation model binding changed after task creation')
+    }
+    const allAttachmentIds = [
+      ...new Set([
+        ...frozen.attachmentIds,
+        ...frozen.clarificationHistory.flatMap(clarification => clarification.attachmentIds),
+      ]),
+    ]
+    const attachments = await resolveAttachments(
+      repository,
+      transition.actorId,
+      transition.projectId,
+      run.conversationId,
+      allAttachmentIds,
+    )
+    const images = await resolveModelImages(
+      repository,
+      transition.actorId,
+      transition.projectId,
+      attachments,
+      runtime.capabilities.vision,
+    )
+    const baseSnapshot = frozen.providerInputSnapshot
+    const expectedImages = [
+      ...new Map(
+        [...baseSnapshot.images, ...frozen.clarificationHistory.flatMap(clarification => clarification.images)].map(
+          image => [image.assetId, image],
+        ),
+      ).values(),
+    ]
+    if (
+      expectedImages.length !== images.length ||
+      expectedImages.some(
+        (image, index) => image.assetId !== images[index]?.assetId || image.sha256 !== images[index]?.sha256,
+      )
+    ) {
+      throw new ApiError(409, 'AGENT_TASK_SNAPSHOT_INVALID', 'Frozen Agent image inputs changed after enqueue')
+    }
+    const providerInputSnapshot = frozen.clarificationHistory.length
+      ? createAgentClarificationHistoryProviderInputSnapshot(
+          baseSnapshot,
+          frozen.clarificationHistory,
+          attachments,
+          images.map(image => ({ assetId: image.assetId, sha256: image.sha256 })),
+        )
+      : baseSnapshot
+    const maximumRate = options.env.AGENT_BILLING_MAX_USD_PER_1M_TOKENS ?? 100
+    const estimatedMicros = Math.min(
+      2_147_483_647,
+      Math.ceil(estimateAgentProviderInputTokens(providerInputSnapshot) * maximumRate),
+    )
+    const fence = {
+      kind: 'transition' as const,
+      transitionId: transition.id,
+      workerId: options.workerId,
+      leaseGeneration: transition.leaseGeneration,
+      leaseToken: transition.leaseToken,
+    }
+    const attemptState: { current: DurableProviderAttemptRecord | null } = { current: null }
+    try {
+      const result = await model({
+        runtime,
+        images: images.map(image => ({ assetId: image.assetId, url: image.url })),
+        providerInputSnapshot,
+        resolveHost: options.modelConfig?.resolveHost,
+        providerAttemptLifecycle: {
+          async prepare(metadata) {
+            const prepared = await repository.prepareAgentProviderAttempt(transition.actorId, fence, {
+              projectId: transition.projectId,
+              taskId: run.taskId,
+              turnId: transition.transitionKey,
+              providerRequestKey: metadata.providerRequestKey ?? null,
+              requestBodyDigest: metadata.requestBodyDigest,
+              idempotencyMode: metadata.idempotencyMode,
+              reservedMicros: estimatedMicros,
+              now: options.modelConfig?.now?.() ?? new Date(),
+            })
+            if (prepared === 'stale') {
+              throw new ApiError(409, 'AGENT_TASK_TRANSITION_STALE', 'Agent planning lease is no longer current')
+            }
+            if (prepared === 'outcome_unknown') {
+              throw new ApiError(409, 'AGENT_PROVIDER_BILLING_INDETERMINATE', 'Provider outcome is unknown')
+            }
+            if (prepared === 'task_budget_exceeded' || prepared === 'project_budget_exceeded') {
+              throw new ApiError(429, 'AGENT_TASK_BUDGET_EXCEEDED', 'Agent task budget was exhausted before planning')
+            }
+            attemptState.current = prepared
+            return {
+              ...(prepared.providerRequestKey ? { providerRequestKey: prepared.providerRequestKey } : {}),
+              requestBodyDigest: prepared.requestBodyDigest,
+              idempotencyMode: prepared.idempotencyMode,
+            }
+          },
+          async markStarted() {
+            if (!attemptState.current) throw new Error('Provider attempt was not prepared')
+            const started = await repository.markAgentProviderAttemptStarted(
+              transition.actorId,
+              attemptState.current.id,
+              fence,
+              options.modelConfig?.now?.() ?? new Date(),
+            )
+            if (!started) throw new ApiError(409, 'AGENT_TASK_TRANSITION_STALE', 'Agent planning lease is stale')
+            attemptState.current = started
+          },
+        },
+      })
+      if (!attemptState.current || !result.providerAttempt) {
+        throw new ApiError(503, 'AGENT_PROVIDER_ATTEMPT_UNAVAILABLE', 'Provider attempt result was not persisted')
+      }
+      const totalTokens =
+        result.usage?.totalTokens ??
+        ((result.usage?.promptTokens ?? 0) + (result.usage?.completionTokens ?? 0) || undefined)
+      const settled = requireCurrentProviderAttemptCompletion(
+        await repository.completeAgentProviderAttempt(transition.actorId, attemptState.current.id, fence, {
+          state: 'succeeded',
+          providerAttempt: result.providerAttempt,
+          decisionOutput: { purpose: 'planning', output: result.output },
+          decisionUsage: result.usage ? { ...result.usage } : null,
+          decisionTrace: { purpose: 'planning', transitionKey: transition.transitionKey, ...result.trace },
+          observedTokens: totalTokens,
+          promptTokens: result.usage?.promptTokens,
+          completionTokens: result.usage?.completionTokens,
+          cachedTokens: result.usage?.cachedTokens,
+          estimatedMicros: Math.min(
+            2_147_483_647,
+            providerSettlementEstimateMicros(estimatedMicros, totalTokens, maximumRate),
+          ),
+          now: options.modelConfig?.now?.() ?? new Date(),
+        }),
+      )
+      if (settled.taskOutcomeClassification !== 'within_budget') {
+        throw new AgentTaskPlanningFailure('task_budget_exceeded', false, true)
+      }
+      return planningResultFromOutput(result.output, transition)
+    } catch (error) {
+      if (error instanceof AgentTaskPlanningProviderResponseError && attemptState.current) {
+        if (error.classification === 'transient') {
+          const settled = requireCurrentProviderAttemptCompletion(
+            await repository.completeAgentProviderAttempt(transition.actorId, attemptState.current.id, fence, {
+              state: 'failed_definite',
+              providerAttempt: { ...error.providerAttempt, reason: 'provider_response_transient' },
+              estimatedMicros,
+              now: options.modelConfig?.now?.() ?? new Date(),
+            }),
+          )
+          if (settled.taskOutcomeClassification === 'task_budget_exceeded_paused') {
+            throw new AgentTaskPlanningFailure('task_budget_exceeded', false, true)
+          }
+          throw new AgentTaskPlanningFailure('provider_response_transient', true)
+        }
+        const settled = requireCurrentProviderAttemptCompletion(
+          await repository.completeAgentProviderAttempt(transition.actorId, attemptState.current.id, fence, {
+            state: 'succeeded',
+            providerAttempt: error.providerAttempt,
+            decisionOutput: { purpose: 'planning', error: { code: 'provider_response_invalid' } },
+            decisionUsage: null,
+            decisionTrace: { purpose: 'planning', transitionKey: transition.transitionKey },
+            terminalTransitionFailure: {
+              code: 'provider_response_invalid',
+              summary: '规划模型返回了无法安全使用的结果，任务已停止。',
+              publicPayload: { code: 'provider_response_invalid' },
+              technicalPayload: {},
+            },
+            estimatedMicros,
+            now: options.modelConfig?.now?.() ?? new Date(),
+          }),
+        )
+        if (settled.taskOutcomeClassification !== 'transition_failed_terminal') {
+          throw new AgentTaskPlanningFailure('provider_failure_persistence_incomplete', false)
+        }
+        throw new AgentTaskPlanningFailure('provider_response_invalid', false, true)
+      }
+      if (error instanceof AgentTaskPlanningProviderError && attemptState.current) {
+        const settled = requireCurrentProviderAttemptCompletion(
+          await repository.completeAgentProviderAttempt(transition.actorId, attemptState.current.id, fence, {
+            state: error.providerAttempt.outcome,
+            providerAttempt: error.providerAttempt,
+            estimatedMicros,
+            now: options.modelConfig?.now?.() ?? new Date(),
+          }),
+        )
+        if (settled.taskOutcomeClassification === 'provider_outcome_unknown_paused') {
+          throw new AgentTaskPlanningFailure('provider_outcome_unknown', false, true)
+        }
+        throw new AgentTaskPlanningFailure('provider_failed_definite', true)
+      }
+      if (error instanceof ApiError) throw new AgentTaskPlanningFailure(error.code, false)
+      throw error
+    }
+  }
 }
 
 function durableCost(cost: AgentRunCostRecord | null | undefined) {
@@ -515,6 +1017,7 @@ async function assertAgentRunWorkspaceAuthority(
   conversationId: string,
   taskId: string,
 ): Promise<{
+  workspaceVersion: 1 | 2
   conversationTurns: Array<{ role: 'user' | 'assistant'; content: string }>
   projectContext: Array<{ title: string; content: string; status: 'pending' | 'confirmed' }>
 }> {
@@ -536,6 +1039,7 @@ async function assertAgentRunWorkspaceAuthority(
   const priorMessages =
     currentTaskMessageIndex === -1 ? conversation.messages : conversation.messages.slice(0, currentTaskMessageIndex)
   return {
+    workspaceVersion: payload.version,
     conversationTurns: priorMessages.flatMap(message =>
       message.role === 'user' || message.role === 'assistant' ? [{ role: message.role, content: message.content }] : [],
     ),
@@ -601,6 +1105,217 @@ async function repairMissingAgentRunDispatch(
 
 export function createAgentRunRoutes(options: AgentRunRouteOptions) {
   const app = new Hono<{ Variables: AppVariables }>()
+
+  const wakeTaskOrchestrator = (projectId: string, taskRunId: string) => {
+    try {
+      options.wakeTaskOrchestrator?.()
+    } catch {
+      ;(options.taskOrchestratorLogger ?? console).warn({
+        code: 'AGENT_TASK_ORCHESTRATOR_WAKE_FAILED',
+        projectId,
+        taskRunId,
+      })
+    }
+  }
+
+  const requireSemanticTaskRuns = (): SemanticTaskRunRepository => {
+    if (!options.env.AGENT_TASK_LOOP_V1) {
+      throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    }
+    const repository = semanticTaskRunRepository(options.repository)
+    if (!repository) {
+      throw new ApiError(503, 'AGENT_TASK_LOOP_UNAVAILABLE', 'Agent task loop persistence is unavailable')
+    }
+    return repository
+  }
+
+  app.post('/:projectId/agent/task-runs', async c => {
+    const repository = requireSemanticTaskRuns()
+    const actorId = c.get('actorId')
+    const projectId = c.req.param('projectId')
+    const body = await readJson(c, taskRunRequestSchema)
+    const project = await repository.getProject(actorId, projectId)
+    if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    const workspaceAuthority = await assertAgentRunWorkspaceAuthority(
+      repository,
+      actorId,
+      projectId,
+      body.conversationId,
+      body.taskId,
+    )
+    if (workspaceAuthority.workspaceVersion !== 2) {
+      throw new ApiError(
+        409,
+        'AGENT_WORKSPACE_UPGRADE_REQUIRED',
+        'Historical Agent tasks remain readable but cannot start a semantic task run',
+      )
+    }
+    const attachments = await resolveAttachments(
+      repository,
+      actorId,
+      projectId,
+      body.conversationId,
+      body.attachmentIds,
+    )
+    const runtime = await resolveAgentModelRuntime(
+      { repository, env: options.env, ...options.modelConfig },
+      actorId,
+      projectId,
+    )
+    const userPreferences = repository.getAgentUserPreferenceMemory
+      ? agentUserPreferencesForModel(await repository.getAgentUserPreferenceMemory(actorId))
+      : []
+    const images = await resolveModelImages(repository, actorId, projectId, attachments, runtime.capabilities.vision)
+    const providerInputSnapshot = createAgentProviderInputSnapshot({
+      prompt: body.prompt,
+      conversationTurns: workspaceAuthority.conversationTurns,
+      selectionContext: body.selectionContext,
+      project,
+      conversationId: body.conversationId,
+      taskId: body.taskId,
+      attachments,
+      projectContext: workspaceAuthority.projectContext,
+      userPreferences,
+      images: images.map(image => ({ assetId: image.assetId, sha256: image.sha256 })),
+      linkedPieChartStyles: options.env.AGENT_ENABLE_LINKED_PIE_CHART_0_0_8,
+    })
+    const estimatedTokens = estimateAgentProviderInputTokens(providerInputSnapshot)
+    const configDigest = agentTaskRuntimeConfigDigest(runtime)
+    const createdAt = options.modelConfig?.now?.() ?? new Date()
+    const idempotencyKey =
+      body.idempotencyKey ??
+      `task-run:${canonicalJsonSha256({ projectId, conversationId: body.conversationId, taskId: body.taskId })}`
+    const created = await repository.createAgentTaskRun(actorId, {
+      projectId,
+      conversationId: body.conversationId,
+      taskId: body.taskId,
+      idempotencyKey,
+      binding: {
+        provider: runtime.provider,
+        model: runtime.model,
+        profileId: runtime.profileId,
+        configDigest,
+      },
+      bounds: {
+        maxProviderTurns: 12,
+        maxStepRevisions: 2,
+        maxExecutorRetries: 2,
+        tokenLimit: Math.max(estimatedTokens, 64_000),
+        costLimitMicros: runtime.budget.taskMicros,
+      },
+      taskStartDocumentRevision: project.draftVersion,
+      planningInput: {
+        purpose: 'planning',
+        prompt: body.prompt,
+        attachmentIds: body.attachmentIds,
+        providerInputSnapshot,
+        clarificationHistory: [],
+      },
+      now: createdAt,
+    })
+    if (created === 'configuration_drift') {
+      throw new ApiError(409, 'AGENT_MODEL_BINDING_DRIFT', 'Conversation model binding changed after task creation')
+    }
+    if (created === 'conflict') {
+      throw new ApiError(409, 'AGENT_TASK_IDEMPOTENCY_CONFLICT', 'Agent task input changed after it was submitted')
+    }
+    if (created === 'workspace_unavailable') {
+      throw new ApiError(503, 'AGENT_TASK_RUN_BINDING_UNAVAILABLE', 'Agent task workspace is unavailable')
+    }
+    if (!created) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    const detail = await repository.getAgentTaskRunDetail(actorId, projectId, created.id)
+    if (!detail)
+      throw new ApiError(503, 'AGENT_TASK_RUN_UNAVAILABLE', 'Agent task run could not be read after creation')
+    wakeTaskOrchestrator(projectId, created.id)
+    return c.json({ taskRun: publicTaskRunDetail(detail) }, 202)
+  })
+
+  app.get('/:projectId/agent/task-runs/:taskRunId', async c => {
+    const repository = requireSemanticTaskRuns()
+    const actorId = c.get('actorId')
+    const projectId = c.req.param('projectId')
+    const taskRunId = c.req.param('taskRunId')
+    const detail = await repository.getAgentTaskRunDetail(actorId, projectId, taskRunId)
+    if (!detail) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    return c.json({ taskRun: publicTaskRunDetail(detail) })
+  })
+
+  app.get('/:projectId/agent/task-runs/:taskRunId/events', async c => {
+    const repository = requireSemanticTaskRuns()
+    const actorId = c.get('actorId')
+    const projectId = c.req.param('projectId')
+    const taskRunId = c.req.param('taskRunId')
+    const parsedQuery = taskRunEventsQuerySchema.safeParse(c.req.query())
+    if (!parsedQuery.success) {
+      throw new ApiError(422, 'VALIDATION_FAILED', 'Agent task event query is invalid')
+    }
+    const query = parsedQuery.data
+    const page = await repository.listAgentTaskEventPage(actorId, projectId, taskRunId, query)
+    if (!page) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    return c.json({
+      events: page.events.map(publicTaskEvent),
+      latestEventSequence: page.latestEventSequence,
+      retentionPolicy: {
+        version: 'unbounded_v1',
+        earliestAvailableSequence: page.latestEventSequence === 0 ? 0 : 1,
+      },
+      artifactPolicy: { version: 'none_v1' },
+    })
+  })
+
+  app.post('/:projectId/agent/task-runs/:taskRunId/continue', async c => {
+    const repository = requireSemanticTaskRuns()
+    const actorId = c.get('actorId')
+    const projectId = c.req.param('projectId')
+    const taskRunId = c.req.param('taskRunId')
+    const body = await readJson(c, taskRunContinueSchema)
+    const currentDetail = await repository.getAgentTaskRunDetail(actorId, projectId, taskRunId)
+    if (!currentDetail) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    const attachments = await resolveAttachments(
+      repository,
+      actorId,
+      projectId,
+      currentDetail.run.conversationId,
+      body.attachmentIds,
+    )
+    const runtime = await resolveAgentModelRuntime(
+      { repository, env: options.env, ...options.modelConfig },
+      actorId,
+      projectId,
+    )
+    const images = await resolveModelImages(repository, actorId, projectId, attachments, runtime.capabilities.vision)
+    const continuedAt = options.modelConfig?.now?.() ?? new Date()
+    const idempotencyKey =
+      body.idempotencyKey ??
+      `continue:${canonicalJsonSha256({
+        taskRunId,
+        questionId: body.questionId,
+        response: body.response,
+        attachmentIds: body.attachmentIds,
+      })}`
+    const continued = await repository.continueAgentTaskRun(actorId, {
+      projectId,
+      taskRunId,
+      questionId: body.questionId,
+      response: body.response,
+      attachmentIds: body.attachmentIds,
+      imageInputs: images.map(image => ({ assetId: image.assetId, sha256: image.sha256 })),
+      idempotencyKey,
+      now: continuedAt,
+    })
+    if (continued === 'conflict') {
+      throw new ApiError(409, 'AGENT_TASK_CONTINUE_CONFLICT', 'Agent task continuation input changed after submission')
+    }
+    if (continued === 'invalid_state') {
+      throw new ApiError(409, 'AGENT_TASK_CONTINUE_INVALID_STATE', 'Agent task is not waiting for this response')
+    }
+    if (!continued) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    const detail = await repository.getAgentTaskRunDetail(actorId, projectId, taskRunId)
+    if (!detail)
+      throw new ApiError(503, 'AGENT_TASK_RUN_UNAVAILABLE', 'Agent task run could not be read after continue')
+    wakeTaskOrchestrator(projectId, taskRunId)
+    return c.json({ taskRun: publicTaskRunDetail(detail) }, 202)
+  })
 
   app.post('/:projectId/agent/runs', async c => {
     if (!options.dispatcher) {

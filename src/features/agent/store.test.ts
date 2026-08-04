@@ -19,6 +19,8 @@ import {
   recordAgentRunRollback,
   recordAgentTaskPlan,
   recordAgentTaskQuestion,
+  recordAgentTaskRunDetail,
+  replaceAgentWorkspace,
   rollbackProjectContext,
   setAgentMessageAttachments,
   updateAgentPreferences,
@@ -26,6 +28,13 @@ import {
   upsertProjectContext,
 } from './store'
 import type { AgentStorage } from './types'
+
+const legacyStages = () => [
+  { id: 'understand-requirements' as const, title: '理解请求', status: 'complete' as const },
+  { id: 'plan-layout' as const, title: '制定方案', status: 'waiting' as const, detail: '等待 Agent 开始处理' },
+  { id: 'bind-data' as const, title: '执行修改', status: 'pending' as const },
+  { id: 'preview-check' as const, title: '检查结果', status: 'pending' as const },
+]
 
 function createStorage(): AgentStorage {
   const values = new Map<string, string>()
@@ -144,7 +153,7 @@ describe('agent workspace storage', () => {
     expect(getConversation('user-b', first.id, storage)).toBeUndefined()
   })
 
-  it('creates a waiting task and does not pretend that execution has started', () => {
+  it('creates a waiting task without fabricating a fixed execution plan', () => {
     const storage = createStorage()
     const conversation = createAgentConversation(
       { ownerUserId: 'user-a', projectId: 'project-a', initialMessage: '生成大屏' },
@@ -153,12 +162,7 @@ describe('agent workspace storage', () => {
 
     expect(conversation.tasks[0]).toMatchObject({
       status: 'waiting',
-      stages: [
-        { title: '理解请求', status: 'complete' },
-        { title: '制定方案', status: 'waiting', detail: '等待 Agent 开始处理' },
-        { title: '执行修改', status: 'pending' },
-        { title: '检查结果', status: 'pending' },
-      ],
+      stages: [],
     })
 
     const task = conversation.tasks[0]
@@ -213,12 +217,7 @@ describe('agent workspace storage', () => {
     expect(updated.tasks).toHaveLength(2)
     expect(updated.tasks[1]).toMatchObject({
       status: 'waiting',
-      stages: [
-        { title: '理解请求', status: 'complete' },
-        { title: '制定方案', status: 'waiting', detail: '等待 Agent 开始处理' },
-        { title: '执行修改', status: 'pending' },
-        { title: '检查结果', status: 'pending' },
-      ],
+      stages: [],
     })
   })
 
@@ -559,12 +558,7 @@ describe('agent workspace storage', () => {
       id: task.id,
       status: 'waiting',
       usage: { promptTokens: 120, completionTokens: 80, totalTokens: 200 },
-      stages: [
-        { id: 'understand-requirements', status: 'complete' },
-        { id: 'plan-layout', status: 'complete' },
-        { id: 'bind-data', status: 'waiting', detail: '方案已确定，正在执行修改' },
-        { id: 'preview-check', status: 'pending' },
-      ],
+      stages: [],
     })
     expect(getTaskUserMessage(retried, task.id)?.content).toBe('创建大屏')
   })
@@ -577,6 +571,12 @@ describe('agent workspace storage', () => {
     )
     const task = conversation.tasks[0]
     if (!task) throw new Error('Expected initial task')
+    task.stages = legacyStages()
+    const workspace = readAgentWorkspace('user-a', storage)
+    const storedTask = workspace.conversations[0]?.tasks[0]
+    if (!storedTask) throw new Error('Expected stored task')
+    storedTask.stages = legacyStages()
+    replaceAgentWorkspace(workspace, storage)
 
     const planning = recordAgentRun(
       {
@@ -672,12 +672,233 @@ describe('agent workspace storage', () => {
     })
   })
 
-  it('uses user-facing generic stages instead of exposing one implementation path', () => {
+  it('does not construct local Todo stages before the persisted planner responds', () => {
     const task = createInitialAgentTask('2026-07-31T08:00:00.000Z')
 
-    expect(task.stages.map(stage => stage.title)).toEqual(['理解请求', '制定方案', '执行修改', '检查结果'])
-    expect(task.stages.map(stage => stage.title)).not.toContain('数据绑定')
+    expect(task.stages).toEqual([])
+    expect(task.activePlan).toBeUndefined()
     expect(task.title).toBe('Agent 修改任务')
+  })
+
+  it('keeps the legacy operation fallback usable without recreating fake stages', () => {
+    const storage = createStorage()
+    const conversation = createAgentConversation(
+      { ownerUserId: 'user-a', projectId: 'project-a', initialMessage: '执行修改' },
+      storage,
+    )
+    const task = conversation.tasks[0]
+    if (!task) throw new Error('Expected initial task')
+
+    const updated = updateTaskProgress(
+      {
+        ownerUserId: 'user-a',
+        conversationId: conversation.id,
+        taskId: task.id,
+        taskStatus: 'running',
+        stageId: 'plan-layout',
+        stageStatus: 'running',
+      },
+      storage,
+    )
+
+    expect(updated).toMatchObject({ status: 'running', stages: [] })
+  })
+
+  it('hydrates the persisted plan and merges activity by monotonic sequence', () => {
+    const storage = createStorage()
+    const conversation = createAgentConversation(
+      { ownerUserId: 'user-a', projectId: 'project-a', initialMessage: '实现左右面板' },
+      storage,
+    )
+    const task = conversation.tasks[0]
+    if (!task) throw new Error('Expected initial task')
+    const detail = {
+      id: 'task-run-1',
+      projectId: 'project-a',
+      conversationId: conversation.id,
+      taskId: task.id,
+      status: 'running' as const,
+      activePlanVersion: 1,
+      currentTransitionKey: 'step:layout:1',
+      modelBinding: { provider: 'openai', model: 'gpt-5', profileId: 'default', configDigest: 'digest' },
+      bounds: {
+        maxProviderTurns: 12,
+        maxStepRevisions: 2,
+        maxExecutorRetries: 2,
+        tokenLimit: 100000,
+        costLimitMicros: 500000,
+      },
+      accounting: {
+        providerTurns: 2,
+        executorRetries: 0,
+        semanticRevisions: 0,
+        promptTokens: 80,
+        completionTokens: 20,
+        costMicros: 800,
+      },
+      taskStartDocumentRevision: 3,
+      latestEventSequence: 3,
+      activePlan: {
+        id: 'plan-1',
+        version: 1,
+        summary: '搭建左右结构',
+        assumptions: [],
+        verification: {},
+        createdAt: '2026-08-04T08:00:10.000Z',
+        steps: [
+          {
+            id: 'step-1',
+            planVersion: 1,
+            ordinal: 1,
+            semanticStepKey: 'layout',
+            title: '搭建左右面板',
+            intent: {},
+            status: 'running' as const,
+            lastObservation: null,
+            createdAt: '2026-08-04T08:00:10.000Z',
+            updatedAt: '2026-08-04T08:00:20.000Z',
+          },
+        ],
+      },
+      waiting: null,
+      createdAt: '2026-08-04T08:00:00.000Z',
+      updatedAt: '2026-08-04T08:00:20.000Z',
+      completedAt: null,
+    }
+    const event = (seq: number, summary: string) => ({
+      taskRunId: 'task-run-1',
+      seq,
+      eventKey: `event:${seq}`,
+      stepId: 'step-1',
+      type: 'step_started' as const,
+      summary,
+      publicPayload: {},
+      redactionVersion: 1,
+      createdAt: `2026-08-04T08:00:2${seq}.000Z`,
+    })
+
+    recordAgentTaskRunDetail(
+      { ownerUserId: 'user-a', conversationId: conversation.id, detail, events: [event(2, '第二条')] },
+      storage,
+    )
+    const merged = recordAgentTaskRunDetail(
+      {
+        ownerUserId: 'user-a',
+        conversationId: conversation.id,
+        detail: { ...detail, latestEventSequence: 2, updatedAt: '2026-08-04T08:00:15.000Z' },
+        events: [event(1, '较旧'), event(2, '重复'), event(3, '第三条')],
+      },
+      storage,
+    )
+
+    expect(merged.taskRunId).toBe('task-run-1')
+    expect(merged.activePlan?.steps).toEqual([expect.objectContaining({ id: 'step-1', status: 'running' })])
+    expect(merged.latestEventSequence).toBe(3)
+    expect(merged.activities?.map(activity => [activity.seq, activity.summary])).toEqual([
+      [1, '较旧'],
+      [2, '第二条'],
+      [3, '第三条'],
+    ])
+    expect(merged.updatedAt).toBe('2026-08-04T08:00:20.000Z')
+  })
+
+  it('does not regress a completed semantic run from a stale same-timestamp snapshot', () => {
+    const storage = createStorage()
+    const conversation = createAgentConversation(
+      { ownerUserId: 'user-a', projectId: 'project-a', initialMessage: '实现左右面板' },
+      storage,
+    )
+    const task = conversation.tasks[0]
+    if (!task) throw new Error('Expected initial task')
+    const completed = {
+      id: 'task-run-monotonic',
+      projectId: 'project-a',
+      conversationId: conversation.id,
+      taskId: task.id,
+      status: 'completed' as const,
+      activePlanVersion: 2,
+      currentTransitionKey: 'complete:2',
+      modelBinding: { provider: 'openai', model: 'gpt-5', profileId: 'default', configDigest: 'digest' },
+      bounds: {
+        maxProviderTurns: 12,
+        maxStepRevisions: 2,
+        maxExecutorRetries: 2,
+        tokenLimit: 100000,
+        costLimitMicros: 500000,
+      },
+      accounting: {
+        providerTurns: 4,
+        executorRetries: 0,
+        semanticRevisions: 1,
+        promptTokens: 120,
+        completionTokens: 40,
+        costMicros: 1200,
+      },
+      taskStartDocumentRevision: 3,
+      latestEventSequence: 8,
+      activePlan: {
+        id: 'plan-2',
+        version: 2,
+        summary: '完成左右结构',
+        assumptions: [],
+        verification: {},
+        createdAt: '2026-08-04T08:01:00.000Z',
+        steps: [
+          {
+            id: 'step-layout',
+            planVersion: 2,
+            ordinal: 1,
+            semanticStepKey: 'layout',
+            title: '搭建左右面板',
+            intent: {},
+            status: 'passed' as const,
+            lastObservation: { result: 'ok' },
+            createdAt: '2026-08-04T08:01:00.000Z',
+            updatedAt: '2026-08-04T08:02:00.000Z',
+          },
+        ],
+      },
+      waiting: null,
+      createdAt: '2026-08-04T08:00:00.000Z',
+      updatedAt: '2026-08-04T08:02:00.000Z',
+      completedAt: '2026-08-04T08:02:00.000Z',
+    }
+
+    recordAgentTaskRunDetail({ ownerUserId: 'user-a', conversationId: conversation.id, detail: completed }, storage)
+    const merged = recordAgentTaskRunDetail(
+      {
+        ownerUserId: 'user-a',
+        conversationId: conversation.id,
+        detail: {
+          ...completed,
+          status: 'running',
+          activePlanVersion: 1,
+          currentTransitionKey: 'step:layout:1',
+          latestEventSequence: 7,
+          completedAt: null,
+          activePlan: {
+            ...completed.activePlan,
+            version: 1,
+            steps: [
+              {
+                ...completed.activePlan.steps[0]!,
+                planVersion: 1,
+                status: 'running',
+                lastObservation: null,
+              },
+            ],
+          },
+        },
+      },
+      storage,
+    )
+
+    expect(merged.status).toBe('complete')
+    expect(merged.taskRun).toMatchObject({ status: 'completed', activePlanVersion: 2, latestEventSequence: 8 })
+    expect(merged.activePlan).toMatchObject({
+      version: 2,
+      steps: [expect.objectContaining({ id: 'step-layout', status: 'passed' })],
+    })
   })
 
   it.each(['paused', 'canceled'] as const)('persists the %s run as a task control state', status => {

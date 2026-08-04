@@ -281,7 +281,13 @@ export function PublishShareDialog({
       setLoadError(null)
       setRestoredReleaseNumber(null)
       onPublicationChange?.(release)
-      toast.success(`版本 ${release.releaseNumber} 已发布`)
+      if (release.previewSource === 'editor_blueprint_artifact') {
+        toast.warning(`版本 ${release.releaseNumber} 已发布`, {
+          description: '跨域资源阻止了截图编码，本次使用结构蓝图作为降级预览证据。',
+        })
+      } else {
+        toast.success(`版本 ${release.releaseNumber} 已发布`)
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '发布失败')
     } finally {
@@ -522,7 +528,7 @@ export function PublishShareDialog({
               onClick={() => void publishCurrentDraft()}
             >
               {isPublishing ? <Loader2 className='size-3.5 animate-spin' /> : null}
-              {isPublishing ? '正在发布' : isPublished ? '发布新版本' : '发布当前草稿'}
+              {isPublishing ? '正在发布' : '发布当前草稿'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -547,7 +553,7 @@ export function PublishShareDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className='border border-[#5B4327] bg-[#211A12] px-3 py-2.5 text-[11px] leading-5 text-[#D7B578]'>
-            此操作不会改变任何公开链接；如需让恢复后的内容上线，仍需再次点击“发布新版本”。
+            此操作不会改变任何公开链接；如需让恢复后的内容上线，仍需再次点击“发布当前草稿”。
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel

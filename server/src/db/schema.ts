@@ -1,6 +1,8 @@
+import { sql } from 'drizzle-orm'
 import {
   boolean,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -336,7 +338,9 @@ export const projectPreviewRuns = appSchema.table(
       .references(() => projectPublishSnapshots.id, { onDelete: 'cascade' })
       .unique(),
     source: text('source')
-      .$type<'agent_executor' | 'owner_live_render_attestation' | 'editor_renderer_artifact'>()
+      .$type<
+        'agent_executor' | 'owner_live_render_attestation' | 'editor_renderer_artifact' | 'editor_blueprint_artifact'
+      >()
       .notNull(),
     status: text('status').$type<'verified'>().notNull(),
     documentSha256: text('document_sha256').notNull(),
@@ -534,6 +538,319 @@ export const agentRunDispatches = appSchema.table(
   ],
 )
 
+export const agentConversationModelBindings = appSchema.table(
+  'agent_conversation_model_bindings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    actorId: uuid('actor_id').notNull(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    profileId: text('profile_id').notNull(),
+    configDigest: text('config_digest').notNull(),
+    boundAt: timestamp('bound_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    uniqueIndex('agent_conversation_model_bindings_project_conversation_uidx').on(
+      table.projectId,
+      table.conversationId,
+    ),
+    uniqueIndex('agent_conversation_model_bindings_id_actor_project_uidx').on(table.id, table.actorId, table.projectId),
+  ],
+)
+
+export const agentTaskRuns = appSchema.table(
+  'agent_task_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    actorId: uuid('actor_id').notNull(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id').notNull(),
+    taskId: text('task_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestDigest: text('request_digest').notNull(),
+    status: text('status').notNull().default('planning'),
+    activePlanVersion: integer('active_plan_version').notNull().default(0),
+    currentTransitionKey: text('current_transition_key'),
+    modelBindingId: uuid('model_binding_id')
+      .notNull()
+      .references(() => agentConversationModelBindings.id, { onDelete: 'restrict' }),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    profileId: text('profile_id').notNull(),
+    configDigest: text('config_digest').notNull(),
+    bounds: jsonb('bounds_json').$type<Record<string, number>>().notNull(),
+    providerTurns: integer('provider_turns').notNull().default(0),
+    executorRetries: integer('executor_retries').notNull().default(0),
+    semanticRevisions: integer('semantic_revisions').notNull().default(0),
+    promptTokens: integer('prompt_tokens').notNull().default(0),
+    completionTokens: integer('completion_tokens').notNull().default(0),
+    costMicros: integer('cost_micros').notNull().default(0),
+    taskStartDocumentRevision: integer('task_start_document_revision').notNull(),
+    nextTransitionGeneration: integer('next_transition_generation').notNull().default(1),
+    nextEventSequence: integer('next_event_sequence').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  table => [
+    uniqueIndex('agent_task_runs_actor_idempotency_uidx').on(table.actorId, table.idempotencyKey),
+    uniqueIndex('agent_task_runs_project_conversation_task_uidx').on(
+      table.projectId,
+      table.conversationId,
+      table.taskId,
+    ),
+    uniqueIndex('agent_task_runs_id_actor_project_uidx').on(table.id, table.actorId, table.projectId),
+    uniqueIndex('agent_task_runs_project_id_uidx').on(table.projectId, table.id),
+    foreignKey({
+      columns: [table.modelBindingId, table.actorId, table.projectId],
+      foreignColumns: [
+        agentConversationModelBindings.id,
+        agentConversationModelBindings.actorId,
+        agentConversationModelBindings.projectId,
+      ],
+      name: 'agent_task_runs_model_binding_actor_project_fk',
+    }).onDelete('restrict'),
+    index('agent_task_runs_project_status_idx').on(table.projectId, table.status, table.updatedAt),
+  ],
+)
+
+export const agentTaskPlans = appSchema.table(
+  'agent_task_plans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskRunId: uuid('task_run_id')
+      .notNull()
+      .references(() => agentTaskRuns.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    summary: text('summary').notNull(),
+    assumptions: jsonb('assumptions_json').$type<unknown>().notNull(),
+    verification: jsonb('verification_json').$type<unknown>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [uniqueIndex('agent_task_plans_run_version_uidx').on(table.taskRunId, table.version)],
+)
+
+export const agentTaskSteps = appSchema.table(
+  'agent_task_steps',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskRunId: uuid('task_run_id')
+      .notNull()
+      .references(() => agentTaskRuns.id, { onDelete: 'cascade' }),
+    planVersion: integer('plan_version').notNull(),
+    ordinal: integer('ordinal').notNull(),
+    semanticStepKey: text('semantic_step_key').notNull(),
+    title: text('title').notNull(),
+    intent: jsonb('intent_json').$type<Record<string, unknown>>().notNull(),
+    status: text('status').notNull().default('pending'),
+    lastObservation: jsonb('last_observation_json').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    uniqueIndex('agent_task_steps_run_plan_ordinal_uidx').on(table.taskRunId, table.planVersion, table.ordinal),
+    uniqueIndex('agent_task_steps_run_plan_semantic_key_uidx').on(
+      table.taskRunId,
+      table.planVersion,
+      table.semanticStepKey,
+    ),
+    uniqueIndex('agent_task_steps_id_run_uidx').on(table.id, table.taskRunId),
+    foreignKey({
+      columns: [table.taskRunId, table.planVersion],
+      foreignColumns: [agentTaskPlans.taskRunId, agentTaskPlans.version],
+      name: 'agent_task_steps_plan_fk',
+    }).onDelete('cascade'),
+    index('agent_task_steps_run_status_idx').on(table.taskRunId, table.status, table.ordinal),
+  ],
+)
+
+export const agentTaskTransitions = appSchema.table(
+  'agent_task_transitions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    actorId: uuid('actor_id').notNull(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskRunId: uuid('task_run_id')
+      .notNull()
+      .references(() => agentTaskRuns.id, { onDelete: 'cascade' }),
+    stepId: uuid('step_id').references(() => agentTaskSteps.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    transitionKey: text('transition_key').notNull(),
+    generation: integer('generation').notNull(),
+    status: text('status').notNull().default('pending'),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    leaseOwner: text('lease_owner'),
+    leaseGeneration: integer('lease_generation').notNull().default(0),
+    leaseToken: uuid('lease_token'),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    projectLeaseGeneration: integer('project_lease_generation'),
+    projectLeaseToken: uuid('project_lease_token'),
+    projectLeaseWorkerId: text('project_lease_worker_id'),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }),
+    claimAttempts: integer('claim_attempts').notNull().default(0),
+    operationId: text('operation_id'),
+    stepAttemptId: uuid('step_attempt_id'),
+    input: jsonb('input_json').$type<Record<string, unknown>>().notNull(),
+    requestDigest: text('request_digest').notNull(),
+    completionDigest: text('completion_digest'),
+    output: jsonb('output_json').$type<Record<string, unknown>>(),
+    error: jsonb('error_json').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  table => [
+    uniqueIndex('agent_task_transitions_run_key_uidx').on(table.taskRunId, table.transitionKey),
+    uniqueIndex('agent_task_transitions_run_generation_uidx').on(table.taskRunId, table.generation),
+    uniqueIndex('agent_task_transitions_id_run_uidx').on(table.id, table.taskRunId),
+    uniqueIndex('agent_task_transitions_id_actor_project_uidx').on(table.id, table.actorId, table.projectId),
+    foreignKey({
+      columns: [table.taskRunId, table.actorId, table.projectId],
+      foreignColumns: [agentTaskRuns.id, agentTaskRuns.actorId, agentTaskRuns.projectId],
+      name: 'agent_task_transitions_run_actor_project_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.stepId, table.taskRunId],
+      foreignColumns: [agentTaskSteps.id, agentTaskSteps.taskRunId],
+      name: 'agent_task_transitions_step_run_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('agent_task_transitions_one_leased_per_run_uidx')
+      .on(table.taskRunId)
+      .where(sql`${table.status} = 'leased'`),
+    index('agent_task_transitions_claim_idx').on(table.status, table.availableAt, table.leaseUntil),
+  ],
+)
+
+export const agentTaskStepAttempts = appSchema.table(
+  'agent_task_step_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskRunId: uuid('task_run_id')
+      .notNull()
+      .references(() => agentTaskRuns.id, { onDelete: 'cascade' }),
+    stepId: uuid('step_id')
+      .notNull()
+      .references(() => agentTaskSteps.id, { onDelete: 'cascade' }),
+    attemptNumber: integer('attempt_number').notNull(),
+    decisionKind: text('decision_kind').notNull(),
+    transitionKey: text('transition_key').notNull(),
+    transitionId: uuid('transition_id')
+      .notNull()
+      .references(() => agentTaskTransitions.id, { onDelete: 'restrict' }),
+    providerCallReference: text('provider_call_reference'),
+    operationId: text('operation_id'),
+    executorRetryCount: integer('executor_retry_count').notNull().default(0),
+    semanticRevisionCount: integer('semantic_revision_count').notNull().default(0),
+    observation: jsonb('observation_json').$type<Record<string, unknown>>(),
+    terminalClassification: text('terminal_classification'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  table => [
+    uniqueIndex('agent_task_step_attempts_step_number_uidx').on(table.stepId, table.attemptNumber),
+    uniqueIndex('agent_task_step_attempts_transition_uidx').on(table.transitionId),
+    foreignKey({
+      columns: [table.stepId, table.taskRunId],
+      foreignColumns: [agentTaskSteps.id, agentTaskSteps.taskRunId],
+      name: 'agent_task_step_attempts_step_run_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.transitionId, table.taskRunId],
+      foreignColumns: [agentTaskTransitions.id, agentTaskTransitions.taskRunId],
+      name: 'agent_task_step_attempts_transition_run_fk',
+    }).onDelete('restrict'),
+  ],
+)
+
+export const agentProjectTaskLeases = appSchema.table(
+  'agent_project_task_leases',
+  {
+    projectId: uuid('project_id')
+      .primaryKey()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    taskRunId: uuid('task_run_id').notNull(),
+    leaseGeneration: integer('lease_generation').notNull(),
+    leaseToken: uuid('lease_token').notNull(),
+    leaseOwner: text('lease_owner').notNull(),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }).notNull(),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    foreignKey({
+      columns: [table.projectId, table.taskRunId],
+      foreignColumns: [agentTaskRuns.projectId, agentTaskRuns.id],
+      name: 'agent_project_task_leases_project_run_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const agentTaskEvents = appSchema.table(
+  'agent_task_events',
+  {
+    taskRunId: uuid('task_run_id')
+      .notNull()
+      .references(() => agentTaskRuns.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    eventKey: text('event_key').notNull(),
+    stepId: uuid('step_id').references(() => agentTaskSteps.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    summary: text('summary').notNull(),
+    publicPayload: jsonb('public_payload_json').$type<Record<string, unknown>>().notNull(),
+    technicalPayload: jsonb('technical_payload_json').$type<Record<string, unknown>>().notNull(),
+    redactionVersion: integer('redaction_version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    primaryKey({ columns: [table.taskRunId, table.seq], name: 'agent_task_events_pkey' }),
+    uniqueIndex('agent_task_events_run_key_uidx').on(table.taskRunId, table.eventKey),
+    foreignKey({
+      columns: [table.stepId, table.taskRunId],
+      foreignColumns: [agentTaskSteps.id, agentTaskSteps.taskRunId],
+      name: 'agent_task_events_step_run_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const agentTaskOperationalEvents = appSchema.table(
+  'agent_task_operational_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    dedupeKey: text('dedupe_key').notNull().unique(),
+    actorId: uuid('actor_id'),
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    taskRunId: uuid('task_run_id').references(() => agentTaskRuns.id, { onDelete: 'cascade' }),
+    transitionId: uuid('transition_id').references(() => agentTaskTransitions.id, { onDelete: 'set null' }),
+    operationId: text('operation_id'),
+    code: text('code').notNull(),
+    severity: text('severity').notNull(),
+    details: jsonb('details_json').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    foreignKey({
+      columns: [table.projectId, table.taskRunId],
+      foreignColumns: [agentTaskRuns.projectId, agentTaskRuns.id],
+      name: 'agent_task_operational_events_project_run_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.transitionId, table.taskRunId],
+      foreignColumns: [agentTaskTransitions.id, agentTaskTransitions.taskRunId],
+      name: 'agent_task_operational_events_transition_run_fk',
+    }).onDelete('set null'),
+  ],
+)
+
 export const agentProviderAttempts = appSchema.table(
   'agent_provider_attempts',
   {
@@ -542,11 +859,13 @@ export const agentProviderAttempts = appSchema.table(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    dispatchId: uuid('dispatch_id')
-      .notNull()
-      .references(() => agentRunDispatches.id, { onDelete: 'cascade' }),
-    dispatchGeneration: integer('dispatch_generation').notNull(),
-    dispatchWorkerId: text('dispatch_worker_id').notNull(),
+    dispatchId: uuid('dispatch_id').references(() => agentRunDispatches.id, { onDelete: 'cascade' }),
+    dispatchGeneration: integer('dispatch_generation'),
+    dispatchWorkerId: text('dispatch_worker_id'),
+    taskTransitionId: uuid('task_transition_id').references(() => agentTaskTransitions.id, { onDelete: 'cascade' }),
+    transitionLeaseGeneration: integer('transition_lease_generation'),
+    transitionLeaseToken: uuid('transition_lease_token'),
+    transitionWorkerId: text('transition_worker_id'),
     attemptNo: integer('attempt_no').notNull(),
     providerRequestKey: text('provider_request_key'),
     requestBodyDigest: text('request_body_digest').notNull(),
@@ -574,7 +893,13 @@ export const agentProviderAttempts = appSchema.table(
   },
   table => [
     uniqueIndex('agent_provider_attempts_dispatch_attempt_uidx').on(table.dispatchId, table.attemptNo),
+    uniqueIndex('agent_provider_attempts_transition_attempt_uidx').on(table.taskTransitionId, table.attemptNo),
     index('agent_provider_attempts_dispatch_idx').on(table.dispatchId, table.attemptNo),
+    foreignKey({
+      columns: [table.taskTransitionId, table.actorId, table.projectId],
+      foreignColumns: [agentTaskTransitions.id, agentTaskTransitions.actorId, agentTaskTransitions.projectId],
+      name: 'agent_provider_attempts_transition_actor_project_fk',
+    }).onDelete('cascade'),
   ],
 )
 
@@ -599,4 +924,13 @@ export const schema = {
   agentRunCosts,
   agentRunDispatches,
   agentProviderAttempts,
+  agentConversationModelBindings,
+  agentProjectTaskLeases,
+  agentTaskRuns,
+  agentTaskPlans,
+  agentTaskSteps,
+  agentTaskStepAttempts,
+  agentTaskTransitions,
+  agentTaskEvents,
+  agentTaskOperationalEvents,
 }

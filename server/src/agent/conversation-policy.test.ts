@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { assertAgentDecisionUserTextSafe, renderAgentConversationPolicy } from './conversation-policy.js'
+import {
+  assertAgentDecisionUserTextSafe,
+  isAgentConversationImplementationDetailText,
+  renderAgentConversationPolicy,
+} from './conversation-policy.js'
 
 describe('Agent conversation policy', () => {
   it('requires questions to use visible product language instead of implementation protocol fields', () => {
@@ -53,4 +57,22 @@ describe('Agent conversation policy', () => {
       }),
     ).toThrow(/implementation details/iu)
   })
+
+  it.each([
+    '{"target":"visible-title"}',
+    "{'target':'visible-title'}",
+    'payload={"safe":"value"}',
+    '{"x":120,"y":48,"width":320,"height":180}',
+    '目标区域的 "width": 320',
+    'fieldPath=props.text',
+  ])('classifies raw JSON and numeric protocol text as implementation detail: %s', text => {
+    expect(isAgentConversationImplementationDetailText(text)).toBe(true)
+  })
+
+  it.each(['更新右侧股东排行', '画布宽度需要跟随窗口自适应', '把标题移动到页面上方'])(
+    'does not classify visible product language as implementation detail: %s',
+    text => {
+      expect(isAgentConversationImplementationDetailText(text)).toBe(false)
+    },
+  )
 })

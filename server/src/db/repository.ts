@@ -3,13 +3,16 @@ import { createClient } from '@supabase/supabase-js'
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, max, ne, or, sql } from 'drizzle-orm'
 import { readAgentUserPreferenceMemory } from '../agent/agent-user-preferences.js'
 import { agentRunInputDigest, estimateAgentProviderInputTokens } from '../agent/change-set-model.js'
+import { isAgentConversationImplementationDetailText } from '../agent/conversation-policy.js'
 import { derivePublicCost } from '../agent/cost-accuracy.js'
 import { safeAgentUndo } from '../agent/safe-agent-undo.js'
+import { bindAgentWorkspaceTaskRunProjection, parseAgentProjectWorkspacePayload } from '../agent/workspace-contract.js'
 import type { AppEnv } from '../env.js'
 import type {
   AgentMutationAuthority,
   AgentProjectContextRecord,
   AgentProjectStartRecord,
+  AgentProviderAttemptFence,
   AgentProviderInputSnapshot,
   AgentRunCostRecord,
   AgentRunDispatchRecord,
@@ -17,6 +20,9 @@ import type {
   AgentSpikeOperationBinding,
   AgentSpikeOperationRecord,
   AgentSpikeOperationStatus,
+  AgentTaskCompletionInput,
+  AgentTaskRunBounds,
+  AgentTaskTransitionFence,
   AgentWorkspaceRecord,
   DurableAgentTurnRecord,
   DurableProviderAttemptRecord,
@@ -34,11 +40,20 @@ import {
 import { createDatabase } from './client.js'
 import {
   agentAssets,
+  agentConversationModelBindings,
   agentProjectContexts,
+  agentProjectTaskLeases,
   agentProviderAttempts,
   agentRunCosts,
   agentRunDispatches,
   agentSpikeOperations,
+  agentTaskEvents,
+  agentTaskOperationalEvents,
+  agentTaskPlans,
+  agentTaskRuns,
+  agentTaskStepAttempts,
+  agentTaskSteps,
+  agentTaskTransitions,
   agentWorkspaces,
   projectFavorites,
   projectMembers,
@@ -80,6 +95,10 @@ const THUMBNAIL_UPLOAD_EXPIRES_MS = 2 * 60 * 60 * 1000
 const THUMBNAIL_UPLOAD_EXPIRY_SAFETY_MS = 60 * 1000
 const THUMBNAIL_UPLOAD_STAGING_EXPIRES_MS = 24 * 60 * 60 * 1000
 const THUMBNAIL_CLEANUP_RETRY_MS = 5 * 60 * 1000
+const EDITOR_RENDERER_ARTIFACT_VERSION = 'easy-dashboard-editor-renderer-artifact@1'
+const EDITOR_RENDERER_ARTIFACT_SHA256 = createHash('sha256').update(EDITOR_RENDERER_ARTIFACT_VERSION).digest('hex')
+const EDITOR_BLUEPRINT_ARTIFACT_VERSION = 'easy-dashboard-editor-blueprint-artifact@1'
+const EDITOR_BLUEPRINT_ARTIFACT_SHA256 = createHash('sha256').update(EDITOR_BLUEPRINT_ARTIFACT_VERSION).digest('hex')
 
 function cleanAgentPreviewEvidence(evidence: Record<string, unknown> | null): boolean {
   const record = (value: unknown): Record<string, unknown> | null =>
@@ -102,6 +121,25 @@ function cleanAgentPreviewEvidence(evidence: Record<string, unknown> | null): bo
   )
 }
 
+function completeAgentTaskFinalVerificationEvidence(input: AgentTaskCompletionInput['finalVerification']): boolean {
+  return Boolean(
+    input &&
+      input.operationId.trim() &&
+      input.receiptId.trim() &&
+      Number.isSafeInteger(input.committedDraftVersion) &&
+      input.committedDraftVersion > 0 &&
+      Number.isFinite(Date.parse(input.verifiedAt)) &&
+      input.documentValid === true &&
+      input.renderReady === true &&
+      Array.isArray(input.browserErrors) &&
+      input.browserErrors.length === 0 &&
+      Array.isArray(input.resourceErrors) &&
+      input.resourceErrors.length === 0 &&
+      input.freshContextVerified === true &&
+      input.receiptConsistent === true,
+  )
+}
+
 function reconciledDispatchState(
   operationStatus: AgentSpikeOperationStatus | null,
 ): Extract<AgentRunDispatchState, 'succeeded' | 'failed' | 'indeterminate'> | null {
@@ -109,6 +147,293 @@ function reconciledDispatchState(
   if (operationStatus === 'committed') return 'succeeded'
   if (operationStatus === 'rejected_stale' || operationStatus === 'failed_not_applied') return 'failed'
   return 'indeterminate'
+}
+
+function isTransitionProviderAttemptFence(
+  fence: AgentProviderAttemptFence,
+): fence is Extract<AgentProviderAttemptFence, { kind: 'transition' }> {
+  return fence.kind === 'transition'
+}
+
+const agentTaskStatusEdges: Readonly<Record<string, readonly string[]>> = {
+  planning: ['waiting_user', 'running', 'paused', 'failed', 'canceled'],
+  waiting_user: ['planning', 'running', 'canceled'],
+  running: ['waiting_user', 'verifying', 'blocked_material', 'paused', 'failed', 'canceled'],
+  verifying: ['running', 'completed', 'paused', 'failed', 'canceled'],
+  blocked_material: ['running', 'paused', 'canceled'],
+  paused: ['running', 'rolling_back', 'failed', 'canceled'],
+  completed: ['rolling_back'],
+  failed: ['rolling_back'],
+  rollback_blocked: ['rolling_back'],
+  rolling_back: ['rolled_back', 'rollback_blocked'],
+  canceled: [],
+  rolled_back: [],
+}
+
+const agentStepStatusEdges: Readonly<Record<string, readonly string[]>> = {
+  pending: ['running', 'verifying', 'superseded'],
+  running: ['verifying', 'revising', 'failed', 'superseded'],
+  verifying: ['passed', 'revising', 'failed', 'superseded'],
+  revising: ['pending', 'running', 'verifying', 'failed', 'superseded'],
+  passed: [],
+  failed: [],
+  superseded: [],
+}
+
+function allowsAgentStateEdge(edges: Readonly<Record<string, readonly string[]>>, from: string, to: string): boolean {
+  return from === to || Boolean(edges[from]?.includes(to))
+}
+
+interface NormalizedAgentPlanStep {
+  id: string
+  ordinal: number
+  semanticStepKey: string
+  title: string
+  intent: Record<string, unknown>
+}
+
+function normalizedAgentPlanSteps(
+  steps: NonNullable<AgentTaskCompletionInput['plan']>['steps'],
+): NormalizedAgentPlanStep[] | null {
+  if (steps.length < 1 || steps.length > 8) return null
+  const ordinals = steps.map(step => step.ordinal)
+  if (!ordinals.every((ordinal): ordinal is number => Number.isInteger(ordinal))) return null
+  if (!ordinals.every((ordinal, index) => ordinal === index + 1)) return null
+  const semanticKeys = steps.map(step => step.id?.trim() ?? '')
+  if (
+    semanticKeys.some(key => key.length < 1 || key.length > 160) ||
+    new Set(semanticKeys).size !== semanticKeys.length
+  )
+    return null
+  return steps.map((step, index) => ({
+    id: randomUUID(),
+    ordinal: ordinals[index]!,
+    semanticStepKey: semanticKeys[index]!,
+    title: step.title,
+    intent: step.intent,
+  }))
+}
+
+function agentTaskStepValues(
+  taskRunId: string,
+  planVersion: number,
+  steps: readonly NormalizedAgentPlanStep[],
+  now: Date,
+): Array<typeof agentTaskSteps.$inferInsert> {
+  return steps.map(step => ({
+    ...step,
+    taskRunId,
+    planVersion,
+    createdAt: now,
+    updatedAt: now,
+  }))
+}
+
+interface AgentTaskTransitionDigestInput {
+  taskRunId: string
+  stepId: string | null
+  kind: NonNullable<AgentTaskCompletionInput['nextTransition']>['kind']
+  transitionKey: string
+  availableAt?: Date
+  payload: Record<string, unknown>
+}
+
+function agentTaskTransitionRequestDigest(input: AgentTaskTransitionDigestInput): string {
+  return canonicalJsonSha256({
+    taskRunId: input.taskRunId,
+    stepId: input.stepId,
+    kind: input.kind,
+    transitionKey: input.transitionKey,
+    availableAt: input.availableAt?.toISOString() ?? null,
+    input: input.payload,
+  })
+}
+
+type AgentTaskClarificationHistoryItem = {
+  question: { id: string; text: string }
+  response: string
+  attachmentIds: string[]
+  images: Array<{ assetId: string; sha256: string }>
+}
+
+function agentTaskClarificationHistory(value: unknown): AgentTaskClarificationHistoryItem[] | null {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > 8) return null
+  const parsed: AgentTaskClarificationHistoryItem[] = []
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null
+    const item = candidate as Record<string, unknown>
+    const question = item.question
+    if (!question || typeof question !== 'object' || Array.isArray(question)) return null
+    const questionRecord = question as Record<string, unknown>
+    if (
+      typeof questionRecord.id !== 'string' ||
+      !questionRecord.id.trim() ||
+      typeof questionRecord.text !== 'string' ||
+      !questionRecord.text.trim() ||
+      typeof item.response !== 'string' ||
+      !item.response.trim() ||
+      !Array.isArray(item.attachmentIds) ||
+      item.attachmentIds.some(id => typeof id !== 'string') ||
+      !Array.isArray(item.images)
+    )
+      return null
+    const images: Array<{ assetId: string; sha256: string }> = []
+    for (const image of item.images) {
+      if (!image || typeof image !== 'object' || Array.isArray(image)) return null
+      const record = image as Record<string, unknown>
+      if (
+        typeof record.assetId !== 'string' ||
+        typeof record.sha256 !== 'string' ||
+        !/^[a-f0-9]{64}$/u.test(record.sha256)
+      )
+        return null
+      images.push({ assetId: record.assetId, sha256: record.sha256 })
+    }
+    parsed.push({
+      question: { id: questionRecord.id, text: questionRecord.text },
+      response: item.response,
+      attachmentIds: [...item.attachmentIds] as string[],
+      images,
+    })
+  }
+  return parsed
+}
+
+function agentTaskCompletionRequestDigest(input: AgentTaskCompletionInput): string {
+  return canonicalJsonSha256({
+    status: input.status,
+    output: input.output ?? null,
+    error: input.error ?? null,
+    taskRunPatch: input.taskRunPatch ?? null,
+    accountingDelta: input.accountingDelta ?? null,
+    stepPatch: input.stepPatch ?? null,
+    plan: input.plan ?? null,
+    stepAttempt: input.stepAttempt ?? null,
+    finalVerification: input.finalVerification ?? null,
+    events: input.events ?? [],
+    nextTransition: input.nextTransition
+      ? {
+          ...input.nextTransition,
+          availableAt: input.nextTransition.availableAt?.toISOString() ?? null,
+        }
+      : null,
+  })
+}
+
+const agentTaskProjectLeaseReleaseStatuses = new Set([
+  'waiting_user',
+  'blocked_material',
+  'paused',
+  'completed',
+  'failed',
+  'canceled',
+  'rolled_back',
+  'rollback_blocked',
+])
+
+class AgentTaskCompletionRollback extends Error {
+  override readonly name = 'AgentTaskCompletionRollback'
+
+  constructor(readonly result: 'stale' | 'invalid_state' | 'conflict') {
+    super(result)
+  }
+}
+
+const agentTaskPublicProtocolKeys = new Set([
+  'changeset',
+  'componentname',
+  'coordinates',
+  'fieldid',
+  'fieldpath',
+  'height',
+  'nodeid',
+  'operation',
+  'operations',
+  'parentid',
+  'props',
+  'rect',
+  'shared',
+  'width',
+  'x',
+  'y',
+])
+const agentTaskPublicRedacted = Symbol('agent-task-public-redacted')
+
+function sanitizePublicAgentTaskValue(value: unknown): unknown | typeof agentTaskPublicRedacted {
+  if (typeof value === 'string')
+    return isAgentConversationImplementationDetailText(value) ? agentTaskPublicRedacted : value
+  if (Array.isArray(value))
+    return value
+      .map(sanitizePublicAgentTaskValue)
+      .filter(
+        (entry): entry is Exclude<typeof entry, typeof agentTaskPublicRedacted> => entry !== agentTaskPublicRedacted,
+      )
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !agentTaskPublicProtocolKeys.has(key.replace(/[^a-z0-9]/gi, '').toLowerCase()))
+      .map(([key, nested]) => [key, sanitizePublicAgentTaskValue(nested)] as const)
+      .filter((entry): entry is readonly [string, unknown] => entry[1] !== agentTaskPublicRedacted),
+  )
+}
+
+function sanitizePublicAgentTaskEvent(
+  event: Pick<NonNullable<AgentTaskCompletionInput['events']>[number], 'summary' | 'publicPayload'>,
+): { summary: string; publicPayload: Record<string, unknown> } {
+  return {
+    summary: isAgentConversationImplementationDetailText(event.summary) ? 'Agent activity updated.' : event.summary,
+    publicPayload: sanitizePublicAgentTaskValue(event.publicPayload ?? {}) as Record<string, unknown>,
+  }
+}
+
+type AgentConversationModelIdentity = Pick<
+  typeof agentConversationModelBindings.$inferSelect,
+  'provider' | 'model' | 'profileId' | 'configDigest'
+>
+
+function matchesAgentConversationModel(
+  binding: AgentConversationModelIdentity,
+  expected: AgentConversationModelIdentity,
+): boolean {
+  return (
+    binding.provider === expected.provider &&
+    binding.model === expected.model &&
+    binding.profileId === expected.profileId &&
+    binding.configDigest === expected.configDigest
+  )
+}
+
+type AgentTaskLeaseIdentity = Pick<AgentTaskTransitionFence, 'workerId' | 'leaseGeneration' | 'leaseToken'>
+
+function matchesAgentTaskLease(
+  transition: Pick<typeof agentTaskTransitions.$inferSelect, 'leaseOwner' | 'leaseGeneration' | 'leaseToken'>,
+  fence: AgentTaskLeaseIdentity,
+): boolean {
+  return (
+    transition.leaseGeneration === fence.leaseGeneration &&
+    transition.leaseToken === fence.leaseToken &&
+    transition.leaseOwner === fence.workerId
+  )
+}
+
+function agentTaskTransitionRequiresProjectLease(kind: string): boolean {
+  return kind !== 'planning'
+}
+
+function matchesAgentProjectTaskLease(
+  transition: Pick<
+    typeof agentTaskTransitions.$inferSelect,
+    'projectLeaseGeneration' | 'projectLeaseToken' | 'projectLeaseWorkerId'
+  >,
+  fence: AgentTaskTransitionFence,
+): boolean {
+  return (
+    transition.projectLeaseGeneration === fence.projectLeaseGeneration &&
+    transition.projectLeaseToken === fence.projectLeaseToken &&
+    transition.projectLeaseWorkerId === fence.projectLeaseWorkerId &&
+    fence.projectLeaseWorkerId === fence.workerId
+  )
 }
 
 class ThumbnailConflictRollback extends Error {
@@ -394,6 +719,17 @@ export function createPgRepository(env: AppEnv): Repository {
       await tx.execute(sql`select set_config('app.actor_id', ${actorId}, true)`)
       return run(tx)
     })
+  const withActorSnapshot = <T>(
+    actorId: string,
+    run: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
+  ) =>
+    db.transaction(
+      async tx => {
+        await tx.execute(sql`select set_config('app.actor_id', ${actorId}, true)`)
+        return run(tx)
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    )
 
   const lockUserSettings = (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], actorId: string) =>
     tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${actorId}:user-settings`}, 0))`)
@@ -480,6 +816,23 @@ export function createPgRepository(env: AppEnv): Repository {
   const canEditProject = (actorId: string) => sql<boolean>`exists (
     select 1 from ${projectMembers}
     where ${projectMembers.projectId} = ${projects.id}
+      and ${projectMembers.userId} = ${actorId}
+      and ${projectMembers.role} in ('owner', 'editor')
+  )`
+
+  const canReadAgentTaskProject = (actorId: string) => sql<boolean>`exists (
+    select 1 from ${projects}
+    inner join ${projectMembers} on ${projectMembers.projectId} = ${projects.id}
+    where ${projects.id} = ${agentTaskRuns.projectId}
+      and ${projects.deletedAt} is null
+      and ${projectMembers.userId} = ${actorId}
+  )`
+
+  const canEditAgentTaskProject = (actorId: string) => sql<boolean>`exists (
+    select 1 from ${projects}
+    inner join ${projectMembers} on ${projectMembers.projectId} = ${projects.id}
+    where ${projects.id} = ${agentTaskRuns.projectId}
+      and ${projects.deletedAt} is null
       and ${projectMembers.userId} = ${actorId}
       and ${projectMembers.role} in ('owner', 'editor')
   )`
@@ -829,6 +1182,198 @@ export function createPgRepository(env: AppEnv): Repository {
     return { deleted, retryPending }
   }
 
+  const unknownProviderOutcomeAccountingPendingErrorCodes = new Set([
+    'provider_outcome_unknown',
+    'transition_attempt_stale',
+    'transition_generation_reclaimed',
+  ])
+
+  const unknownProviderOutcomeAccountingAlreadyApplied = (
+    attempt: Pick<typeof agentProviderAttempts.$inferSelect, 'state' | 'errorCode'>,
+  ): boolean =>
+    attempt.state === 'outcome_unknown' &&
+    !unknownProviderOutcomeAccountingPendingErrorCodes.has(attempt.errorCode ?? '')
+
+  const pauseTransitionForUnknownProviderOutcome = async (
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    actorId: string,
+    transition: typeof agentTaskTransitions.$inferSelect,
+    attempt: typeof agentProviderAttempts.$inferSelect,
+    now: Date,
+    evidence?: {
+      event?: NonNullable<AgentTaskCompletionInput['events']>[number]
+      operationalEvent?: {
+        dedupeKey: string
+        code: string
+        severity: 'info' | 'warning' | 'error' | 'critical'
+        details?: Record<string, unknown>
+      }
+      providerObservation?: {
+        promptTokens?: number
+        completionTokens?: number
+        cachedTokens?: number
+        durationMs?: number
+        upstreamRequestId?: string
+      }
+      accountingAlreadyApplied?: boolean
+    },
+  ) => {
+    if (!['started', 'outcome_unknown'].includes(attempt.state)) return 'invalid_state' as const
+    if (!['leased', 'failed'].includes(transition.status)) return 'stale' as const
+    const needsProjectLease = agentTaskTransitionRequiresProjectLease(transition.kind)
+    if (needsProjectLease) {
+      if (
+        transition.projectLeaseGeneration === null ||
+        transition.projectLeaseToken === null ||
+        transition.projectLeaseWorkerId === null
+      )
+        return 'stale' as const
+      const [projectLease] = await tx
+        .select({ projectId: agentProjectTaskLeases.projectId })
+        .from(agentProjectTaskLeases)
+        .where(
+          and(
+            eq(agentProjectTaskLeases.projectId, transition.projectId),
+            eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+            eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration),
+            eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken),
+            eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId),
+          ),
+        )
+        .for('update')
+        .limit(1)
+      if (!projectLease) return 'stale' as const
+    }
+    const [run] = await tx
+      .select()
+      .from(agentTaskRuns)
+      .where(eq(agentTaskRuns.id, transition.taskRunId))
+      .for('update')
+      .limit(1)
+    if (!run) return 'stale' as const
+
+    const eventKey = evidence?.event?.eventKey ?? `provider-outcome-unknown:${transition.id}`
+    const operationalDedupeKey = evidence?.operationalEvent?.dedupeKey ?? eventKey
+    const [existingEvent] = await tx
+      .select({ seq: agentTaskEvents.seq })
+      .from(agentTaskEvents)
+      .where(and(eq(agentTaskEvents.taskRunId, run.id), eq(agentTaskEvents.eventKey, eventKey)))
+      .limit(1)
+    const [existingOperationalEvent] = await tx
+      .select({ id: agentTaskOperationalEvents.id })
+      .from(agentTaskOperationalEvents)
+      .where(eq(agentTaskOperationalEvents.dedupeKey, operationalDedupeKey))
+      .limit(1)
+
+    let reconciledAttempt = attempt
+    if (attempt.state === 'started') {
+      const [updatedAttempt] = await tx
+        .update(agentProviderAttempts)
+        .set({
+          state: 'outcome_unknown',
+          costAccuracy: 'billing_indeterminate',
+          amountMicros: attempt.reservationDeltaMicros,
+          minimumMicros: 0,
+          maximumMicros: attempt.reservationDeltaMicros,
+          promptTokens: evidence?.providerObservation?.promptTokens ?? attempt.promptTokens,
+          completionTokens: evidence?.providerObservation?.completionTokens ?? attempt.completionTokens,
+          cachedTokens: evidence?.providerObservation?.cachedTokens ?? attempt.cachedTokens,
+          durationMs: evidence?.providerObservation?.durationMs ?? attempt.durationMs,
+          upstreamRequestId: evidence?.providerObservation?.upstreamRequestId ?? attempt.upstreamRequestId,
+          errorCode: 'provider_outcome_unknown',
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(and(eq(agentProviderAttempts.id, attempt.id), eq(agentProviderAttempts.state, 'started')))
+        .returning()
+      if (!updatedAttempt) return 'stale' as const
+      reconciledAttempt = updatedAttempt
+    }
+
+    let nextEventSequence = run.nextEventSequence
+    if (!existingEvent) {
+      const event =
+        evidence?.event ??
+        ({
+          eventKey,
+          type: 'waiting_user',
+          summary: 'Execution paused because the provider outcome could not be confirmed.',
+          publicPayload: { state: 'paused', reason: 'provider_outcome_unknown' },
+          technicalPayload: { providerAttemptId: attempt.id, transitionId: transition.id },
+          redactionVersion: 1,
+        } satisfies NonNullable<AgentTaskCompletionInput['events']>[number])
+      const publicEvent = sanitizePublicAgentTaskEvent(event)
+      await tx.insert(agentTaskEvents).values({
+        taskRunId: run.id,
+        seq: nextEventSequence++,
+        eventKey,
+        stepId: transition.stepId,
+        type: event.type,
+        summary: publicEvent.summary,
+        publicPayload: publicEvent.publicPayload,
+        technicalPayload: event.technicalPayload ?? {},
+        redactionVersion: event.redactionVersion ?? 1,
+        createdAt: now,
+      })
+    }
+    if (!existingOperationalEvent)
+      await tx.insert(agentTaskOperationalEvents).values({
+        dedupeKey: operationalDedupeKey,
+        actorId,
+        projectId: run.projectId,
+        taskRunId: run.id,
+        transitionId: transition.id,
+        operationId: transition.operationId,
+        code: evidence?.operationalEvent?.code ?? 'agent_task_provider_outcome_unknown',
+        severity: evidence?.operationalEvent?.severity ?? 'critical',
+        details: evidence?.operationalEvent?.details ?? { providerAttemptId: attempt.id },
+        createdAt: now,
+      })
+
+    const shouldApplyAccounting = !existingOperationalEvent && !evidence?.accountingAlreadyApplied
+    await tx
+      .update(agentTaskRuns)
+      .set({
+        status: 'paused',
+        currentTransitionKey: null,
+        providerTurns: run.providerTurns + (shouldApplyAccounting ? 1 : 0),
+        promptTokens: run.promptTokens + (shouldApplyAccounting ? (reconciledAttempt.promptTokens ?? 0) : 0),
+        completionTokens:
+          run.completionTokens + (shouldApplyAccounting ? (reconciledAttempt.completionTokens ?? 0) : 0),
+        costMicros: run.costMicros + (shouldApplyAccounting ? attempt.reservationDeltaMicros : 0),
+        nextEventSequence,
+        updatedAt: now,
+      })
+      .where(eq(agentTaskRuns.id, run.id))
+    if (needsProjectLease)
+      await tx
+        .update(agentProjectTaskLeases)
+        .set({ leaseUntil: now, heartbeatAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(agentProjectTaskLeases.projectId, transition.projectId),
+            eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+            eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+            eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+            eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+          ),
+        )
+    const [pausedTransition] = await tx
+      .update(agentTaskTransitions)
+      .set({
+        status: 'failed',
+        error: { code: 'provider_outcome_unknown' },
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(eq(agentTaskTransitions.id, transition.id), inArray(agentTaskTransitions.status, ['leased', 'failed'])),
+      )
+      .returning()
+    if (!pausedTransition) return 'stale' as const
+    return { transition: pausedTransition, attempt: reconciledAttempt }
+  }
+
   return {
     async ping() {
       await pool.query(`
@@ -851,6 +1396,10 @@ export function createPgRepository(env: AppEnv): Repository {
           agent_costs.decision_trace as agent_cost_decision_trace,
           agent_dispatches.desired_state as agent_dispatch_desired_state,
           agent_dispatches.generation as agent_dispatch_generation,
+          agent_task_runs.status as agent_task_run_status,
+          agent_task_transitions.lease_token as agent_task_transition_lease_token,
+          agent_task_events.redaction_version as agent_task_event_redaction_version,
+          agent_provider_attempts.task_transition_id as agent_provider_attempt_transition_id,
           agent_assets.idempotency_key as agent_asset_idempotency_key,
           agent_assets.storage_cleanup_status as agent_asset_storage_cleanup_status,
           agent_assets.storage_cleanup_attempts as agent_asset_storage_cleanup_attempts,
@@ -868,11 +1417,1794 @@ export function createPgRepository(env: AppEnv): Repository {
         cross join app.agent_spike_operations as agent_operations
         cross join app.agent_run_costs as agent_costs
         cross join app.agent_run_dispatches as agent_dispatches
+        cross join app.agent_task_runs as agent_task_runs
+        cross join app.agent_task_transitions as agent_task_transitions
+        cross join app.agent_task_events as agent_task_events
+        cross join app.agent_provider_attempts as agent_provider_attempts
         cross join app.agent_assets as agent_assets
         cross join app.project_members as project_members
         cross join app.projects as projects
         limit 0
       `)
+    },
+    resolveAgentConversationModelBinding(actorId, input) {
+      return withActor(actorId, async tx => {
+        const [project] = await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(and(eq(projects.id, input.projectId), canEditProject(actorId), isNull(projects.deletedAt)))
+          .limit(1)
+        if (!project) return null
+        const [existing] = await tx
+          .select()
+          .from(agentConversationModelBindings)
+          .where(
+            and(
+              eq(agentConversationModelBindings.projectId, input.projectId),
+              eq(agentConversationModelBindings.conversationId, input.conversationId),
+            ),
+          )
+          .limit(1)
+        if (existing) {
+          return matchesAgentConversationModel(existing, input) ? existing : 'configuration_drift'
+        }
+        const [binding] = await tx
+          .insert(agentConversationModelBindings)
+          .values({
+            actorId,
+            projectId: input.projectId,
+            conversationId: input.conversationId,
+            provider: input.provider,
+            model: input.model,
+            profileId: input.profileId,
+            configDigest: input.configDigest,
+            boundAt: input.now,
+            createdAt: input.now,
+          })
+          .onConflictDoNothing()
+          .returning()
+        if (binding) return binding
+        const [concurrent] = await tx
+          .select()
+          .from(agentConversationModelBindings)
+          .where(
+            and(
+              eq(agentConversationModelBindings.projectId, input.projectId),
+              eq(agentConversationModelBindings.conversationId, input.conversationId),
+            ),
+          )
+          .limit(1)
+        if (!concurrent) return null
+        return matchesAgentConversationModel(concurrent, input) ? concurrent : 'configuration_drift'
+      })
+    },
+    createAgentTaskRun(actorId, input) {
+      return withActor(actorId, async tx => {
+        const requestDigest = canonicalJsonSha256({
+          projectId: input.projectId,
+          conversationId: input.conversationId,
+          taskId: input.taskId,
+          binding: input.binding,
+          bounds: input.bounds,
+          taskStartDocumentRevision: input.taskStartDocumentRevision,
+          planningInput: input.planningInput ?? {},
+        })
+        const [project] = await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(and(eq(projects.id, input.projectId), canEditProject(actorId), isNull(projects.deletedAt)))
+          .limit(1)
+        if (!project) return null
+        const [workspace] = await tx
+          .select()
+          .from(agentWorkspaces)
+          .where(and(eq(agentWorkspaces.ownerId, actorId), eq(agentWorkspaces.projectId, input.projectId)))
+          .for('update')
+          .limit(1)
+        if (!workspace) return 'workspace_unavailable'
+        let [binding] = await tx
+          .select()
+          .from(agentConversationModelBindings)
+          .where(
+            and(
+              eq(agentConversationModelBindings.projectId, input.projectId),
+              eq(agentConversationModelBindings.conversationId, input.conversationId),
+            ),
+          )
+          .for('update')
+          .limit(1)
+        if (binding && !matchesAgentConversationModel(binding, input.binding)) return 'configuration_drift'
+        if (!binding) {
+          ;[binding] = await tx
+            .insert(agentConversationModelBindings)
+            .values({
+              actorId,
+              projectId: input.projectId,
+              conversationId: input.conversationId,
+              ...input.binding,
+              boundAt: input.now,
+              createdAt: input.now,
+            })
+            .onConflictDoNothing()
+            .returning()
+          if (!binding)
+            [binding] = await tx
+              .select()
+              .from(agentConversationModelBindings)
+              .where(
+                and(
+                  eq(agentConversationModelBindings.projectId, input.projectId),
+                  eq(agentConversationModelBindings.conversationId, input.conversationId),
+                ),
+              )
+              .limit(1)
+        }
+        if (!binding) throw new Error('Agent conversation binding insert returned no row')
+        if (!matchesAgentConversationModel(binding, input.binding)) return 'configuration_drift'
+        const [existing] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(and(eq(agentTaskRuns.actorId, actorId), eq(agentTaskRuns.idempotencyKey, input.idempotencyKey)))
+          .limit(1)
+        if (existing && existing.requestDigest !== requestDigest) return 'conflict'
+        const runId = existing?.id ?? randomUUID()
+        let workspacePayload: ReturnType<typeof parseAgentProjectWorkspacePayload>
+        try {
+          workspacePayload = parseAgentProjectWorkspacePayload(workspace.payload, actorId, input.projectId)
+        } catch {
+          return 'workspace_unavailable'
+        }
+        const workspaceProjection = bindAgentWorkspaceTaskRunProjection(workspacePayload, {
+          conversationId: input.conversationId,
+          taskId: input.taskId,
+          taskRunId: runId,
+        })
+        if (workspaceProjection.status === 'conflict') return 'conflict'
+        if (workspaceProjection.status === 'legacy' || workspaceProjection.status === 'not_found') {
+          return 'workspace_unavailable'
+        }
+        if (existing) {
+          if (workspaceProjection.status === 'bound') {
+            await tx
+              .update(agentWorkspaces)
+              .set({
+                payload: workspaceProjection.payload,
+                revision: workspace.revision + 1,
+                updatedAt: input.now,
+              })
+              .where(eq(agentWorkspaces.id, workspace.id))
+          }
+          return existing as never
+        }
+        const [run] = await tx
+          .insert(agentTaskRuns)
+          .values({
+            id: runId,
+            actorId,
+            projectId: input.projectId,
+            conversationId: input.conversationId,
+            taskId: input.taskId,
+            idempotencyKey: input.idempotencyKey,
+            requestDigest,
+            modelBindingId: binding.id,
+            provider: binding.provider,
+            model: binding.model,
+            profileId: binding.profileId,
+            configDigest: binding.configDigest,
+            bounds: { ...input.bounds },
+            taskStartDocumentRevision: input.taskStartDocumentRevision,
+            currentTransitionKey: 'planning:1',
+            nextTransitionGeneration: 2,
+            createdAt: input.now,
+            updatedAt: input.now,
+          })
+          .onConflictDoNothing()
+          .returning()
+        if (!run) {
+          const [concurrent] = await tx
+            .select()
+            .from(agentTaskRuns)
+            .where(and(eq(agentTaskRuns.actorId, actorId), eq(agentTaskRuns.idempotencyKey, input.idempotencyKey)))
+            .limit(1)
+          return concurrent?.requestDigest === requestDigest ? (concurrent as never) : 'conflict'
+        }
+        const planningInput = input.planningInput ?? {}
+        await tx.insert(agentTaskTransitions).values({
+          actorId,
+          projectId: input.projectId,
+          taskRunId: run.id,
+          kind: 'planning',
+          transitionKey: 'planning:1',
+          generation: 1,
+          status: 'pending',
+          availableAt: input.now,
+          input: planningInput,
+          requestDigest: agentTaskTransitionRequestDigest({
+            taskRunId: run.id,
+            stepId: null,
+            kind: 'planning',
+            transitionKey: 'planning:1',
+            payload: planningInput,
+          }),
+          createdAt: input.now,
+          updatedAt: input.now,
+        })
+        if (workspaceProjection.status === 'bound') {
+          await tx
+            .update(agentWorkspaces)
+            .set({
+              payload: workspaceProjection.payload,
+              revision: workspace.revision + 1,
+              updatedAt: input.now,
+            })
+            .where(eq(agentWorkspaces.id, workspace.id))
+        }
+        return run as never
+      })
+    },
+    getAgentTaskRun(actorId, taskRunId) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(eq(agentTaskRuns.id, taskRunId), eq(agentTaskRuns.actorId, actorId), canReadAgentTaskProject(actorId)),
+          )
+          .limit(1)
+        return (run as never) ?? null
+      })
+    },
+    getAgentTaskRunDetail(actorId, projectId, taskRunId) {
+      return withActorSnapshot(actorId, async tx => {
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, taskRunId),
+              eq(agentTaskRuns.projectId, projectId),
+              eq(agentTaskRuns.actorId, actorId),
+              canReadAgentTaskProject(actorId),
+            ),
+          )
+          .limit(1)
+        if (!run) return null
+
+        const [latestEvent] = await tx
+          .select({ seq: max(agentTaskEvents.seq) })
+          .from(agentTaskEvents)
+          .where(eq(agentTaskEvents.taskRunId, run.id))
+        const [waitingEvent] =
+          run.status === 'waiting_user'
+            ? await tx
+                .select({ summary: agentTaskEvents.summary, publicPayload: agentTaskEvents.publicPayload })
+                .from(agentTaskEvents)
+                .where(and(eq(agentTaskEvents.taskRunId, run.id), eq(agentTaskEvents.type, 'waiting_user')))
+                .orderBy(desc(agentTaskEvents.seq))
+                .limit(1)
+            : []
+
+        let activePlan: {
+          plan: typeof agentTaskPlans.$inferSelect
+          steps: (typeof agentTaskSteps.$inferSelect)[]
+        } | null = null
+        if (run.activePlanVersion > 0) {
+          const [plan] = await tx
+            .select()
+            .from(agentTaskPlans)
+            .where(and(eq(agentTaskPlans.taskRunId, run.id), eq(agentTaskPlans.version, run.activePlanVersion)))
+            .limit(1)
+          if (plan) {
+            const steps = await tx
+              .select()
+              .from(agentTaskSteps)
+              .where(and(eq(agentTaskSteps.taskRunId, run.id), eq(agentTaskSteps.planVersion, run.activePlanVersion)))
+              .orderBy(asc(agentTaskSteps.ordinal))
+            activePlan = { plan, steps }
+          }
+        }
+
+        return {
+          run,
+          activePlan,
+          waitingReason: waitingEvent
+            ? { summary: waitingEvent.summary, publicPayload: waitingEvent.publicPayload }
+            : null,
+          latestEventSequence: latestEvent?.seq ?? 0,
+        } as never
+      })
+    },
+    listAgentTaskEvents(actorId, projectId, taskRunId, input) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select({ id: agentTaskRuns.id })
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, taskRunId),
+              eq(agentTaskRuns.projectId, projectId),
+              eq(agentTaskRuns.actorId, actorId),
+              canReadAgentTaskProject(actorId),
+            ),
+          )
+          .limit(1)
+        if (!run) return null
+        const afterSeq = Number.isSafeInteger(input.afterSeq) && input.afterSeq >= 0 ? input.afterSeq : 0
+        const limit = Number.isSafeInteger(input.limit) ? Math.min(100, Math.max(1, input.limit)) : 50
+        return (await tx
+          .select()
+          .from(agentTaskEvents)
+          .where(and(eq(agentTaskEvents.taskRunId, run.id), gt(agentTaskEvents.seq, afterSeq)))
+          .orderBy(asc(agentTaskEvents.seq))
+          .limit(limit)) as never
+      })
+    },
+    listAgentTaskEventPage(actorId, projectId, taskRunId, input) {
+      return withActorSnapshot(actorId, async tx => {
+        const [run] = await tx
+          .select({ id: agentTaskRuns.id })
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, taskRunId),
+              eq(agentTaskRuns.projectId, projectId),
+              eq(agentTaskRuns.actorId, actorId),
+              canReadAgentTaskProject(actorId),
+            ),
+          )
+          .limit(1)
+        if (!run) return null
+        const afterSeq = Number.isSafeInteger(input.afterSeq) && input.afterSeq >= 0 ? input.afterSeq : 0
+        const limit = Number.isSafeInteger(input.limit) ? Math.min(100, Math.max(1, input.limit)) : 50
+        const [tail] = await tx
+          .select({ seq: max(agentTaskEvents.seq) })
+          .from(agentTaskEvents)
+          .where(eq(agentTaskEvents.taskRunId, run.id))
+        const events = await tx
+          .select()
+          .from(agentTaskEvents)
+          .where(and(eq(agentTaskEvents.taskRunId, run.id), gt(agentTaskEvents.seq, afterSeq)))
+          .orderBy(asc(agentTaskEvents.seq))
+          .limit(limit)
+        return { events, latestEventSequence: tail?.seq ?? 0 } as never
+      })
+    },
+    continueAgentTaskRun(actorId, input) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, input.taskRunId),
+              eq(agentTaskRuns.projectId, input.projectId),
+              eq(agentTaskRuns.actorId, actorId),
+              canEditAgentTaskProject(actorId),
+            ),
+          )
+          .for('update')
+          .limit(1)
+        if (!run) return null
+        const transitionKey = `planning:continue:${input.idempotencyKey}`
+        const [existing] = await tx
+          .select()
+          .from(agentTaskTransitions)
+          .where(and(eq(agentTaskTransitions.taskRunId, run.id), eq(agentTaskTransitions.transitionKey, transitionKey)))
+          .limit(1)
+        if (existing) {
+          const history = agentTaskClarificationHistory(existing.input.clarificationHistory)
+          const last = history?.at(-1)
+          const replayMatches =
+            last?.question.id === input.questionId &&
+            last.response === input.response &&
+            canonicalJsonSha256(last.attachmentIds) === canonicalJsonSha256(input.attachmentIds) &&
+            canonicalJsonSha256(last.images) === canonicalJsonSha256(input.imageInputs)
+          return replayMatches ? ({ taskRun: run, transition: existing } as never) : 'conflict'
+        }
+        const [latestPlanning] = await tx
+          .select({ input: agentTaskTransitions.input })
+          .from(agentTaskTransitions)
+          .where(and(eq(agentTaskTransitions.taskRunId, run.id), eq(agentTaskTransitions.kind, 'planning')))
+          .orderBy(desc(agentTaskTransitions.generation))
+          .limit(1)
+        const [waitingEvent] = await tx
+          .select({ publicPayload: agentTaskEvents.publicPayload })
+          .from(agentTaskEvents)
+          .where(and(eq(agentTaskEvents.taskRunId, run.id), eq(agentTaskEvents.type, 'waiting_user')))
+          .orderBy(desc(agentTaskEvents.seq))
+          .limit(1)
+        const waitingQuestion = waitingEvent?.publicPayload.question
+        if (
+          !latestPlanning ||
+          !waitingQuestion ||
+          typeof waitingQuestion !== 'object' ||
+          Array.isArray(waitingQuestion)
+        )
+          return 'invalid_state'
+        const question = waitingQuestion as Record<string, unknown>
+        if (
+          typeof question.id !== 'string' ||
+          question.id !== input.questionId ||
+          typeof question.text !== 'string' ||
+          question.text.length < 1
+        )
+          return 'invalid_state'
+        const history = agentTaskClarificationHistory(latestPlanning.input.clarificationHistory)
+        if (!history || history.length >= 8) return 'invalid_state'
+        const basePlanningInput = Object.fromEntries(
+          Object.entries(latestPlanning.input).filter(([key]) => key !== 'clarification'),
+        )
+        const transitionInput = {
+          ...basePlanningInput,
+          clarificationHistory: [
+            ...history,
+            {
+              question: { id: question.id, text: question.text },
+              response: input.response,
+              attachmentIds: input.attachmentIds,
+              images: input.imageInputs,
+            },
+          ],
+        }
+        const requestDigest = agentTaskTransitionRequestDigest({
+          taskRunId: run.id,
+          stepId: null,
+          kind: 'planning',
+          transitionKey,
+          payload: transitionInput,
+        })
+        if (run.status !== 'waiting_user' || run.activePlanVersion !== 0) return 'invalid_state'
+        const [nonterminal] = await tx
+          .select({ id: agentTaskTransitions.id })
+          .from(agentTaskTransitions)
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, run.id),
+              inArray(agentTaskTransitions.status, ['pending', 'leased']),
+            ),
+          )
+          .limit(1)
+        if (nonterminal) return 'invalid_state'
+
+        const generation = run.nextTransitionGeneration
+        const [transition] = await tx
+          .insert(agentTaskTransitions)
+          .values({
+            actorId,
+            projectId: run.projectId,
+            taskRunId: run.id,
+            kind: 'planning',
+            transitionKey,
+            generation,
+            status: 'pending',
+            availableAt: input.now,
+            input: transitionInput,
+            requestDigest,
+            createdAt: input.now,
+            updatedAt: input.now,
+          })
+          .returning()
+        if (!transition) throw new Error('Agent task continuation insert returned no row')
+        const [updatedRun] = await tx
+          .update(agentTaskRuns)
+          .set({
+            status: 'planning',
+            currentTransitionKey: transitionKey,
+            nextTransitionGeneration: generation + 1,
+            updatedAt: input.now,
+          })
+          .where(eq(agentTaskRuns.id, run.id))
+          .returning()
+        if (!updatedRun) throw new Error('Agent task continuation run update returned no row')
+        return { taskRun: updatedRun, transition } as never
+      })
+    },
+    getAgentTaskTransitionProviderResult(actorId, taskRunId, transitionId) {
+      return withActor(actorId, async tx => {
+        const [transition] = await tx
+          .select({ output: agentTaskTransitions.output })
+          .from(agentTaskTransitions)
+          .innerJoin(agentTaskRuns, eq(agentTaskRuns.id, agentTaskTransitions.taskRunId))
+          .where(
+            and(
+              eq(agentTaskTransitions.id, transitionId),
+              eq(agentTaskTransitions.taskRunId, taskRunId),
+              eq(agentTaskTransitions.actorId, actorId),
+              eq(agentTaskRuns.actorId, actorId),
+              canReadAgentTaskProject(actorId),
+            ),
+          )
+          .limit(1)
+        if (!transition) return null
+        const [latestAttempt] = await tx
+          .select({ id: agentProviderAttempts.id, state: agentProviderAttempts.state })
+          .from(agentProviderAttempts)
+          .where(
+            and(eq(agentProviderAttempts.taskTransitionId, transitionId), eq(agentProviderAttempts.actorId, actorId)),
+          )
+          .orderBy(desc(agentProviderAttempts.attemptNo))
+          .limit(1)
+        if (!latestAttempt || latestAttempt.state !== 'succeeded') return null
+        const providerResult = transition.output?.providerResult
+        if (!providerResult || typeof providerResult !== 'object' || Array.isArray(providerResult)) return null
+        const result = providerResult as Record<string, unknown>
+        const decisionOutput = result.decisionOutput
+        const decisionUsage = result.decisionUsage
+        const decisionTrace = result.decisionTrace
+        if (
+          result.attemptId !== latestAttempt.id ||
+          !decisionOutput ||
+          typeof decisionOutput !== 'object' ||
+          Array.isArray(decisionOutput) ||
+          !Object.prototype.hasOwnProperty.call(result, 'decisionUsage') ||
+          (decisionUsage !== null && (typeof decisionUsage !== 'object' || Array.isArray(decisionUsage))) ||
+          !decisionTrace ||
+          typeof decisionTrace !== 'object' ||
+          Array.isArray(decisionTrace)
+        )
+          return null
+        return {
+          attemptId: latestAttempt.id,
+          decisionOutput: decisionOutput as Record<string, unknown>,
+          decisionUsage: decisionUsage as Record<string, unknown> | null,
+          decisionTrace: decisionTrace as Record<string, unknown>,
+        }
+      })
+    },
+    getAgentTaskPlanningInput(actorId, projectId, taskRunId) {
+      return withActor(actorId, async tx => {
+        const [planning] = await tx
+          .select({ input: agentTaskTransitions.input })
+          .from(agentTaskTransitions)
+          .innerJoin(agentTaskRuns, eq(agentTaskRuns.id, agentTaskTransitions.taskRunId))
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, taskRunId),
+              eq(agentTaskTransitions.actorId, actorId),
+              eq(agentTaskTransitions.projectId, projectId),
+              eq(agentTaskTransitions.kind, 'planning'),
+              eq(agentTaskRuns.actorId, actorId),
+              eq(agentTaskRuns.projectId, projectId),
+              canReadAgentTaskProject(actorId),
+            ),
+          )
+          .orderBy(desc(agentTaskTransitions.generation))
+          .limit(1)
+        return planning?.input ?? null
+      })
+    },
+    enqueueAgentTaskTransition(actorId, input) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, input.taskRunId),
+              eq(agentTaskRuns.actorId, actorId),
+              canEditAgentTaskProject(actorId),
+            ),
+          )
+          .for('update')
+          .limit(1)
+        if (!run) return null
+        const transitionInput = input.input ?? {}
+        const requestDigest = agentTaskTransitionRequestDigest({
+          taskRunId: run.id,
+          stepId: input.stepId ?? null,
+          kind: input.kind,
+          transitionKey: input.transitionKey,
+          availableAt: input.availableAt,
+          payload: transitionInput,
+        })
+        const [existing] = await tx
+          .select()
+          .from(agentTaskTransitions)
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, run.id),
+              eq(agentTaskTransitions.transitionKey, input.transitionKey),
+            ),
+          )
+          .limit(1)
+        if (existing) return existing.requestDigest === requestDigest ? (existing as never) : 'conflict'
+        if (['completed', 'failed', 'canceled', 'rolled_back'].includes(run.status)) return 'invalid_state'
+        let ownedStep: typeof agentTaskSteps.$inferSelect | undefined
+        if (input.stepId) {
+          ;[ownedStep] = await tx
+            .select()
+            .from(agentTaskSteps)
+            .where(and(eq(agentTaskSteps.id, input.stepId), eq(agentTaskSteps.taskRunId, run.id)))
+            .limit(1)
+          if (!ownedStep || ownedStep.planVersion !== run.activePlanVersion) return 'invalid_state'
+        }
+        const kindAllowsState =
+          (input.kind === 'planning' && !ownedStep && ['planning', 'waiting_user'].includes(run.status)) ||
+          (input.kind === 'step_action' &&
+            ownedStep &&
+            run.status === 'running' &&
+            ['pending', 'revising'].includes(ownedStep.status)) ||
+          (input.kind === 'observation' &&
+            ownedStep &&
+            ['running', 'verifying'].includes(run.status) &&
+            ['running', 'verifying', 'revising'].includes(ownedStep.status)) ||
+          (input.kind === 'final_verification' && !ownedStep && run.status === 'verifying') ||
+          (input.kind === 'rollback' && !ownedStep && run.status === 'rolling_back')
+        if (!kindAllowsState) return 'invalid_state'
+        const [earlierNonterminal] = await tx
+          .select({ id: agentTaskTransitions.id })
+          .from(agentTaskTransitions)
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, run.id),
+              inArray(agentTaskTransitions.status, ['pending', 'leased']),
+            ),
+          )
+          .limit(1)
+        if (earlierNonterminal) return 'invalid_state'
+        const generation = run.nextTransitionGeneration
+        const [transition] = await tx
+          .insert(agentTaskTransitions)
+          .values({
+            actorId,
+            projectId: run.projectId,
+            taskRunId: run.id,
+            stepId: input.stepId ?? null,
+            kind: input.kind,
+            transitionKey: input.transitionKey,
+            generation,
+            availableAt: input.availableAt ?? input.now,
+            input: transitionInput,
+            requestDigest,
+            createdAt: input.now,
+            updatedAt: input.now,
+          })
+          .returning()
+        await tx
+          .update(agentTaskRuns)
+          .set({
+            nextTransitionGeneration: generation + 1,
+            currentTransitionKey: input.transitionKey,
+            updatedAt: input.now,
+          })
+          .where(eq(agentTaskRuns.id, run.id))
+        return (transition as never) ?? null
+      })
+    },
+    createAgentTaskPlan(actorId, taskRunId, input) {
+      return withActor(actorId, async tx => {
+        const normalizedSteps = normalizedAgentPlanSteps(input.steps)
+        if (!normalizedSteps) return 'invalid_state'
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(eq(agentTaskRuns.id, taskRunId), eq(agentTaskRuns.actorId, actorId), canEditAgentTaskProject(actorId)),
+          )
+          .for('update')
+          .limit(1)
+        if (!run || run.activePlanVersion !== 0 || run.status !== 'planning') return run ? 'invalid_state' : null
+        const version = 1
+        const [plan] = await tx
+          .insert(agentTaskPlans)
+          .values({
+            taskRunId,
+            version,
+            summary: input.summary,
+            assumptions: input.assumptions,
+            verification: input.verification,
+            createdAt: input.now,
+          })
+          .returning()
+        const steps = await tx
+          .insert(agentTaskSteps)
+          .values(agentTaskStepValues(taskRunId, version, normalizedSteps, input.now))
+          .returning()
+        await tx
+          .update(agentTaskRuns)
+          .set({ activePlanVersion: version, status: 'running', updatedAt: input.now })
+          .where(eq(agentTaskRuns.id, taskRunId))
+        return plan ? { plan: plan as never, steps: steps as never } : 'invalid_state'
+      })
+    },
+    reviseAgentTaskPlan(actorId, taskRunId, input) {
+      return withActor(actorId, async tx => {
+        const normalizedSteps = normalizedAgentPlanSteps(input.steps)
+        if (!normalizedSteps) return 'invalid_state'
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(eq(agentTaskRuns.id, taskRunId), eq(agentTaskRuns.actorId, actorId), canEditAgentTaskProject(actorId)),
+          )
+          .for('update')
+          .limit(1)
+        if (!run) return null
+        if (run.activePlanVersion < 1 || run.status !== 'paused') return 'invalid_state'
+        await tx
+          .update(agentTaskSteps)
+          .set({ status: 'superseded', updatedAt: input.now })
+          .where(and(eq(agentTaskSteps.taskRunId, taskRunId), inArray(agentTaskSteps.status, ['pending', 'revising'])))
+        const version = run.activePlanVersion + 1
+        const [plan] = await tx
+          .insert(agentTaskPlans)
+          .values({
+            taskRunId,
+            version,
+            summary: input.summary,
+            assumptions: input.assumptions,
+            verification: input.verification,
+            createdAt: input.now,
+          })
+          .returning()
+        const steps = await tx
+          .insert(agentTaskSteps)
+          .values(agentTaskStepValues(taskRunId, version, normalizedSteps, input.now))
+          .returning()
+        await tx
+          .update(agentTaskRuns)
+          .set({
+            activePlanVersion: version,
+            status: 'running',
+            semanticRevisions: run.semanticRevisions + 1,
+            updatedAt: input.now,
+          })
+          .where(eq(agentTaskRuns.id, taskRunId))
+        return plan ? { plan: plan as never, steps: steps as never } : 'invalid_state'
+      })
+    },
+    appendAgentTaskEvent(actorId, taskRunId, input) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(eq(agentTaskRuns.id, taskRunId), eq(agentTaskRuns.actorId, actorId), canEditAgentTaskProject(actorId)),
+          )
+          .for('update')
+          .limit(1)
+        if (!run) return null
+        const [existing] = await tx
+          .select()
+          .from(agentTaskEvents)
+          .where(and(eq(agentTaskEvents.taskRunId, taskRunId), eq(agentTaskEvents.eventKey, input.eventKey)))
+          .limit(1)
+        if (existing) return existing as never
+        if (input.stepId) {
+          const [step] = await tx
+            .select({ id: agentTaskSteps.id })
+            .from(agentTaskSteps)
+            .where(and(eq(agentTaskSteps.id, input.stepId), eq(agentTaskSteps.taskRunId, taskRunId)))
+            .limit(1)
+          if (!step) return null
+        }
+        const publicEvent = sanitizePublicAgentTaskEvent(input)
+        const seq = run.nextEventSequence
+        const [event] = await tx
+          .insert(agentTaskEvents)
+          .values({
+            taskRunId,
+            seq,
+            eventKey: input.eventKey,
+            stepId: input.stepId ?? null,
+            type: input.type,
+            summary: publicEvent.summary,
+            publicPayload: publicEvent.publicPayload,
+            technicalPayload: input.technicalPayload ?? {},
+            redactionVersion: input.redactionVersion ?? 1,
+            createdAt: input.now,
+          })
+          .returning()
+        await tx
+          .update(agentTaskRuns)
+          .set({ nextEventSequence: seq + 1, updatedAt: input.now })
+          .where(eq(agentTaskRuns.id, taskRunId))
+        return (event as never) ?? null
+      })
+    },
+    acquireAgentProjectTaskLease(actorId, input) {
+      return withActor(actorId, async tx => {
+        if (input.leaseUntil <= input.now) return 'stale'
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, input.taskRunId),
+              eq(agentTaskRuns.actorId, actorId),
+              canEditAgentTaskProject(actorId),
+            ),
+          )
+          .limit(1)
+        if (!run) return null
+        if (['completed', 'failed', 'canceled', 'rolled_back'].includes(run.status)) return 'stale'
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${run.projectId}:agent-task-lease`}, 0))`)
+        const [lease] = await tx
+          .select()
+          .from(agentProjectTaskLeases)
+          .where(eq(agentProjectTaskLeases.projectId, run.projectId))
+          .for('update')
+          .limit(1)
+        if (lease?.leaseUntil && lease.leaseUntil > input.now) {
+          if (lease.taskRunId !== run.id || lease.leaseOwner !== input.workerId) return 'busy'
+          return lease as never
+        }
+        const leaseToken = randomUUID()
+        const generation = (lease?.leaseGeneration ?? 0) + 1
+        const values = {
+          taskRunId: run.id,
+          leaseGeneration: generation,
+          leaseToken,
+          leaseOwner: input.workerId,
+          leaseUntil: input.leaseUntil,
+          heartbeatAt: input.now,
+          updatedAt: input.now,
+        }
+        const [saved] = lease
+          ? await tx
+              .update(agentProjectTaskLeases)
+              .set(values)
+              .where(eq(agentProjectTaskLeases.projectId, run.projectId))
+              .returning()
+          : await tx
+              .insert(agentProjectTaskLeases)
+              .values({ projectId: run.projectId, ...values, createdAt: input.now })
+              .returning()
+        return (saved as never) ?? 'stale'
+      })
+    },
+    async acquireNextAgentProjectTaskLease(workerId, now, leaseUntil) {
+      if (!workerId.trim() || leaseUntil <= now) {
+        throw new Error('Valid Agent project task lease worker and lease are required')
+      }
+      const result = (await db.execute(sql`
+        select acquired.project_id as "projectId", acquired.task_run_id as "taskRunId",
+          acquired.lease_generation as "leaseGeneration", acquired.lease_token as "leaseToken",
+          acquired.lease_owner as "leaseOwner", acquired.lease_until as "leaseUntil",
+          acquired.heartbeat_at as "heartbeatAt", acquired.created_at as "createdAt",
+          acquired.updated_at as "updatedAt"
+        from app.acquire_next_agent_project_task_lease(${workerId}, ${now}, ${leaseUntil}) acquired
+      `)) as unknown as { rows?: unknown[] }
+      return (result.rows?.[0] as never) ?? null
+    },
+    releaseAgentProjectTaskLease(actorId, input) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select({ projectId: agentTaskRuns.projectId })
+          .from(agentTaskRuns)
+          .where(and(eq(agentTaskRuns.id, input.taskRunId), eq(agentTaskRuns.actorId, actorId)))
+          .limit(1)
+        if (!run) return 'stale'
+        const [released] = await tx
+          .update(agentProjectTaskLeases)
+          .set({ leaseUntil: input.now, heartbeatAt: input.now, updatedAt: input.now })
+          .where(
+            and(
+              eq(agentProjectTaskLeases.projectId, run.projectId),
+              eq(agentProjectTaskLeases.taskRunId, input.taskRunId),
+              eq(agentProjectTaskLeases.leaseGeneration, input.leaseGeneration),
+              eq(agentProjectTaskLeases.leaseToken, input.leaseToken),
+              eq(agentProjectTaskLeases.leaseOwner, input.workerId),
+            ),
+          )
+          .returning({ projectId: agentProjectTaskLeases.projectId })
+        return released ? true : 'stale'
+      })
+    },
+    async claimAgentTaskTransition(workerId, now, leaseUntil, kinds) {
+      if (!workerId.trim() || leaseUntil <= now)
+        throw new Error('Valid Agent task transition worker and lease are required')
+      if (kinds?.length === 0) return null
+      const claimKinds = kinds
+        ? sql`array[${sql.join(
+            kinds.map(kind => sql`${kind}`),
+            sql`, `,
+          )}]::app.agent_task_transition_kind[]`
+        : sql`null::app.agent_task_transition_kind[]`
+      // app.claim_agent_task_transition selects pending or expired lease_until work FOR UPDATE SKIP LOCKED.
+      const result =
+        (await db.execute(sql`select claimed.id, claimed.actor_id as "actorId", claimed.project_id as "projectId",
+        claimed.task_run_id as "taskRunId", claimed.step_id as "stepId", claimed.kind, claimed.transition_key as "transitionKey",
+        claimed.generation, claimed.status, claimed.available_at as "availableAt", claimed.lease_owner as "leaseOwner",
+        claimed.lease_generation as "leaseGeneration", claimed.lease_token as "leaseToken", claimed.lease_until as "leaseUntil",
+        claimed.project_lease_generation as "projectLeaseGeneration", claimed.project_lease_token as "projectLeaseToken",
+        claimed.project_lease_worker_id as "projectLeaseWorkerId",
+        claimed.heartbeat_at as "heartbeatAt", claimed.claim_attempts as "claimAttempts", claimed.operation_id as "operationId",
+        claimed.step_attempt_id as "stepAttemptId", claimed.input_json as input, claimed.output_json as output, claimed.error_json as error,
+        claimed.request_digest as "requestDigest", claimed.completion_digest as "completionDigest",
+        claimed.created_at as "createdAt", claimed.updated_at as "updatedAt", claimed.completed_at as "completedAt"
+        from app.claim_agent_task_transition(${workerId}, ${now}, ${leaseUntil}, ${claimKinds}) claimed`)) as unknown as {
+          rows?: unknown[]
+        }
+      return (result.rows?.[0] as never) ?? null
+    },
+    heartbeatAgentTaskTransition(actorId, fence, now, leaseUntil) {
+      return withActor(actorId, async tx => {
+        if (leaseUntil <= now) return 'stale' as const
+        const [transition] = await tx
+          .select()
+          .from(agentTaskTransitions)
+          .where(and(eq(agentTaskTransitions.id, fence.transitionId), eq(agentTaskTransitions.actorId, actorId)))
+          .for('update')
+          .limit(1)
+        if (
+          !transition ||
+          transition.status !== 'leased' ||
+          !matchesAgentTaskLease(transition, fence) ||
+          !transition.leaseUntil ||
+          transition.leaseUntil <= now
+        )
+          return 'stale' as const
+        if (agentTaskTransitionRequiresProjectLease(transition.kind)) {
+          if (!matchesAgentProjectTaskLease(transition, fence)) return 'stale' as const
+          const [projectLease] = await tx
+            .update(agentProjectTaskLeases)
+            .set({ leaseUntil, heartbeatAt: now, updatedAt: now })
+            .where(
+              and(
+                eq(agentProjectTaskLeases.projectId, transition.projectId),
+                eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+                gt(agentProjectTaskLeases.leaseUntil, now),
+              ),
+            )
+            .returning({ projectId: agentProjectTaskLeases.projectId })
+          if (!projectLease) return 'stale' as const
+        }
+        const [heartbeat] = await tx
+          .update(agentTaskTransitions)
+          .set({ leaseUntil, heartbeatAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(agentTaskTransitions.id, transition.id),
+              eq(agentTaskTransitions.status, 'leased'),
+              eq(agentTaskTransitions.leaseGeneration, fence.leaseGeneration),
+              eq(agentTaskTransitions.leaseToken, fence.leaseToken),
+              eq(agentTaskTransitions.leaseOwner, fence.workerId),
+              gt(agentTaskTransitions.leaseUntil, now),
+            ),
+          )
+          .returning()
+        return (heartbeat as never) ?? ('stale' as const)
+      })
+    },
+    releaseAgentTaskTransition(actorId, fence, now) {
+      return withActor(actorId, async tx => {
+        const [transition] = await tx
+          .update(agentTaskTransitions)
+          .set({
+            status: 'pending',
+            leaseOwner: null,
+            leaseToken: null,
+            leaseUntil: null,
+            heartbeatAt: null,
+            availableAt: now,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(agentTaskTransitions.id, fence.transitionId),
+              eq(agentTaskTransitions.actorId, actorId),
+              eq(agentTaskTransitions.status, 'leased'),
+              eq(agentTaskTransitions.leaseGeneration, fence.leaseGeneration),
+              eq(agentTaskTransitions.leaseToken, fence.leaseToken),
+              eq(agentTaskTransitions.leaseOwner, fence.workerId),
+            ),
+          )
+          .returning()
+        return (transition as never) ?? 'stale'
+      })
+    },
+    completeAgentTaskTransition(actorId, fence, input: AgentTaskCompletionInput) {
+      const completionDigest = agentTaskCompletionRequestDigest(input)
+      // withActor is one database transaction: taskRunPatch, steps, events, accounting and nextTransition commit together.
+      return withActor(actorId, async tx => {
+        const [transition] = await tx
+          .select()
+          .from(agentTaskTransitions)
+          .where(and(eq(agentTaskTransitions.id, fence.transitionId), eq(agentTaskTransitions.actorId, actorId)))
+          .for('update')
+          .limit(1)
+        if (!transition) return 'stale'
+        if (
+          ['completed', 'failed', 'canceled'].includes(transition.status) &&
+          matchesAgentTaskLease(transition, fence)
+        ) {
+          if (transition.completionDigest !== completionDigest) return 'conflict'
+          const [taskRun] = await tx
+            .select()
+            .from(agentTaskRuns)
+            .where(eq(agentTaskRuns.id, transition.taskRunId))
+            .limit(1)
+          const [nextTransition] = await tx
+            .select()
+            .from(agentTaskTransitions)
+            .where(
+              and(
+                eq(agentTaskTransitions.taskRunId, transition.taskRunId),
+                gt(agentTaskTransitions.generation, transition.generation),
+              ),
+            )
+            .orderBy(asc(agentTaskTransitions.generation))
+            .limit(1)
+          return taskRun
+            ? {
+                transition: transition as never,
+                taskRun: taskRun as never,
+                nextTransition: (nextTransition as never) ?? null,
+              }
+            : 'stale'
+        }
+        if (
+          transition.status !== 'leased' ||
+          !matchesAgentTaskLease(transition, fence) ||
+          !transition.leaseUntil ||
+          transition.leaseUntil <= input.now
+        )
+          return 'stale'
+        if (agentTaskTransitionRequiresProjectLease(transition.kind)) {
+          if (!matchesAgentProjectTaskLease(transition, fence)) return 'stale'
+          const [projectLease] = await tx
+            .select({ projectId: agentProjectTaskLeases.projectId })
+            .from(agentProjectTaskLeases)
+            .where(
+              and(
+                eq(agentProjectTaskLeases.projectId, transition.projectId),
+                eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+                gt(agentProjectTaskLeases.leaseUntil, input.now),
+              ),
+            )
+            .for('update')
+            .limit(1)
+          if (!projectLease) return 'stale'
+        }
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(eq(agentTaskRuns.id, transition.taskRunId))
+          .for('update')
+          .limit(1)
+        if (!run) return 'stale'
+        const kindAllowsRun =
+          (transition.kind === 'planning' && ['planning', 'waiting_user'].includes(run.status)) ||
+          (transition.kind === 'step_action' && run.status === 'running') ||
+          (transition.kind === 'observation' && ['running', 'verifying', 'paused'].includes(run.status)) ||
+          (transition.kind === 'final_verification' && run.status === 'verifying') ||
+          (transition.kind === 'rollback' && run.status === 'rolling_back')
+        if (!kindAllowsRun) return 'invalid_state'
+
+        let transitionStep: typeof agentTaskSteps.$inferSelect | undefined
+        if (transition.stepId) {
+          ;[transitionStep] = await tx
+            .select()
+            .from(agentTaskSteps)
+            .where(and(eq(agentTaskSteps.id, transition.stepId), eq(agentTaskSteps.taskRunId, run.id)))
+            .for('update')
+            .limit(1)
+          if (!transitionStep || transitionStep.planVersion !== run.activePlanVersion) return 'invalid_state'
+        }
+        if ((transition.kind === 'step_action' || transition.kind === 'observation') !== Boolean(transitionStep))
+          return 'invalid_state'
+        if (
+          (transition.kind === 'step_action' &&
+            transitionStep &&
+            !['pending', 'running', 'revising'].includes(transitionStep.status)) ||
+          (transition.kind === 'observation' &&
+            transitionStep &&
+            !['running', 'verifying', 'revising'].includes(transitionStep.status))
+        )
+          return 'invalid_state'
+
+        const nextRunStatus = input.taskRunPatch?.status ?? run.status
+        if (!allowsAgentStateEdge(agentTaskStatusEdges, run.status, nextRunStatus)) return 'invalid_state'
+        if (transition.kind === 'final_verification' && nextRunStatus === 'completed') {
+          if (!completeAgentTaskFinalVerificationEvidence(input.finalVerification)) return 'invalid_state'
+          const [notPassedStep] = await tx
+            .select({ id: agentTaskSteps.id })
+            .from(agentTaskSteps)
+            .where(
+              and(
+                eq(agentTaskSteps.taskRunId, run.id),
+                eq(agentTaskSteps.planVersion, run.activePlanVersion),
+                ne(agentTaskSteps.status, 'passed'),
+              ),
+            )
+            .limit(1)
+          if (notPassedStep) return 'invalid_state'
+          const evidence = input.finalVerification!
+          const [operation] = await tx
+            .select({
+              id: agentSpikeOperations.id,
+              status: agentSpikeOperations.status,
+              committedDraftVersion: agentSpikeOperations.committedDraftVersion,
+              evidence: agentSpikeOperations.evidence,
+              hostReceipt: agentSpikeOperations.hostReceipt,
+            })
+            .from(agentSpikeOperations)
+            .where(
+              and(
+                eq(agentSpikeOperations.actorId, actorId),
+                eq(agentSpikeOperations.projectId, run.projectId),
+                eq(agentSpikeOperations.taskId, run.taskId),
+                eq(agentSpikeOperations.operationId, evidence.operationId),
+              ),
+            )
+            .limit(1)
+          const [project] = await tx
+            .select({ draftVersion: projects.draftVersion })
+            .from(projects)
+            .where(eq(projects.id, run.projectId))
+            .limit(1)
+          const renderEvidence =
+            operation?.evidence?.render &&
+            typeof operation.evidence.render === 'object' &&
+            !Array.isArray(operation.evidence.render)
+              ? (operation.evidence.render as Record<string, unknown>)
+              : null
+          if (
+            !operation ||
+            operation.status !== 'committed' ||
+            operation.id !== evidence.receiptId ||
+            operation.committedDraftVersion !== evidence.committedDraftVersion ||
+            project?.draftVersion !== evidence.committedDraftVersion ||
+            !operation.hostReceipt ||
+            operation.hostReceipt.status !== 'applied' ||
+            renderEvidence?.rendererReady !== true ||
+            !cleanAgentPreviewEvidence(operation.evidence)
+          )
+            return 'invalid_state'
+        } else if (input.finalVerification) {
+          return 'invalid_state'
+        }
+        const forbiddenProviderAccountingFields = ['providerTurns', 'promptTokens', 'completionTokens', 'costMicros']
+        if (
+          forbiddenProviderAccountingFields.some(field =>
+            Object.prototype.hasOwnProperty.call(input.accountingDelta ?? {}, field),
+          )
+        )
+          return 'invalid_state'
+        const accountingDelta = {
+          executorRetries: input.accountingDelta?.executorRetries ?? 0,
+          semanticRevisions: input.accountingDelta?.semanticRevisions ?? 0,
+        }
+        if (Object.values(accountingDelta).some(value => !Number.isSafeInteger(value) || value < 0))
+          return 'invalid_state'
+        let operationRetryCount = 0
+        let stepRevisionCount = 0
+        if (input.stepAttempt) {
+          const operationId = input.stepAttempt.operationId?.trim() || null
+          if (operationId) {
+            const [operation] = await tx
+              .select({ id: agentSpikeOperations.id })
+              .from(agentSpikeOperations)
+              .where(
+                and(
+                  eq(agentSpikeOperations.actorId, actorId),
+                  eq(agentSpikeOperations.projectId, run.projectId),
+                  eq(agentSpikeOperations.taskId, run.taskId),
+                  eq(agentSpikeOperations.operationId, operationId),
+                ),
+              )
+              .limit(1)
+            if (!operation) return 'invalid_state'
+            const [latestOperationAttempt] = await tx
+              .select({ maximum: max(agentTaskStepAttempts.executorRetryCount) })
+              .from(agentTaskStepAttempts)
+              .where(
+                and(eq(agentTaskStepAttempts.taskRunId, run.id), eq(agentTaskStepAttempts.operationId, operationId)),
+              )
+            operationRetryCount = Number(latestOperationAttempt?.maximum ?? 0) + accountingDelta.executorRetries
+          } else if (accountingDelta.executorRetries > 0) {
+            return 'invalid_state'
+          }
+          if (transitionStep) {
+            const [latestStepAttempt] = await tx
+              .select({ maximum: max(agentTaskStepAttempts.semanticRevisionCount) })
+              .from(agentTaskStepAttempts)
+              .where(eq(agentTaskStepAttempts.stepId, transitionStep.id))
+            stepRevisionCount = Number(latestStepAttempt?.maximum ?? 0) + accountingDelta.semanticRevisions
+          }
+          if (
+            (input.stepAttempt.executorRetryCount ?? 0) !== operationRetryCount ||
+            (input.stepAttempt.semanticRevisionCount ?? 0) !== stepRevisionCount
+          )
+            return 'invalid_state'
+        } else if (accountingDelta.executorRetries > 0 || accountingDelta.semanticRevisions > 0) {
+          return 'invalid_state'
+        }
+        const nextAccounting = {
+          providerTurns: run.providerTurns,
+          executorRetries: run.executorRetries + accountingDelta.executorRetries,
+          semanticRevisions: run.semanticRevisions + accountingDelta.semanticRevisions,
+          promptTokens: run.promptTokens,
+          completionTokens: run.completionTokens,
+          costMicros: run.costMicros,
+        }
+        const bounds = run.bounds as unknown as AgentTaskRunBounds
+        if (operationRetryCount > bounds.maxExecutorRetries || stepRevisionCount > bounds.maxStepRevisions)
+          return 'invalid_state'
+
+        const normalizedPlanStepsInput = input.plan ? normalizedAgentPlanSteps(input.plan.steps) : []
+        const projectedPlanVersion = input.plan ? run.activePlanVersion + 1 : run.activePlanVersion
+        if (input.plan) {
+          if (!normalizedPlanStepsInput) return 'invalid_state'
+          const isInitialPlan =
+            transition.kind === 'planning' && run.activePlanVersion === 0 && run.status === 'planning'
+          const isReplan =
+            transition.kind === 'observation' &&
+            run.activePlanVersion > 0 &&
+            ['running', 'verifying', 'paused'].includes(run.status) &&
+            input.stepPatch?.status === 'superseded'
+          if (!isInitialPlan && !isReplan) return 'invalid_state'
+        }
+        if (
+          transition.kind === 'planning' &&
+          !input.plan &&
+          input.status === 'completed' &&
+          nextRunStatus !== 'waiting_user'
+        )
+          return 'invalid_state'
+        if (input.stepPatch) {
+          if (!transitionStep || input.stepPatch.stepId !== transitionStep.id)
+            throw new AgentTaskCompletionRollback('invalid_state')
+          if (!allowsAgentStateEdge(agentStepStatusEdges, transitionStep.status, input.stepPatch.status))
+            throw new AgentTaskCompletionRollback('invalid_state')
+        }
+        if (input.stepAttempt) {
+          if (!transitionStep || input.stepAttempt.stepId !== transitionStep.id)
+            throw new AgentTaskCompletionRollback('invalid_state')
+          const [existingStepAttempt] = await tx
+            .select({ id: agentTaskStepAttempts.id })
+            .from(agentTaskStepAttempts)
+            .where(eq(agentTaskStepAttempts.transitionId, transition.id))
+            .limit(1)
+          if (existingStepAttempt) return 'conflict'
+        }
+        for (const event of input.events ?? []) {
+          const resolvedEventStepId =
+            event.stepId && normalizedPlanStepsInput
+              ? (normalizedPlanStepsInput.find(step => step.semanticStepKey === event.stepId)?.id ?? event.stepId)
+              : (event.stepId ?? null)
+          if (resolvedEventStepId) {
+            const ownedEventStep =
+              normalizedPlanStepsInput?.find(step => step.id === resolvedEventStepId) ??
+              (
+                await tx
+                  .select()
+                  .from(agentTaskSteps)
+                  .where(and(eq(agentTaskSteps.id, resolvedEventStepId), eq(agentTaskSteps.taskRunId, run.id)))
+                  .limit(1)
+              )[0]
+            if (
+              !ownedEventStep ||
+              ('planVersion' in ownedEventStep && ownedEventStep.planVersion !== projectedPlanVersion)
+            )
+              return 'invalid_state'
+          }
+          const publicEvent = sanitizePublicAgentTaskEvent(event)
+          const [existingEvent] = await tx
+            .select()
+            .from(agentTaskEvents)
+            .where(and(eq(agentTaskEvents.taskRunId, run.id), eq(agentTaskEvents.eventKey, event.eventKey)))
+            .limit(1)
+          if (
+            existingEvent &&
+            canonicalJsonSha256({
+              stepId: existingEvent.stepId,
+              type: existingEvent.type,
+              summary: existingEvent.summary,
+              publicPayload: existingEvent.publicPayload,
+              technicalPayload: existingEvent.technicalPayload,
+              redactionVersion: existingEvent.redactionVersion,
+            }) !==
+              canonicalJsonSha256({
+                stepId: resolvedEventStepId,
+                type: event.type,
+                summary: publicEvent.summary,
+                publicPayload: publicEvent.publicPayload,
+                technicalPayload: event.technicalPayload ?? {},
+                redactionVersion: event.redactionVersion ?? 1,
+              })
+          )
+            return 'conflict'
+        }
+        if (input.nextTransition) {
+          const allowedNextKinds: Readonly<Record<string, readonly string[]>> = {
+            planning: ['step_action'],
+            step_action: ['observation'],
+            observation: ['step_action', 'final_verification'],
+            final_verification: [],
+            rollback: ['rollback'],
+          }
+          if (!allowedNextKinds[transition.kind]?.includes(input.nextTransition.kind)) return 'invalid_state'
+          const nextKindAllowsRun =
+            (input.nextTransition.kind === 'step_action' && nextRunStatus === 'running') ||
+            (input.nextTransition.kind === 'observation' && ['running', 'verifying'].includes(nextRunStatus)) ||
+            (input.nextTransition.kind === 'final_verification' && nextRunStatus === 'verifying') ||
+            (input.nextTransition.kind === 'rollback' && nextRunStatus === 'rolling_back')
+          if (!nextKindAllowsRun) return 'invalid_state'
+          const ordinalStep = input.nextTransition.stepOrdinal
+            ? normalizedPlanStepsInput?.find(step => step.ordinal === input.nextTransition?.stepOrdinal)
+            : undefined
+          const semanticStep = input.nextTransition.stepId
+            ? normalizedPlanStepsInput?.find(step => step.semanticStepKey === input.nextTransition?.stepId)
+            : undefined
+          if (ordinalStep && semanticStep && ordinalStep.id !== semanticStep.id) return 'invalid_state'
+          const nextStepId = ordinalStep?.id ?? semanticStep?.id ?? input.nextTransition.stepId ?? null
+          const ownedNextStep = nextStepId
+            ? (normalizedPlanStepsInput?.find(step => step.id === nextStepId) ??
+              (
+                await tx
+                  .select()
+                  .from(agentTaskSteps)
+                  .where(and(eq(agentTaskSteps.id, nextStepId), eq(agentTaskSteps.taskRunId, run.id)))
+                  .limit(1)
+              )[0])
+            : undefined
+          if (
+            (input.nextTransition.kind === 'step_action' || input.nextTransition.kind === 'observation') !==
+              Boolean(ownedNextStep) ||
+            (ownedNextStep && 'planVersion' in ownedNextStep && ownedNextStep.planVersion !== projectedPlanVersion)
+          )
+            return 'invalid_state'
+          const nextRequestDigest = agentTaskTransitionRequestDigest({
+            taskRunId: run.id,
+            stepId: nextStepId,
+            kind: input.nextTransition.kind,
+            transitionKey: input.nextTransition.transitionKey,
+            availableAt: input.nextTransition.availableAt,
+            payload: input.nextTransition.input ?? {},
+          })
+          const [existingNext] = await tx
+            .select({ requestDigest: agentTaskTransitions.requestDigest })
+            .from(agentTaskTransitions)
+            .where(
+              and(
+                eq(agentTaskTransitions.taskRunId, run.id),
+                eq(agentTaskTransitions.transitionKey, input.nextTransition.transitionKey),
+              ),
+            )
+            .limit(1)
+          if (existingNext && existingNext.requestDigest !== nextRequestDigest) return 'conflict'
+        }
+
+        let insertedSteps: Array<typeof agentTaskSteps.$inferSelect> = []
+        if (input.plan) {
+          const normalizedSteps = normalizedPlanStepsInput!
+          const isReplan =
+            transition.kind === 'observation' &&
+            run.activePlanVersion > 0 &&
+            ['running', 'verifying', 'paused'].includes(run.status) &&
+            input.stepPatch?.status === 'superseded'
+          const version = projectedPlanVersion
+          if (isReplan)
+            await tx
+              .update(agentTaskSteps)
+              .set({ status: 'superseded', updatedAt: input.now })
+              .where(and(eq(agentTaskSteps.taskRunId, run.id), inArray(agentTaskSteps.status, ['pending', 'revising'])))
+          await tx.insert(agentTaskPlans).values({
+            taskRunId: run.id,
+            version,
+            summary: input.plan.summary,
+            assumptions: input.plan.assumptions,
+            verification: input.plan.verification,
+            createdAt: input.now,
+          })
+          insertedSteps = await tx
+            .insert(agentTaskSteps)
+            .values(agentTaskStepValues(run.id, version, normalizedSteps, input.now))
+            .returning()
+          run.activePlanVersion = version
+        }
+        if (
+          transition.kind === 'planning' &&
+          !input.plan &&
+          input.status === 'completed' &&
+          nextRunStatus !== 'waiting_user'
+        )
+          throw new AgentTaskCompletionRollback('invalid_state')
+        if (input.stepPatch) {
+          if (!transitionStep || input.stepPatch.stepId !== transitionStep.id)
+            throw new AgentTaskCompletionRollback('invalid_state')
+          if (!allowsAgentStateEdge(agentStepStatusEdges, transitionStep.status, input.stepPatch.status))
+            throw new AgentTaskCompletionRollback('invalid_state')
+          await tx
+            .update(agentTaskSteps)
+            .set({
+              status: input.stepPatch.status,
+              lastObservation: input.stepPatch.lastObservation,
+              updatedAt: input.now,
+            })
+            .where(and(eq(agentTaskSteps.id, input.stepPatch.stepId), eq(agentTaskSteps.taskRunId, run.id)))
+        }
+        if (input.stepAttempt) {
+          if (!transitionStep || input.stepAttempt.stepId !== transitionStep.id)
+            throw new AgentTaskCompletionRollback('invalid_state')
+          const [latestAttemptNumber] = await tx
+            .select({ maximum: max(agentTaskStepAttempts.attemptNumber) })
+            .from(agentTaskStepAttempts)
+            .where(eq(agentTaskStepAttempts.stepId, input.stepAttempt.stepId))
+          const [attempt] = await tx
+            .insert(agentTaskStepAttempts)
+            .values({
+              taskRunId: run.id,
+              stepId: input.stepAttempt.stepId,
+              attemptNumber: Number(latestAttemptNumber?.maximum ?? 0) + 1,
+              decisionKind: input.stepAttempt.decisionKind,
+              transitionKey: transition.transitionKey,
+              transitionId: transition.id,
+              providerCallReference: input.stepAttempt.providerCallReference,
+              operationId: input.stepAttempt.operationId,
+              executorRetryCount: input.stepAttempt.executorRetryCount ?? 0,
+              semanticRevisionCount: input.stepAttempt.semanticRevisionCount ?? 0,
+              observation: input.stepAttempt.observation,
+              terminalClassification: input.stepAttempt.terminalClassification,
+              createdAt: input.now,
+              completedAt: input.now,
+            })
+            .returning()
+          if (attempt)
+            await tx
+              .update(agentTaskTransitions)
+              .set({
+                stepAttemptId: attempt.id,
+                operationId: input.stepAttempt.operationId ?? null,
+              })
+              .where(eq(agentTaskTransitions.id, transition.id))
+        }
+        let nextEventSequence = run.nextEventSequence
+        for (const event of input.events ?? []) {
+          const [existing] = await tx
+            .select({ seq: agentTaskEvents.seq })
+            .from(agentTaskEvents)
+            .where(and(eq(agentTaskEvents.taskRunId, run.id), eq(agentTaskEvents.eventKey, event.eventKey)))
+            .limit(1)
+          if (existing) continue
+          const resolvedEventStepId =
+            event.stepId && insertedSteps.length > 0
+              ? (insertedSteps.find(step => step.semanticStepKey === event.stepId)?.id ?? event.stepId)
+              : (event.stepId ?? null)
+          if (resolvedEventStepId) {
+            const ownedEventStep =
+              insertedSteps.find(step => step.id === resolvedEventStepId) ??
+              (
+                await tx
+                  .select()
+                  .from(agentTaskSteps)
+                  .where(and(eq(agentTaskSteps.id, resolvedEventStepId), eq(agentTaskSteps.taskRunId, run.id)))
+                  .limit(1)
+              )[0]
+            if (!ownedEventStep || ownedEventStep.planVersion !== run.activePlanVersion)
+              throw new AgentTaskCompletionRollback('invalid_state')
+          }
+          const publicEvent = sanitizePublicAgentTaskEvent(event)
+          await tx.insert(agentTaskEvents).values({
+            taskRunId: run.id,
+            seq: nextEventSequence++,
+            eventKey: event.eventKey,
+            stepId: resolvedEventStepId,
+            type: event.type,
+            summary: publicEvent.summary,
+            publicPayload: publicEvent.publicPayload,
+            technicalPayload: event.technicalPayload ?? {},
+            redactionVersion: event.redactionVersion ?? 1,
+            createdAt: input.now,
+          })
+        }
+        let nextTransition: typeof agentTaskTransitions.$inferSelect | null = null
+        if (input.nextTransition) {
+          const allowedNextKinds: Readonly<Record<string, readonly string[]>> = {
+            planning: ['step_action'],
+            step_action: ['observation'],
+            observation: ['step_action', 'final_verification'],
+            final_verification: [],
+            rollback: ['rollback'],
+          }
+          if (!allowedNextKinds[transition.kind]?.includes(input.nextTransition.kind))
+            throw new AgentTaskCompletionRollback('invalid_state')
+          const nextKindAllowsRun =
+            (input.nextTransition.kind === 'step_action' && nextRunStatus === 'running') ||
+            (input.nextTransition.kind === 'observation' && ['running', 'verifying'].includes(nextRunStatus)) ||
+            (input.nextTransition.kind === 'final_verification' && nextRunStatus === 'verifying') ||
+            (input.nextTransition.kind === 'rollback' && nextRunStatus === 'rolling_back')
+          if (!nextKindAllowsRun) throw new AgentTaskCompletionRollback('invalid_state')
+          const ordinalStep = input.nextTransition.stepOrdinal
+            ? insertedSteps.find(step => step.ordinal === input.nextTransition?.stepOrdinal)
+            : undefined
+          const semanticStep = input.nextTransition.stepId
+            ? insertedSteps.find(step => step.semanticStepKey === input.nextTransition?.stepId)
+            : undefined
+          if (ordinalStep && semanticStep && ordinalStep.id !== semanticStep.id)
+            throw new AgentTaskCompletionRollback('invalid_state')
+          const stepId = ordinalStep?.id ?? semanticStep?.id ?? input.nextTransition.stepId ?? null
+          let ownedNextStep = insertedSteps.find(step => step.id === stepId)
+          if (stepId && !ownedNextStep) {
+            ;[ownedNextStep] = await tx
+              .select()
+              .from(agentTaskSteps)
+              .where(and(eq(agentTaskSteps.id, stepId), eq(agentTaskSteps.taskRunId, run.id)))
+              .limit(1)
+          }
+          if (
+            (input.nextTransition.kind === 'step_action' || input.nextTransition.kind === 'observation') !==
+              Boolean(ownedNextStep) ||
+            (ownedNextStep && ownedNextStep.planVersion !== run.activePlanVersion)
+          )
+            throw new AgentTaskCompletionRollback('invalid_state')
+          const nextTransitionInput = input.nextTransition.input ?? {}
+          const nextRequestDigest = agentTaskTransitionRequestDigest({
+            taskRunId: run.id,
+            stepId,
+            kind: input.nextTransition.kind,
+            transitionKey: input.nextTransition.transitionKey,
+            availableAt: input.nextTransition.availableAt,
+            payload: nextTransitionInput,
+          })
+          const [insertedNextTransition] = await tx
+            .insert(agentTaskTransitions)
+            .values({
+              actorId,
+              projectId: run.projectId,
+              taskRunId: run.id,
+              stepId,
+              kind: input.nextTransition.kind,
+              transitionKey: input.nextTransition.transitionKey,
+              generation: run.nextTransitionGeneration,
+              status: 'pending',
+              availableAt: input.nextTransition.availableAt ?? input.now,
+              input: nextTransitionInput,
+              requestDigest: nextRequestDigest,
+              createdAt: input.now,
+              updatedAt: input.now,
+            })
+            .onConflictDoNothing()
+            .returning()
+          nextTransition = insertedNextTransition ?? null
+          if (!nextTransition) {
+            const [existingNextTransition] = await tx
+              .select()
+              .from(agentTaskTransitions)
+              .where(
+                and(
+                  eq(agentTaskTransitions.taskRunId, run.id),
+                  eq(agentTaskTransitions.transitionKey, input.nextTransition.transitionKey),
+                ),
+              )
+              .limit(1)
+            nextTransition = existingNextTransition ?? null
+            if (!nextTransition || nextTransition.requestDigest !== nextRequestDigest)
+              throw new AgentTaskCompletionRollback('conflict')
+          }
+        }
+        const taskRunPatch = input.taskRunPatch ?? {}
+        const terminal = ['completed', 'failed', 'canceled', 'rolled_back'].includes(nextRunStatus)
+        const releasesProjectLease = agentTaskProjectLeaseReleaseStatuses.has(nextRunStatus)
+        const [taskRun] = await tx
+          .update(agentTaskRuns)
+          .set({
+            status: nextRunStatus,
+            activePlanVersion: projectedPlanVersion,
+            ...nextAccounting,
+            nextEventSequence,
+            nextTransitionGeneration: nextTransition
+              ? Math.max(run.nextTransitionGeneration + 1, nextTransition.generation + 1)
+              : run.nextTransitionGeneration,
+            currentTransitionKey: releasesProjectLease
+              ? null
+              : (nextTransition?.transitionKey ?? taskRunPatch.currentTransitionKey ?? run.currentTransitionKey),
+            updatedAt: input.now,
+            completedAt: terminal ? input.now : run.completedAt,
+          })
+          .where(eq(agentTaskRuns.id, run.id))
+          .returning()
+        const [completed] = await tx
+          .update(agentTaskTransitions)
+          .set({
+            status: input.status,
+            output: input.output ?? null,
+            error: input.error ?? null,
+            completionDigest,
+            completedAt: input.now,
+            updatedAt: input.now,
+          })
+          .where(and(eq(agentTaskTransitions.id, transition.id), eq(agentTaskTransitions.status, 'leased')))
+          .returning()
+        if (!completed || !taskRun) throw new AgentTaskCompletionRollback('stale')
+        if (releasesProjectLease && agentTaskTransitionRequiresProjectLease(transition.kind)) {
+          const [released] = await tx
+            .update(agentProjectTaskLeases)
+            .set({ leaseUntil: input.now, heartbeatAt: input.now, updatedAt: input.now })
+            .where(
+              and(
+                eq(agentProjectTaskLeases.projectId, transition.projectId),
+                eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+              ),
+            )
+            .returning({ projectId: agentProjectTaskLeases.projectId })
+          if (!released) throw new AgentTaskCompletionRollback('stale')
+        }
+        return {
+          transition: completed as never,
+          taskRun: taskRun as never,
+          nextTransition: (nextTransition as never) ?? null,
+        }
+      }).catch(error => {
+        if (error instanceof AgentTaskCompletionRollback) return error.result
+        throw error
+      })
+    },
+    reconcileAgentTaskTransition(actorId, fence, now) {
+      return withActor(actorId, async tx => {
+        const [transition] = await tx
+          .select()
+          .from(agentTaskTransitions)
+          .where(and(eq(agentTaskTransitions.id, fence.transitionId), eq(agentTaskTransitions.actorId, actorId)))
+          .for('update')
+          .limit(1)
+        if (!transition) return null
+        if (transition.status === 'pending')
+          return { transition: transition as never, classification: 'already_pending' as const }
+        if (
+          transition.status === 'failed' &&
+          transition.error?.code === 'provider_outcome_unknown' &&
+          matchesAgentTaskLease(transition, fence)
+        )
+          return { transition: transition as never, classification: 'provider_outcome_unknown_paused' as const }
+        if (transition.status !== 'leased' || !matchesAgentTaskLease(transition, fence)) return 'stale'
+        if (transition.leaseUntil && transition.leaseUntil > now)
+          return { transition: transition as never, classification: 'lease_live' as const }
+        if (agentTaskTransitionRequiresProjectLease(transition.kind)) {
+          if (!matchesAgentProjectTaskLease(transition, fence)) return 'stale'
+          const [projectLease] = await tx
+            .select({ projectId: agentProjectTaskLeases.projectId })
+            .from(agentProjectTaskLeases)
+            .where(
+              and(
+                eq(agentProjectTaskLeases.projectId, transition.projectId),
+                eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+              ),
+            )
+            .for('update')
+            .limit(1)
+          if (!projectLease) return 'stale'
+        }
+        const [attempt] = await tx
+          .select()
+          .from(agentProviderAttempts)
+          .where(
+            and(
+              eq(agentProviderAttempts.taskTransitionId, transition.id),
+              inArray(agentProviderAttempts.state, ['started', 'outcome_unknown']),
+            ),
+          )
+          .orderBy(desc(agentProviderAttempts.attemptNo))
+          .for('update')
+          .limit(1)
+        if (attempt) {
+          const paused = await pauseTransitionForUnknownProviderOutcome(tx, actorId, transition, attempt, now, {
+            accountingAlreadyApplied: unknownProviderOutcomeAccountingAlreadyApplied(attempt),
+          })
+          if (paused === 'invalid_state') return 'stale'
+          if (paused === 'stale') return paused
+          return { transition: paused.transition as never, classification: 'provider_outcome_unknown_paused' as const }
+        }
+        const [pending] = await tx
+          .update(agentTaskTransitions)
+          .set({
+            status: 'pending',
+            leaseOwner: null,
+            leaseToken: null,
+            leaseUntil: null,
+            heartbeatAt: null,
+            availableAt: now,
+            updatedAt: now,
+          })
+          .where(eq(agentTaskTransitions.id, transition.id))
+          .returning()
+        return pending ? { transition: pending as never, classification: 'requeued' as const } : 'stale'
+      })
+    },
+    pauseAgentTaskTransitionUnknownOutcome(actorId, fence, input) {
+      return withActor(actorId, async tx => {
+        const [transition] = await tx
+          .select()
+          .from(agentTaskTransitions)
+          .where(and(eq(agentTaskTransitions.id, fence.transitionId), eq(agentTaskTransitions.actorId, actorId)))
+          .for('update')
+          .limit(1)
+        if (!transition || !matchesAgentTaskLease(transition, fence)) return 'stale'
+        const needsProjectLease = agentTaskTransitionRequiresProjectLease(transition.kind)
+        if (needsProjectLease && !matchesAgentProjectTaskLease(transition, fence)) return 'stale'
+        if (!['leased', 'failed'].includes(transition.status)) return 'invalid_state'
+        const [attempt] = await tx
+          .select()
+          .from(agentProviderAttempts)
+          .where(
+            and(
+              eq(agentProviderAttempts.taskTransitionId, transition.id),
+              inArray(agentProviderAttempts.state, ['started', 'outcome_unknown']),
+            ),
+          )
+          .orderBy(desc(agentProviderAttempts.attemptNo))
+          .for('update')
+          .limit(1)
+        if (!attempt) return 'invalid_state'
+        const paused = await pauseTransitionForUnknownProviderOutcome(tx, actorId, transition, attempt, input.now, {
+          event: input.event,
+          operationalEvent: input.operationalEvent,
+          accountingAlreadyApplied: unknownProviderOutcomeAccountingAlreadyApplied(attempt),
+        })
+        return typeof paused === 'string'
+          ? paused
+          : { transition: paused.transition as never, classification: 'provider_outcome_unknown_paused' as const }
+      })
+    },
+    async reconcileAgentTaskTransitions(now, limit = 100) {
+      const result =
+        (await db.execute(sql`select reconciled.id, reconciled.actor_id as "actorId", reconciled.project_id as "projectId",
+        reconciled.task_run_id as "taskRunId", reconciled.step_id as "stepId", reconciled.kind,
+        reconciled.transition_key as "transitionKey", reconciled.generation, reconciled.status,
+        reconciled.available_at as "availableAt", reconciled.lease_owner as "leaseOwner",
+        reconciled.lease_generation as "leaseGeneration", reconciled.lease_token as "leaseToken",
+        reconciled.lease_until as "leaseUntil", reconciled.heartbeat_at as "heartbeatAt",
+        reconciled.project_lease_generation as "projectLeaseGeneration",
+        reconciled.project_lease_token as "projectLeaseToken",
+        reconciled.project_lease_worker_id as "projectLeaseWorkerId",
+        reconciled.claim_attempts as "claimAttempts", reconciled.operation_id as "operationId",
+        reconciled.step_attempt_id as "stepAttemptId", reconciled.input_json as input,
+        reconciled.request_digest as "requestDigest", reconciled.completion_digest as "completionDigest",
+        reconciled.output_json as output, reconciled.error_json as error, reconciled.created_at as "createdAt",
+        reconciled.updated_at as "updatedAt", reconciled.completed_at as "completedAt",
+        case when reconciled.status='failed' and reconciled.error_json->>'code'='provider_outcome_unknown'
+          then 'provider_outcome_unknown_paused' else 'requeued' end as "reconciliationClassification"
+        from app.reconcile_agent_task_transitions(${now}, ${Math.max(1, Math.min(limit, 500))}) reconciled`)) as unknown as {
+          rows?: Array<
+            Record<string, unknown> & { reconciliationClassification: 'provider_outcome_unknown_paused' | 'requeued' }
+          >
+        }
+      return (result.rows ?? []).map(({ reconciliationClassification, ...transition }) => ({
+        transition,
+        classification: reconciliationClassification,
+      })) as never
+    },
+    appendAgentTaskOperationalEvent(actorId, input) {
+      return withActor(actorId, async tx => {
+        const [event] = await tx
+          .insert(agentTaskOperationalEvents)
+          .values({
+            dedupeKey: input.dedupeKey,
+            actorId,
+            projectId: input.projectId,
+            taskRunId: input.taskRunId,
+            transitionId: input.transitionId,
+            operationId: input.operationId,
+            code: input.code,
+            severity: input.severity,
+            details: input.details ?? {},
+            createdAt: input.now,
+          })
+          .onConflictDoNothing()
+          .returning()
+        if (event) return event as never
+        const [existing] = await tx
+          .select()
+          .from(agentTaskOperationalEvents)
+          .where(eq(agentTaskOperationalEvents.dedupeKey, input.dedupeKey))
+          .limit(1)
+        if (!existing) throw new Error('Agent task operational event insert returned no row')
+        return existing as never
+      })
     },
     ensurePersonalSpace(actorId) {
       return withActor(actorId, tx => ensurePersonalSpaceWithTx(tx, actorId))
@@ -932,6 +3264,10 @@ export function createPgRepository(env: AppEnv): Repository {
     },
     startAgentProject(actorId, input) {
       return withActor(actorId, async tx => {
+        const createLegacyDispatch = input.createLegacyDispatch !== false
+        if (createLegacyDispatch && !input.dispatch) {
+          throw new Error('Legacy Agent start requires dispatch metadata')
+        }
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${`${actorId}:agent-start:${input.idempotencyKey}`}, 0))`,
         )
@@ -948,22 +3284,26 @@ export function createPgRepository(env: AppEnv): Repository {
             .where(and(eq(agentWorkspaces.ownerId, actorId), eq(agentWorkspaces.projectId, existing.id)))
             .limit(1)
           const project = await selectProjectDetail(tx, actorId, existing.id)
-          const [dispatch] = await tx
-            .select()
-            .from(agentRunDispatches)
-            .where(
-              and(
-                eq(agentRunDispatches.actorId, actorId),
-                eq(agentRunDispatches.projectId, existing.id),
-                eq(agentRunDispatches.kind, 'initial'),
-              ),
-            )
-            .limit(1)
-          if (!workspace || !project || !dispatch) throw new Error('Idempotent Agent start could not be replayed')
+          const [dispatch] = createLegacyDispatch
+            ? await tx
+                .select()
+                .from(agentRunDispatches)
+                .where(
+                  and(
+                    eq(agentRunDispatches.actorId, actorId),
+                    eq(agentRunDispatches.projectId, existing.id),
+                    eq(agentRunDispatches.kind, 'initial'),
+                  ),
+                )
+                .limit(1)
+            : [undefined]
+          if (!workspace || !project || (createLegacyDispatch && !dispatch)) {
+            throw new Error('Idempotent Agent start could not be replayed')
+          }
           return {
             project,
             workspace: workspace as AgentWorkspaceRecord,
-            dispatch: dispatch as AgentRunDispatchRecord,
+            ...(dispatch ? { dispatch: dispatch as AgentRunDispatchRecord } : {}),
           } satisfies AgentProjectStartRecord
         }
         const spaceId = await ensurePersonalSpaceWithTx(tx, actorId)
@@ -990,27 +3330,29 @@ export function createPgRepository(env: AppEnv): Repository {
           })
           .returning()
         if (!workspace) throw new Error('Agent workspace insert returned no row')
-        const [dispatch] = await tx
-          .insert(agentRunDispatches)
-          .values({
-            actorId,
-            projectId: input.project.id,
-            conversationId: input.dispatch.conversationId,
-            taskId: input.dispatch.taskId,
-            operationId: input.dispatch.operationId,
-            kind: 'initial',
-            state: input.dispatch.waitingForUpload ? 'paused' : 'queued',
-            desiredState: input.dispatch.waitingForUpload ? 'paused' : 'running',
-            waitingReason: input.dispatch.waitingForUpload ? 'upload' : null,
-          })
-          .returning()
-        if (!dispatch) throw new Error('Agent initial dispatch insert returned no row')
+        const [dispatch] = createLegacyDispatch
+          ? await tx
+              .insert(agentRunDispatches)
+              .values({
+                actorId,
+                projectId: input.project.id,
+                conversationId: input.dispatch!.conversationId,
+                taskId: input.dispatch!.taskId,
+                operationId: input.dispatch!.operationId,
+                kind: 'initial',
+                state: input.dispatch!.waitingForUpload ? 'paused' : 'queued',
+                desiredState: input.dispatch!.waitingForUpload ? 'paused' : 'running',
+                waitingReason: input.dispatch!.waitingForUpload ? 'upload' : null,
+              })
+              .returning()
+          : [undefined]
+        if (createLegacyDispatch && !dispatch) throw new Error('Agent initial dispatch insert returned no row')
         const project = await selectProjectDetail(tx, actorId, input.project.id)
         if (!project) throw new Error('Created Agent project could not be read')
         return {
           project,
           workspace: workspace as AgentWorkspaceRecord,
-          dispatch: dispatch as AgentRunDispatchRecord,
+          ...(dispatch ? { dispatch: dispatch as AgentRunDispatchRecord } : {}),
         } satisfies AgentProjectStartRecord
       })
     },
@@ -1725,6 +4067,211 @@ export function createPgRepository(env: AppEnv): Repository {
       })
     },
     prepareAgentProviderAttempt(actorId, dispatchAttempt, input) {
+      if (isTransitionProviderAttemptFence(dispatchAttempt)) {
+        return withActor(actorId, async tx => {
+          const [priorUnknownAttempt] = await tx
+            .select({ id: agentProviderAttempts.id })
+            .from(agentProviderAttempts)
+            .where(
+              and(
+                eq(agentProviderAttempts.actorId, actorId),
+                eq(agentProviderAttempts.taskTransitionId, dispatchAttempt.transitionId),
+                eq(agentProviderAttempts.state, 'outcome_unknown'),
+              ),
+            )
+            .for('update')
+            .limit(1)
+          if (priorUnknownAttempt) return 'outcome_unknown'
+          const [transition] = await tx
+            .select()
+            .from(agentTaskTransitions)
+            .where(
+              and(
+                eq(agentTaskTransitions.id, dispatchAttempt.transitionId),
+                eq(agentTaskTransitions.actorId, actorId),
+                eq(agentTaskTransitions.projectId, input.projectId),
+                eq(agentTaskTransitions.status, 'leased'),
+                eq(agentTaskTransitions.leaseGeneration, dispatchAttempt.leaseGeneration),
+                eq(agentTaskTransitions.leaseToken, dispatchAttempt.leaseToken),
+                eq(agentTaskTransitions.leaseOwner, dispatchAttempt.workerId),
+                gt(agentTaskTransitions.leaseUntil, input.now),
+              ),
+            )
+            .for('update')
+            .limit(1)
+          if (!transition) return 'stale'
+          if (agentTaskTransitionRequiresProjectLease(transition.kind)) {
+            const [projectLease] = await tx
+              .select({ projectId: agentProjectTaskLeases.projectId })
+              .from(agentProjectTaskLeases)
+              .where(
+                and(
+                  eq(agentProjectTaskLeases.projectId, transition.projectId),
+                  eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                  eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                  eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                  eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+                  gt(agentProjectTaskLeases.leaseUntil, input.now),
+                ),
+              )
+              .for('update')
+              .limit(1)
+            if (!projectLease) return 'stale'
+          }
+          let [latest] = await tx
+            .select()
+            .from(agentProviderAttempts)
+            .where(
+              and(
+                eq(agentProviderAttempts.actorId, actorId),
+                eq(agentProviderAttempts.taskTransitionId, transition.id),
+              ),
+            )
+            .orderBy(desc(agentProviderAttempts.attemptNo))
+            .for('update')
+            .limit(1)
+          if (
+            latest &&
+            latest.transitionLeaseGeneration === dispatchAttempt.leaseGeneration &&
+            latest.transitionLeaseToken === dispatchAttempt.leaseToken &&
+            latest.transitionWorkerId === dispatchAttempt.workerId
+          ) {
+            if (
+              (latest.state === 'prepared' || latest.state === 'started') &&
+              latest.requestBodyDigest === input.requestBodyDigest &&
+              latest.providerRequestKey === input.providerRequestKey
+            )
+              return durableProviderAttempt(latest, input.idempotencyMode)
+            return 'stale'
+          }
+          if (latest?.state === 'started') {
+            await tx
+              .update(agentProviderAttempts)
+              .set({
+                state: 'outcome_unknown',
+                costAccuracy: 'billing_indeterminate',
+                amountMicros: latest.reservationDeltaMicros,
+                minimumMicros: 0,
+                maximumMicros: latest.reservationDeltaMicros,
+                errorCode: 'transition_generation_reclaimed',
+                completedAt: input.now,
+                updatedAt: input.now,
+              })
+              .where(eq(agentProviderAttempts.id, latest.id))
+            return 'outcome_unknown'
+          }
+          if (latest?.state === 'prepared') {
+            ;[latest] = await tx
+              .update(agentProviderAttempts)
+              .set({
+                state: 'failed_definite',
+                costAccuracy: 'estimated',
+                amountMicros: 0,
+                minimumMicros: 0,
+                maximumMicros: 0,
+                errorCode: 'transition_generation_reclaimed_before_start',
+                completedAt: input.now,
+                updatedAt: input.now,
+              })
+              .where(eq(agentProviderAttempts.id, latest.id))
+              .returning()
+          }
+          const [run] = await tx
+            .select()
+            .from(agentTaskRuns)
+            .where(eq(agentTaskRuns.id, transition.taskRunId))
+            .for('update')
+            .limit(1)
+          if (!run) return 'stale'
+          const taskBounds = run.bounds as unknown as AgentTaskRunBounds
+          const hardBoundExceeded =
+            run.providerTurns >= taskBounds.maxProviderTurns ||
+            run.promptTokens + run.completionTokens >= taskBounds.tokenLimit ||
+            run.costMicros + input.reservedMicros > taskBounds.costLimitMicros
+          if (hardBoundExceeded) {
+            const eventKey = `task-budget-exceeded:${transition.id}`
+            const [existingEvent] = await tx
+              .select({ seq: agentTaskEvents.seq })
+              .from(agentTaskEvents)
+              .where(and(eq(agentTaskEvents.taskRunId, run.id), eq(agentTaskEvents.eventKey, eventKey)))
+              .limit(1)
+            let nextEventSequence = run.nextEventSequence
+            if (!existingEvent) {
+              await tx.insert(agentTaskEvents).values({
+                taskRunId: run.id,
+                seq: nextEventSequence++,
+                eventKey,
+                stepId: transition.stepId,
+                type: 'waiting_user',
+                summary: 'Execution paused because the task budget was reached.',
+                publicPayload: { code: 'task_budget_exceeded', action: 'review_budget_before_resume' },
+                technicalPayload: {},
+                redactionVersion: 1,
+                createdAt: input.now,
+              })
+            }
+            await tx
+              .update(agentTaskRuns)
+              .set({ status: 'paused', currentTransitionKey: null, nextEventSequence, updatedAt: input.now })
+              .where(eq(agentTaskRuns.id, run.id))
+            await tx
+              .insert(agentTaskOperationalEvents)
+              .values({
+                dedupeKey: eventKey,
+                actorId,
+                projectId: run.projectId,
+                taskRunId: run.id,
+                transitionId: transition.id,
+                code: 'task_budget_exceeded',
+                severity: 'warning',
+                details: {
+                  providerTurns: run.providerTurns,
+                  promptTokens: run.promptTokens,
+                  completionTokens: run.completionTokens,
+                  costMicros: run.costMicros,
+                  reservedMicros: input.reservedMicros,
+                },
+                createdAt: input.now,
+              })
+              .onConflictDoNothing()
+            if (agentTaskTransitionRequiresProjectLease(transition.kind))
+              await tx
+                .update(agentProjectTaskLeases)
+                .set({ leaseUntil: input.now, heartbeatAt: input.now, updatedAt: input.now })
+                .where(
+                  and(
+                    eq(agentProjectTaskLeases.projectId, transition.projectId),
+                    eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                    eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                    eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                    eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+                  ),
+                )
+            return 'task_budget_exceeded'
+          }
+          const [created] = await tx
+            .insert(agentProviderAttempts)
+            .values({
+              actorId,
+              projectId: input.projectId,
+              taskTransitionId: transition.id,
+              transitionLeaseGeneration: dispatchAttempt.leaseGeneration,
+              transitionLeaseToken: dispatchAttempt.leaseToken,
+              transitionWorkerId: dispatchAttempt.workerId,
+              attemptNo: (latest?.attemptNo ?? 0) + 1,
+              providerRequestKey: input.providerRequestKey,
+              requestBodyDigest: input.requestBodyDigest,
+              state: 'prepared',
+              reservationDeltaMicros: input.reservedMicros,
+              preparedAt: input.now,
+              createdAt: input.now,
+              updatedAt: input.now,
+            })
+            .returning()
+          if (!created) throw new Error('Transition provider attempt insert returned no row')
+          return durableProviderAttempt(created, input.idempotencyMode)
+        })
+      }
       return withActor(actorId, async tx => {
         const [dispatch] = await tx
           .select()
@@ -1774,7 +4321,7 @@ export function createPgRepository(env: AppEnv): Repository {
           (latest.dispatchGeneration !== dispatchAttempt.leaseGeneration ||
             latest.dispatchWorkerId !== dispatchAttempt.workerId)
         ) {
-          if (latest.dispatchGeneration >= dispatchAttempt.leaseGeneration) return 'stale'
+          if ((latest.dispatchGeneration ?? -1) >= dispatchAttempt.leaseGeneration) return 'stale'
           if (latest.state === 'started') {
             const [unknown] = await tx
               .update(agentProviderAttempts)
@@ -1931,6 +4478,30 @@ export function createPgRepository(env: AppEnv): Repository {
       })
     },
     markAgentProviderAttemptStarted(actorId, attemptId, dispatchAttempt, now) {
+      if (isTransitionProviderAttemptFence(dispatchAttempt)) {
+        return withActor(actorId, async tx => {
+          const [attempt] = await tx
+            .update(agentProviderAttempts)
+            .set({ state: 'started', startedAt: now, updatedAt: now })
+            .where(
+              and(
+                eq(agentProviderAttempts.id, attemptId),
+                eq(agentProviderAttempts.actorId, actorId),
+                eq(agentProviderAttempts.taskTransitionId, dispatchAttempt.transitionId),
+                eq(agentProviderAttempts.transitionLeaseGeneration, dispatchAttempt.leaseGeneration),
+                eq(agentProviderAttempts.transitionLeaseToken, dispatchAttempt.leaseToken),
+                eq(agentProviderAttempts.transitionWorkerId, dispatchAttempt.workerId),
+                eq(agentProviderAttempts.state, 'prepared'),
+                sql`exists (select 1 from ${agentTaskTransitions} transition where transition.id=${dispatchAttempt.transitionId}
+                and transition.status='leased' and transition.lease_generation=${dispatchAttempt.leaseGeneration}
+                and transition.lease_token=${dispatchAttempt.leaseToken} and transition.lease_owner=${dispatchAttempt.workerId}
+                and transition.lease_until>${now})`,
+              ),
+            )
+            .returning()
+          return attempt ? durableProviderAttempt(attempt, 'unsupported') : null
+        })
+      }
       return withActor(actorId, async tx => {
         const [attempt] = await tx
           .update(agentProviderAttempts)
@@ -1966,6 +4537,358 @@ export function createPgRepository(env: AppEnv): Repository {
       })
     },
     completeAgentProviderAttempt(actorId, attemptId, dispatchAttempt, input) {
+      if (isTransitionProviderAttemptFence(dispatchAttempt)) {
+        return withActor(actorId, async tx => {
+          const [transition] = await tx
+            .select()
+            .from(agentTaskTransitions)
+            .where(
+              and(
+                eq(agentTaskTransitions.id, dispatchAttempt.transitionId),
+                eq(agentTaskTransitions.actorId, actorId),
+                eq(agentTaskTransitions.leaseGeneration, dispatchAttempt.leaseGeneration),
+                eq(agentTaskTransitions.leaseToken, dispatchAttempt.leaseToken),
+                eq(agentTaskTransitions.leaseOwner, dispatchAttempt.workerId),
+              ),
+            )
+            .for('update')
+            .limit(1)
+          if (!transition) return 'stale'
+          const [attempt] = await tx
+            .select()
+            .from(agentProviderAttempts)
+            .where(
+              and(
+                eq(agentProviderAttempts.id, attemptId),
+                eq(agentProviderAttempts.taskTransitionId, dispatchAttempt.transitionId),
+                eq(agentProviderAttempts.transitionLeaseGeneration, dispatchAttempt.leaseGeneration),
+                eq(agentProviderAttempts.transitionLeaseToken, dispatchAttempt.leaseToken),
+                eq(agentProviderAttempts.transitionWorkerId, dispatchAttempt.workerId),
+              ),
+            )
+            .for('update')
+            .limit(1)
+          if (
+            !attempt ||
+            attempt.requestBodyDigest !== input.providerAttempt.requestBodyDigest ||
+            attempt.providerRequestKey !== (input.providerAttempt.providerRequestKey ?? null)
+          )
+            return 'stale'
+          const [run] = await tx
+            .select()
+            .from(agentTaskRuns)
+            .where(eq(agentTaskRuns.id, transition.taskRunId))
+            .for('update')
+            .limit(1)
+          if (!run) return 'stale'
+          const budgetEventKey = `task-budget-exceeded:${attempt.id}`
+          const terminalFailureEventKey = `provider-terminal-failure:${attempt.id}`
+          if (['succeeded', 'failed_definite', 'outcome_unknown'].includes(attempt.state)) {
+            if (attempt.state === 'outcome_unknown') {
+              const paused = await pauseTransitionForUnknownProviderOutcome(
+                tx,
+                actorId,
+                transition,
+                attempt,
+                input.now,
+                { accountingAlreadyApplied: unknownProviderOutcomeAccountingAlreadyApplied(attempt) },
+              )
+              if (typeof paused === 'string') return 'stale'
+              return {
+                attempt: durableProviderAttempt(paused.attempt, input.providerAttempt.idempotencyMode),
+                cost: null,
+                taskOutcomeClassification: 'provider_outcome_unknown_paused',
+              }
+            }
+            const [budgetEvent] = await tx
+              .select({ id: agentTaskOperationalEvents.id })
+              .from(agentTaskOperationalEvents)
+              .where(eq(agentTaskOperationalEvents.dedupeKey, budgetEventKey))
+              .limit(1)
+            const [terminalFailureEvent] = await tx
+              .select({ seq: agentTaskEvents.seq })
+              .from(agentTaskEvents)
+              .where(
+                and(
+                  eq(agentTaskEvents.taskRunId, transition.taskRunId),
+                  eq(agentTaskEvents.eventKey, terminalFailureEventKey),
+                ),
+              )
+              .limit(1)
+            return {
+              attempt: durableProviderAttempt(attempt, input.providerAttempt.idempotencyMode),
+              cost: null,
+              taskOutcomeClassification: budgetEvent
+                ? 'task_budget_exceeded_paused'
+                : terminalFailureEvent
+                  ? 'transition_failed_terminal'
+                  : 'within_budget',
+            }
+          }
+          if (transition.status !== 'leased' || !transition.leaseUntil || transition.leaseUntil <= input.now)
+            return 'stale'
+          if (agentTaskTransitionRequiresProjectLease(transition.kind)) {
+            const [projectLease] = await tx
+              .select({ projectId: agentProjectTaskLeases.projectId })
+              .from(agentProjectTaskLeases)
+              .where(
+                and(
+                  eq(agentProjectTaskLeases.projectId, transition.projectId),
+                  eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                  eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                  eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                  eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+                  gt(agentProjectTaskLeases.leaseUntil, input.now),
+                ),
+              )
+              .for('update')
+              .limit(1)
+            if (!projectLease) return 'stale'
+          }
+          if (attempt.state !== 'started' && input.state !== 'failed_definite') return 'stale'
+          if (input.terminalTransitionFailure && (input.state !== 'succeeded' || transition.kind !== 'planning')) {
+            return 'stale'
+          }
+          const attemptWasStarted = attempt.state === 'started'
+          if (input.state === 'outcome_unknown') {
+            const paused = await pauseTransitionForUnknownProviderOutcome(tx, actorId, transition, attempt, input.now, {
+              providerObservation: {
+                promptTokens: input.promptTokens,
+                completionTokens: input.completionTokens,
+                cachedTokens: input.cachedTokens,
+                durationMs: input.providerAttempt.durationMs,
+                upstreamRequestId: input.providerAttempt.upstreamRequestId,
+              },
+            })
+            if (typeof paused === 'string') return 'stale'
+            return {
+              attempt: durableProviderAttempt(paused.attempt, input.providerAttempt.idempotencyMode),
+              cost: null,
+              taskOutcomeClassification: 'provider_outcome_unknown_paused',
+            }
+          }
+          let amountMicros = 0
+          let accuracy: 'actual' | 'billing_indeterminate' | 'estimated' = 'estimated'
+          if (input.state === 'succeeded' || (input.state === 'failed_definite' && attemptWasStarted)) {
+            amountMicros = input.providerAmountMicros ?? input.estimatedMicros ?? 0
+            if (input.providerAmountMicros !== undefined) accuracy = 'actual'
+          }
+          const [completed] = await tx
+            .update(agentProviderAttempts)
+            .set({
+              state: input.state,
+              costAccuracy: accuracy,
+              amountMicros,
+              minimumMicros: amountMicros,
+              maximumMicros: amountMicros,
+              promptTokens: attemptWasStarted ? (input.promptTokens ?? null) : null,
+              completionTokens: attemptWasStarted ? (input.completionTokens ?? null) : null,
+              cachedTokens: attemptWasStarted ? (input.cachedTokens ?? null) : null,
+              durationMs: input.providerAttempt.durationMs ?? null,
+              upstreamRequestId: input.providerAttempt.upstreamRequestId ?? null,
+              errorCode: input.state === 'succeeded' ? null : (input.providerAttempt.reason ?? input.state),
+              errorMessage: null,
+              completedAt: input.now,
+              updatedAt: input.now,
+            })
+            .where(
+              and(
+                eq(agentProviderAttempts.id, attempt.id),
+                inArray(agentProviderAttempts.state, ['prepared', 'started']),
+              ),
+            )
+            .returning()
+          if (!completed) return 'stale'
+          if (input.state === 'succeeded') {
+            const [checkpointed] = await tx
+              .update(agentTaskTransitions)
+              .set({
+                output: {
+                  ...(transition.output ?? {}),
+                  providerResult: {
+                    attemptId: completed.id,
+                    decisionOutput: input.decisionOutput ?? null,
+                    decisionUsage: input.decisionUsage ?? null,
+                    decisionTrace: input.decisionTrace ?? null,
+                  },
+                },
+                updatedAt: input.now,
+              })
+              .where(
+                and(
+                  eq(agentTaskTransitions.id, transition.id),
+                  eq(agentTaskTransitions.status, 'leased'),
+                  eq(agentTaskTransitions.leaseGeneration, dispatchAttempt.leaseGeneration),
+                  eq(agentTaskTransitions.leaseToken, dispatchAttempt.leaseToken),
+                  eq(agentTaskTransitions.leaseOwner, dispatchAttempt.workerId),
+                ),
+              )
+              .returning({ id: agentTaskTransitions.id })
+            if (!checkpointed) return 'stale'
+          }
+          let taskOutcomeClassification:
+            | 'within_budget'
+            | 'task_budget_exceeded_paused'
+            | 'transition_failed_terminal' = 'within_budget'
+          let taskBudgetExceeded = false
+          if (attemptWasStarted) {
+            const nextProviderTurns = run.providerTurns + 1
+            const nextPromptTokens = run.promptTokens + (input.promptTokens ?? 0)
+            const nextCompletionTokens = run.completionTokens + (input.completionTokens ?? 0)
+            const nextCostMicros = run.costMicros + amountMicros
+            const taskBounds = run.bounds as unknown as AgentTaskRunBounds
+            const actualOverage =
+              nextProviderTurns > taskBounds.maxProviderTurns ||
+              nextPromptTokens + nextCompletionTokens > taskBounds.tokenLimit ||
+              nextCostMicros > taskBounds.costLimitMicros
+            taskBudgetExceeded = actualOverage
+            taskOutcomeClassification = actualOverage ? 'task_budget_exceeded_paused' : 'within_budget'
+            await tx
+              .update(agentTaskRuns)
+              .set({
+                providerTurns: nextProviderTurns,
+                promptTokens: nextPromptTokens,
+                completionTokens: nextCompletionTokens,
+                costMicros: nextCostMicros,
+                status: actualOverage ? 'paused' : run.status,
+                currentTransitionKey: actualOverage ? null : run.currentTransitionKey,
+                nextEventSequence: actualOverage ? run.nextEventSequence + 1 : run.nextEventSequence,
+                updatedAt: input.now,
+              })
+              .where(eq(agentTaskRuns.id, transition.taskRunId))
+            if (actualOverage) {
+              await tx
+                .update(agentTaskTransitions)
+                .set({
+                  status: 'failed',
+                  completionDigest: canonicalJsonSha256({ code: 'task_budget_exceeded', attemptId: completed.id }),
+                  error: { code: 'task_budget_exceeded' },
+                  completedAt: input.now,
+                  updatedAt: input.now,
+                })
+                .where(
+                  and(
+                    eq(agentTaskTransitions.id, transition.id),
+                    eq(agentTaskTransitions.status, 'leased'),
+                    eq(agentTaskTransitions.leaseGeneration, dispatchAttempt.leaseGeneration),
+                    eq(agentTaskTransitions.leaseToken, dispatchAttempt.leaseToken),
+                    eq(agentTaskTransitions.leaseOwner, dispatchAttempt.workerId),
+                  ),
+                )
+              await tx
+                .insert(agentTaskEvents)
+                .values({
+                  taskRunId: run.id,
+                  seq: run.nextEventSequence,
+                  eventKey: budgetEventKey,
+                  stepId: transition.stepId,
+                  type: 'waiting_user',
+                  summary: 'Execution paused because actual provider usage exceeded the task budget.',
+                  publicPayload: { code: 'task_budget_exceeded', action: 'review_budget_before_resume' },
+                  technicalPayload: {},
+                  redactionVersion: 1,
+                  createdAt: input.now,
+                })
+                .onConflictDoNothing()
+              await tx
+                .insert(agentTaskOperationalEvents)
+                .values({
+                  dedupeKey: budgetEventKey,
+                  actorId,
+                  projectId: run.projectId,
+                  taskRunId: run.id,
+                  transitionId: transition.id,
+                  code: 'task_budget_exceeded_actual',
+                  severity: 'warning',
+                  details: {
+                    providerTurns: nextProviderTurns,
+                    promptTokens: nextPromptTokens,
+                    completionTokens: nextCompletionTokens,
+                    costMicros: nextCostMicros,
+                  },
+                  createdAt: input.now,
+                })
+                .onConflictDoNothing()
+              if (agentTaskTransitionRequiresProjectLease(transition.kind))
+                await tx
+                  .update(agentProjectTaskLeases)
+                  .set({ leaseUntil: input.now, heartbeatAt: input.now, updatedAt: input.now })
+                  .where(
+                    and(
+                      eq(agentProjectTaskLeases.projectId, transition.projectId),
+                      eq(agentProjectTaskLeases.taskRunId, transition.taskRunId),
+                      eq(agentProjectTaskLeases.leaseGeneration, transition.projectLeaseGeneration!),
+                      eq(agentProjectTaskLeases.leaseToken, transition.projectLeaseToken!),
+                      eq(agentProjectTaskLeases.leaseOwner, transition.projectLeaseWorkerId!),
+                    ),
+                  )
+            }
+          }
+          if (input.terminalTransitionFailure && !taskBudgetExceeded) {
+            const publicEvent = sanitizePublicAgentTaskEvent({
+              summary: input.terminalTransitionFailure.summary,
+              publicPayload: {
+                code: input.terminalTransitionFailure.code,
+                ...input.terminalTransitionFailure.publicPayload,
+              },
+            })
+            const [failedTransition] = await tx
+              .update(agentTaskTransitions)
+              .set({
+                status: 'failed',
+                completionDigest: canonicalJsonSha256({
+                  code: input.terminalTransitionFailure.code,
+                  attemptId: completed.id,
+                }),
+                error: { code: input.terminalTransitionFailure.code },
+                completedAt: input.now,
+                updatedAt: input.now,
+              })
+              .where(
+                and(
+                  eq(agentTaskTransitions.id, transition.id),
+                  eq(agentTaskTransitions.status, 'leased'),
+                  eq(agentTaskTransitions.leaseGeneration, dispatchAttempt.leaseGeneration),
+                  eq(agentTaskTransitions.leaseToken, dispatchAttempt.leaseToken),
+                  eq(agentTaskTransitions.leaseOwner, dispatchAttempt.workerId),
+                ),
+              )
+              .returning({ id: agentTaskTransitions.id })
+            if (!failedTransition) return 'stale'
+            await tx
+              .update(agentTaskRuns)
+              .set({
+                status: 'failed',
+                currentTransitionKey: null,
+                nextEventSequence: run.nextEventSequence + 1,
+                updatedAt: input.now,
+                completedAt: input.now,
+              })
+              .where(eq(agentTaskRuns.id, run.id))
+            await tx
+              .insert(agentTaskEvents)
+              .values({
+                taskRunId: run.id,
+                seq: run.nextEventSequence,
+                eventKey: terminalFailureEventKey,
+                stepId: transition.stepId,
+                type: 'task_failed',
+                summary: publicEvent.summary,
+                publicPayload: publicEvent.publicPayload,
+                technicalPayload: input.terminalTransitionFailure.technicalPayload,
+                redactionVersion: 1,
+                createdAt: input.now,
+              })
+              .onConflictDoNothing()
+            taskOutcomeClassification = 'transition_failed_terminal'
+          }
+          return {
+            attempt: durableProviderAttempt(completed, input.providerAttempt.idempotencyMode),
+            cost: null,
+            taskOutcomeClassification,
+          }
+        })
+      }
       return withActor(actorId, async tx => {
         const [dispatch] = await tx
           .select()
@@ -2023,6 +4946,7 @@ export function createPgRepository(env: AppEnv): Repository {
           return {
             attempt: durableProviderAttempt(attempt, dispatch.providerIdempotency),
             cost: cost as AgentRunCostRecord,
+            taskOutcomeClassification: 'within_budget',
           }
         }
         if (attempt.state !== 'started' && input.state !== 'failed_definite') return 'stale'
@@ -2111,10 +5035,86 @@ export function createPgRepository(env: AppEnv): Repository {
         return {
           attempt: durableProviderAttempt(completed, dispatch.providerIdempotency),
           cost: settledCost as AgentRunCostRecord,
+          taskOutcomeClassification: 'within_budget',
         }
       })
     },
-    reconcileAgentProviderAttempt(actorId, dispatchAttempt, now) {
+    reconcileAgentProviderAttempt: ((actorId: string, dispatchAttempt: AgentProviderAttemptFence, now: Date) => {
+      if (isTransitionProviderAttemptFence(dispatchAttempt)) {
+        return withActor(actorId, async tx => {
+          const [transition] = await tx
+            .select()
+            .from(agentTaskTransitions)
+            .where(
+              and(eq(agentTaskTransitions.id, dispatchAttempt.transitionId), eq(agentTaskTransitions.actorId, actorId)),
+            )
+            .for('update')
+            .limit(1)
+          if (!transition || !matchesAgentTaskLease(transition, dispatchAttempt)) return 'stale'
+          const [attempt] = await tx
+            .select()
+            .from(agentProviderAttempts)
+            .where(
+              and(
+                eq(agentProviderAttempts.taskTransitionId, transition.id),
+                inArray(agentProviderAttempts.state, ['prepared', 'started', 'failed_definite', 'outcome_unknown']),
+              ),
+            )
+            .orderBy(desc(agentProviderAttempts.attemptNo))
+            .for('update')
+            .limit(1)
+          if (!attempt) return null
+          if (attempt.state === 'outcome_unknown') {
+            const paused = await pauseTransitionForUnknownProviderOutcome(tx, actorId, transition, attempt, now, {
+              accountingAlreadyApplied: unknownProviderOutcomeAccountingAlreadyApplied(attempt),
+            })
+            if (paused === 'invalid_state') return 'stale'
+            if (paused === 'stale') return paused
+            return {
+              attempt: durableProviderAttempt(paused.attempt, 'unsupported'),
+              classification: 'started_outcome_unknown' as const,
+            }
+          }
+          if (attempt.state === 'failed_definite')
+            return {
+              attempt: durableProviderAttempt(attempt, 'unsupported'),
+              classification: 'prepared_failed_definite' as const,
+            }
+          if (transition.status === 'leased' && transition.leaseUntil && transition.leaseUntil > now)
+            return {
+              attempt: durableProviderAttempt(attempt, 'unsupported'),
+              classification: 'lease_live' as const,
+            }
+          if (attempt.state === 'started') {
+            const paused = await pauseTransitionForUnknownProviderOutcome(tx, actorId, transition, attempt, now)
+            if (paused === 'invalid_state') return 'stale'
+            if (paused === 'stale') return paused
+            return {
+              attempt: durableProviderAttempt(paused.attempt, 'unsupported'),
+              classification: 'started_outcome_unknown' as const,
+            }
+          }
+          const [reconciled] = await tx
+            .update(agentProviderAttempts)
+            .set({
+              state: 'failed_definite',
+              costAccuracy: 'estimated',
+              amountMicros: 0,
+              minimumMicros: 0,
+              maximumMicros: 0,
+              errorCode: 'transition_attempt_stale',
+              completedAt: now,
+              updatedAt: now,
+            })
+            .where(eq(agentProviderAttempts.id, attempt.id))
+            .returning()
+          if (!reconciled) return 'stale'
+          return {
+            attempt: durableProviderAttempt(reconciled, 'unsupported'),
+            classification: 'prepared_failed_definite' as const,
+          }
+        })
+      }
       return withActor(actorId, async tx => {
         const [dispatch] = await tx
           .select()
@@ -2220,7 +5220,7 @@ export function createPgRepository(env: AppEnv): Repository {
         }
         return durableProviderAttempt(reconciled, dispatch.providerIdempotency)
       })
-    },
+    }) as NonNullable<Repository['reconcileAgentProviderAttempt']>,
     respondToAgentTask(actorId, input) {
       return withActor(actorId, async tx => {
         const [membership] = await tx
@@ -3600,6 +6600,64 @@ export function createPgRepository(env: AppEnv): Repository {
           if (!previewRun) throw new Error('Agent preview evidence insert returned no row')
           return { snapshot, previewRun }
         }
+
+        const [rendererArtifact] = await tx
+          .select({
+            id: projectThumbnailArtifacts.id,
+            path: projectThumbnailArtifacts.path,
+            size: projectThumbnailArtifacts.expectedSize,
+            draftVersion: projectThumbnailArtifacts.draftVersion,
+          })
+          .from(projectThumbnailArtifacts)
+          .where(
+            and(
+              eq(projectThumbnailArtifacts.projectId, projectId),
+              eq(projectThumbnailArtifacts.status, 'current'),
+              eq(projectThumbnailArtifacts.draftVersion, draftVersion),
+              or(
+                and(
+                  eq(projectThumbnailArtifacts.source, 'renderer'),
+                  eq(projectThumbnailArtifacts.contentType, 'image/webp'),
+                ),
+                and(
+                  eq(projectThumbnailArtifacts.source, 'blueprint'),
+                  eq(projectThumbnailArtifacts.contentType, 'image/svg+xml'),
+                ),
+              ),
+            ),
+          )
+          .orderBy(desc(projectThumbnailArtifacts.updatedAt))
+          .limit(1)
+        if (rendererArtifact) {
+          const isBlueprint = rendererArtifact.path.endsWith('.svg')
+          const evidence = {
+            artifactId: rendererArtifact.id,
+            path: rendererArtifact.path,
+            size: rendererArtifact.size,
+            draftVersion: rendererArtifact.draftVersion,
+            documentSha256,
+          }
+          const [previewRun] = await tx
+            .insert(projectPreviewRuns)
+            .values({
+              projectId,
+              publishSnapshotId: snapshot.id,
+              source: isBlueprint ? 'editor_blueprint_artifact' : 'editor_renderer_artifact',
+              status: 'verified',
+              documentSha256,
+              rendererVersion: isBlueprint ? EDITOR_BLUEPRINT_ARTIFACT_VERSION : EDITOR_RENDERER_ARTIFACT_VERSION,
+              rendererSha256: isBlueprint ? EDITOR_BLUEPRINT_ARTIFACT_SHA256 : EDITOR_RENDERER_ARTIFACT_SHA256,
+              evidence,
+              thumbnailArtifactId: rendererArtifact.id,
+              artifactPath: rendererArtifact.path,
+              artifactSize: rendererArtifact.size,
+              artifactDraftVersion: rendererArtifact.draftVersion,
+              createdBy: actorId,
+            })
+            .returning()
+          if (!previewRun) throw new Error('Editor renderer preview evidence insert returned no row')
+          return { snapshot, previewRun }
+        }
         return { snapshot, previewRun: null }
       })
     },
@@ -3620,7 +6678,11 @@ export function createPgRepository(env: AppEnv): Repository {
               eq(projectPreviewRuns.projectId, projectId),
               eq(projectPreviewRuns.publishSnapshotId, snapshotId),
               eq(projectPreviewRuns.status, 'verified'),
-              eq(projectPreviewRuns.source, 'agent_executor'),
+              inArray(projectPreviewRuns.source, [
+                'agent_executor',
+                'editor_renderer_artifact',
+                'editor_blueprint_artifact',
+              ]),
             ),
           )
           .limit(1)
@@ -3726,7 +6788,11 @@ export function createPgRepository(env: AppEnv): Repository {
               eq(projectPublishSnapshots.projectId, projectId),
               eq(projectPreviewRuns.status, 'verified'),
               eq(projectPreviewRuns.documentSha256, projectPublishSnapshots.documentSha256),
-              eq(projectPreviewRuns.source, 'agent_executor'),
+              inArray(projectPreviewRuns.source, [
+                'agent_executor',
+                'editor_renderer_artifact',
+                'editor_blueprint_artifact',
+              ]),
             ),
           )
           .limit(1)

@@ -4,10 +4,14 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   compileAgentPlanPayload,
+  continueAgentTaskRun,
   controlAgentRun,
   finalizeAgentStartAttachments,
   formatAgentRunCost,
+  getAgentTaskRunDetail,
+  getAgentTaskRunEvents,
   pollAgentRun,
+  pollAgentTaskRun,
   recoverAgentRun,
   respondAgentTask,
   startAgentProject,
@@ -26,6 +30,344 @@ afterEach(() => {
 })
 
 describe('Agent planning API boundary', () => {
+  it('refreshes detail immediately when a waiting snapshot has a newer continued event tail', async () => {
+    const baseDetail = {
+      id: 'task-run-race',
+      projectId: 'project-1',
+      conversationId: 'conversation-1',
+      taskId: 'task-1',
+      status: 'waiting_user',
+      activePlanVersion: 0,
+      currentTransitionKey: null,
+      modelBinding: { provider: 'openai', model: 'gpt-5', profileId: 'default', configDigest: 'digest' },
+      bounds: {
+        maxProviderTurns: 12,
+        maxStepRevisions: 2,
+        maxExecutorRetries: 2,
+        tokenLimit: 100000,
+        costLimitMicros: 500000,
+      },
+      accounting: {
+        providerTurns: 1,
+        executorRetries: 0,
+        semanticRevisions: 0,
+        promptTokens: 40,
+        completionTokens: 10,
+        costMicros: 400,
+      },
+      taskStartDocumentRevision: 2,
+      latestEventSequence: 5,
+      plan: null,
+      steps: [],
+      waiting: { question: { id: 'question-1', text: '是否继续？' } },
+      createdAt: '2026-08-04T08:00:00.000Z',
+      updatedAt: '2026-08-04T08:01:00.000Z',
+      completedAt: null,
+    }
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ taskRun: baseDetail }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            events: [
+              {
+                taskRunId: 'task-run-race',
+                seq: 6,
+                eventKey: 'continued:6',
+                stepId: null,
+                type: 'plan_created',
+                summary: '任务已继续',
+                publicPayload: {},
+                redactionVersion: 1,
+                createdAt: '2026-08-04T08:01:01.000Z',
+              },
+            ],
+            latestEventSequence: 6,
+            retentionPolicy: { version: 'unbounded_v1', earliestAvailableSequence: 1 },
+            artifactPolicy: { version: 'none_v1' },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            taskRun: {
+              ...baseDetail,
+              status: 'running',
+              activePlanVersion: 1,
+              latestEventSequence: 6,
+              plan: {
+                id: 'plan-1',
+                version: 1,
+                summary: '继续执行',
+                assumptions: [],
+                verification: {},
+                createdAt: '2026-08-04T08:01:01.000Z',
+              },
+              waiting: null,
+              updatedAt: '2026-08-04T08:01:01.000Z',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+    vi.stubGlobal('fetch', fetch)
+
+    const snapshot = await pollAgentTaskRun('project-1', 'task-run-race', { afterSeq: 5, maxAttempts: 1 })
+
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(snapshot).toMatchObject({
+      detail: { status: 'running', latestEventSequence: 6, activePlan: { id: 'plan-1' } },
+      events: [expect.objectContaining({ seq: 6 })],
+      latestEventSequence: 6,
+    })
+  })
+
+  it('reads the persisted semantic plan and normalizes its public task detail', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          taskRun: {
+            id: 'task-run-1',
+            projectId: 'project-1',
+            conversationId: 'conversation-1',
+            taskId: 'task-1',
+            status: 'running',
+            activePlanVersion: 2,
+            currentTransitionKey: 'step:layout:action:1',
+            modelBinding: { provider: 'openai', model: 'gpt-5', profileId: 'default', configDigest: 'digest' },
+            bounds: {
+              maxProviderTurns: 12,
+              maxStepRevisions: 2,
+              maxExecutorRetries: 2,
+              tokenLimit: 100000,
+              costLimitMicros: 500000,
+            },
+            accounting: {
+              providerTurns: 2,
+              executorRetries: 0,
+              semanticRevisions: 0,
+              promptTokens: 120,
+              completionTokens: 30,
+              costMicros: 1200,
+            },
+            taskStartDocumentRevision: 7,
+            latestEventSequence: 3,
+            createdAt: '2026-08-04T08:00:00.000Z',
+            updatedAt: '2026-08-04T08:01:00.000Z',
+            completedAt: null,
+            plan: {
+              id: 'plan-2',
+              version: 2,
+              summary: '先搭框架，再补图表。',
+              assumptions: [],
+              verification: { kind: 'preview' },
+              createdAt: '2026-08-04T08:00:30.000Z',
+            },
+            steps: [
+              {
+                id: 'step-layout',
+                planVersion: 2,
+                ordinal: 1,
+                semanticStepKey: 'layout',
+                title: '搭建左右面板',
+                intent: { kind: 'layout' },
+                status: 'running',
+                lastObservation: null,
+                createdAt: '2026-08-04T08:00:30.000Z',
+                updatedAt: '2026-08-04T08:01:00.000Z',
+              },
+            ],
+            waiting: null,
+            ignoredFutureField: true,
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(getAgentTaskRunDetail('project-1', 'task-run-1')).resolves.toMatchObject({
+      id: 'task-run-1',
+      activePlan: {
+        id: 'plan-2',
+        version: 2,
+        summary: '先搭框架，再补图表。',
+        steps: [{ id: 'step-layout', ordinal: 1, status: 'running' }],
+      },
+      latestEventSequence: 3,
+      accounting: { providerTurns: 2, promptTokens: 120 },
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/projects/project-1/agent/task-runs/task-run-1', expect.anything())
+  })
+
+  it('reads public activity after a durable sequence and continues the same task run', async () => {
+    const detail = {
+      id: 'task-run-1',
+      projectId: 'project-1',
+      conversationId: 'conversation-1',
+      taskId: 'task-1',
+      status: 'waiting_user',
+      activePlanVersion: 1,
+      currentTransitionKey: null,
+      modelBinding: { provider: 'openai', model: 'gpt-5', profileId: 'default', configDigest: 'digest' },
+      bounds: {
+        maxProviderTurns: 12,
+        maxStepRevisions: 2,
+        maxExecutorRetries: 2,
+        tokenLimit: 100000,
+        costLimitMicros: 500000,
+      },
+      accounting: {
+        providerTurns: 1,
+        executorRetries: 0,
+        semanticRevisions: 0,
+        promptTokens: 50,
+        completionTokens: 10,
+        costMicros: 500,
+      },
+      taskStartDocumentRevision: 7,
+      latestEventSequence: 4,
+      createdAt: '2026-08-04T08:00:00.000Z',
+      updatedAt: '2026-08-04T08:01:00.000Z',
+      completedAt: null,
+      plan: null,
+      steps: [],
+      waiting: {
+        summary: '等待确认左右面板宽度',
+        question: { id: 'question-1', text: '左右面板是否等宽？' },
+      },
+    }
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            events: [
+              {
+                taskRunId: 'task-run-1',
+                seq: 4,
+                eventKey: 'waiting:1',
+                stepId: null,
+                type: 'waiting_user',
+                summary: '等待确认左右面板宽度',
+                publicPayload: { questionId: 'question-1' },
+                technicalDetails: {
+                  errorCode: 'WAITING_FOR_LAYOUT_CONFIRMATION',
+                  operationId: 'operation-1',
+                  receiptId: 'receipt-1',
+                  cost: { amountMicros: 1_200, accuracy: 'estimated', internalRate: 'secret' },
+                  internalTrace: 'do-not-forward',
+                },
+                technicalPayload: { secret: 'do-not-forward' },
+                redactionVersion: 1,
+                createdAt: '2026-08-04T08:01:00.000Z',
+              },
+            ],
+            latestEventSequence: 4,
+            retentionPolicy: { version: 'unbounded_v1', earliestAvailableSequence: 1 },
+            artifactPolicy: { version: 'none_v1' },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ taskRun: { ...detail, status: 'planning', waiting: null } }), {
+          status: 202,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetch)
+
+    const eventPage = await getAgentTaskRunEvents('project-1', 'task-run-1', { afterSeq: 3, limit: 20 })
+    expect(eventPage).toEqual({
+      events: [
+        expect.objectContaining({
+          seq: 4,
+          type: 'waiting_user',
+          technicalDetails: {
+            errorCode: 'WAITING_FOR_LAYOUT_CONFIRMATION',
+            operationId: 'operation-1',
+            receiptId: 'receipt-1',
+            cost: { amountMicros: 1_200, accuracy: 'estimated' },
+          },
+        }),
+      ],
+      latestEventSequence: 4,
+      retentionPolicy: { version: 'unbounded_v1', earliestAvailableSequence: 1 },
+      artifactPolicy: { version: 'none_v1' },
+    })
+    expect(eventPage.events[0]).not.toHaveProperty('technicalPayload')
+    expect(eventPage.events[0]?.technicalDetails).not.toHaveProperty('internalTrace')
+    expect(eventPage.events[0]?.technicalDetails?.cost).not.toHaveProperty('internalRate')
+    await expect(
+      continueAgentTaskRun({
+        projectId: 'project-1',
+        taskRunId: 'task-run-1',
+        questionId: 'question-1',
+        response: '等宽',
+        attachmentIds: ['attachment-reference'],
+        idempotencyKey: 'continue-1',
+      }),
+    ).resolves.toMatchObject({ id: 'task-run-1', status: 'planning', waiting: null })
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      '/api/projects/project-1/agent/task-runs/task-run-1/events?afterSeq=3&limit=20',
+    )
+    expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({
+      questionId: 'question-1',
+      response: '等宽',
+      attachmentIds: ['attachment-reference'],
+      idempotencyKey: 'continue-1',
+    })
+  })
+
+  it('rejects duplicate or out-of-order semantic activity pages', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          events: [
+            {
+              taskRunId: 'task-run-1',
+              seq: 3,
+              eventKey: 'event:3',
+              stepId: null,
+              type: 'plan_created',
+              summary: '计划已创建',
+              publicPayload: {},
+              redactionVersion: 1,
+              createdAt: '2026-08-04T08:00:00.000Z',
+            },
+            {
+              taskRunId: 'task-run-1',
+              seq: 3,
+              eventKey: 'event:3:duplicate',
+              stepId: null,
+              type: 'plan_created',
+              summary: '重复事件',
+              publicPayload: {},
+              redactionVersion: 1,
+              createdAt: '2026-08-04T08:00:01.000Z',
+            },
+          ],
+          latestEventSequence: 3,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(getAgentTaskRunEvents('project-1', 'task-run-1', { afterSeq: 2 })).rejects.toThrow(
+      'not strictly ordered',
+    )
+  })
+
   it('uses the authenticated same-origin server route without exposing provider credentials', async () => {
     const source = await readFile(path.join(currentDirectory, 'api.ts'), 'utf8')
 
@@ -1002,6 +1344,29 @@ describe('Agent planning API boundary', () => {
       prompt: '创建一张城市运行综合态势大屏',
       attachments: [],
     })
+  })
+
+  it('accepts a semantic atomic start response without a legacy operation run', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          project: { id: 'project-1', name: '城市态势大屏' },
+          conversation: { id: 'conversation-1' },
+          workspace: { revision: 1 },
+        }),
+        { status: 201, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    const started = await startAgentProject({
+      idempotencyKey: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+      project: { name: '城市态势大屏', description: '综合态势', schema: { version: '1.0.0' } },
+      prompt: '创建一张城市运行综合态势大屏',
+      attachments: [],
+    })
+
+    expect(started.run).toBeUndefined()
   })
 
   it('calls the operation undo route for an available rollback', async () => {

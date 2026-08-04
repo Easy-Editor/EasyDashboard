@@ -6,7 +6,14 @@ import type {
   AgentRunCost,
   AgentRunTrace,
   AgentSelectionContext,
+  AgentSemanticTaskRunStatus,
+  AgentSemanticTaskStepStatus,
+  AgentTaskActivePlan,
   AgentTaskPlan,
+  AgentTaskPublicEvent,
+  AgentTaskPublicEventType,
+  AgentTaskRunDetail,
+  AgentTaskTechnicalDetails,
   AgentWorkspaceRemoteRecord,
   ProjectContextStatus,
 } from './types'
@@ -320,6 +327,224 @@ export type AgentRunTurnResult = {
 }
 
 export type AgentTurnResult = AgentWaitingUserTurnResult | AgentRunTurnResult
+
+const semanticTaskRunStatuses = new Set<AgentSemanticTaskRunStatus>([
+  'planning',
+  'waiting_user',
+  'running',
+  'verifying',
+  'completed',
+  'blocked_material',
+  'paused',
+  'failed',
+  'canceled',
+  'rolling_back',
+  'rolled_back',
+  'rollback_blocked',
+])
+
+const semanticTaskStepStatuses = new Set<AgentSemanticTaskStepStatus>([
+  'pending',
+  'running',
+  'verifying',
+  'passed',
+  'revising',
+  'failed',
+  'superseded',
+])
+
+const taskPublicEventTypes = new Set<AgentTaskPublicEventType>([
+  'plan_created',
+  'plan_revised',
+  'step_started',
+  'material_selected',
+  'change_prepared',
+  'change_committed',
+  'preview_checked',
+  'step_revising',
+  'fallback_selected',
+  'material_gap',
+  'waiting_user',
+  'step_passed',
+  'step_superseded',
+  'rollback_started',
+  'rollback_completed',
+  'rollback_blocked',
+  'task_failed',
+  'task_completed',
+])
+
+type AgentTaskTechnicalCostAccuracy = NonNullable<NonNullable<AgentTaskTechnicalDetails['cost']>['accuracy']>
+
+const taskCostAccuracies = new Set<AgentTaskTechnicalCostAccuracy>(['actual', 'estimated', 'billing_indeterminate'])
+
+function objectRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Invalid ${label}`)
+  return value as Record<string, unknown>
+}
+
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`Invalid ${label}`)
+  return value.trim()
+}
+
+function requiredInteger(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw new Error(`Invalid ${label}`)
+  return value
+}
+
+function normalizeTaskTechnicalDetails(value: unknown): AgentTaskTechnicalDetails | undefined {
+  if (value === undefined || value === null) return undefined
+  const raw = objectRecord(value, 'Agent task technical details')
+  const errorCode = raw.errorCode === undefined ? undefined : requiredString(raw.errorCode, 'Agent task error code')
+  const operationId =
+    raw.operationId === undefined ? undefined : requiredString(raw.operationId, 'Agent task operation id')
+  const receiptId = raw.receiptId === undefined ? undefined : requiredString(raw.receiptId, 'Agent task receipt id')
+  const cost =
+    raw.cost === undefined
+      ? undefined
+      : (() => {
+          const candidate = objectRecord(raw.cost, 'Agent task technical cost')
+          const accuracy = candidate.accuracy
+          if (accuracy !== undefined && !taskCostAccuracies.has(accuracy as AgentTaskTechnicalCostAccuracy)) {
+            throw new Error('Invalid Agent task technical cost accuracy')
+          }
+          return {
+            amountMicros: requiredInteger(candidate.amountMicros, 'Agent task technical cost amount'),
+            ...(accuracy === undefined ? {} : { accuracy: accuracy as AgentTaskTechnicalCostAccuracy }),
+          }
+        })()
+
+  if (errorCode === undefined && operationId === undefined && receiptId === undefined && cost === undefined) {
+    return undefined
+  }
+  return {
+    ...(errorCode === undefined ? {} : { errorCode }),
+    ...(operationId === undefined ? {} : { operationId }),
+    ...(receiptId === undefined ? {} : { receiptId }),
+    ...(cost === undefined ? {} : { cost }),
+  }
+}
+
+function normalizeSemanticTaskStep(value: unknown) {
+  const raw = objectRecord(value, 'Agent task step')
+  if (!semanticTaskStepStatuses.has(raw.status as AgentSemanticTaskStepStatus)) {
+    throw new Error('Invalid Agent task step status')
+  }
+  return {
+    id: requiredString(raw.id, 'Agent task step id'),
+    planVersion: requiredInteger(raw.planVersion, 'Agent task step plan version'),
+    ordinal: requiredInteger(raw.ordinal, 'Agent task step ordinal'),
+    semanticStepKey: requiredString(raw.semanticStepKey, 'Agent task step key'),
+    title: requiredString(raw.title, 'Agent task step title'),
+    intent: objectRecord(raw.intent, 'Agent task step intent'),
+    status: raw.status as AgentSemanticTaskStepStatus,
+    lastObservation:
+      raw.lastObservation === null ? null : objectRecord(raw.lastObservation, 'Agent task step observation'),
+    createdAt: requiredString(raw.createdAt, 'Agent task step createdAt'),
+    updatedAt: requiredString(raw.updatedAt, 'Agent task step updatedAt'),
+  }
+}
+
+function normalizeActivePlan(planValue: unknown, stepsValue: unknown): AgentTaskActivePlan | null {
+  if (planValue === null) {
+    if (!Array.isArray(stepsValue) || stepsValue.length > 0) throw new Error('Invalid Agent task plan steps')
+    return null
+  }
+  const raw = objectRecord(planValue, 'Agent task plan')
+  if (!Array.isArray(stepsValue)) throw new Error('Invalid Agent task plan steps')
+  return {
+    id: requiredString(raw.id, 'Agent task plan id'),
+    version: requiredInteger(raw.version, 'Agent task plan version'),
+    summary: requiredString(raw.summary, 'Agent task plan summary'),
+    assumptions: raw.assumptions,
+    verification: raw.verification,
+    createdAt: requiredString(raw.createdAt, 'Agent task plan createdAt'),
+    steps: stepsValue.map(normalizeSemanticTaskStep).sort((first, second) => first.ordinal - second.ordinal),
+  }
+}
+
+function normalizeTaskRunDetail(value: unknown): AgentTaskRunDetail {
+  const raw = objectRecord(value, 'Agent task run detail')
+  if (!semanticTaskRunStatuses.has(raw.status as AgentSemanticTaskRunStatus)) {
+    throw new Error('Invalid Agent task run status')
+  }
+  const binding = objectRecord(raw.modelBinding, 'Agent task model binding')
+  const bounds = objectRecord(raw.bounds, 'Agent task bounds')
+  const accounting = objectRecord(raw.accounting, 'Agent task accounting')
+  const waiting =
+    raw.waiting === null
+      ? null
+      : (() => {
+          const candidate = objectRecord(raw.waiting, 'Agent task waiting reason')
+          const question =
+            candidate.question === undefined
+              ? candidate
+              : objectRecord(candidate.question, 'Agent task waiting question')
+          return {
+            questionId: requiredString(question.questionId ?? question.id, 'Agent task question id'),
+            text: requiredString(question.text, 'Agent task question text'),
+          }
+        })()
+  return {
+    id: requiredString(raw.id, 'Agent task run id'),
+    projectId: requiredString(raw.projectId, 'Agent task run project id'),
+    conversationId: requiredString(raw.conversationId, 'Agent task run conversation id'),
+    taskId: requiredString(raw.taskId, 'Agent task run task id'),
+    status: raw.status as AgentSemanticTaskRunStatus,
+    activePlanVersion: requiredInteger(raw.activePlanVersion, 'Agent task plan version'),
+    currentTransitionKey:
+      raw.currentTransitionKey === null
+        ? null
+        : requiredString(raw.currentTransitionKey, 'Agent task current transition key'),
+    modelBinding: {
+      provider: requiredString(binding.provider, 'Agent task provider'),
+      model: requiredString(binding.model, 'Agent task model'),
+      profileId: requiredString(binding.profileId, 'Agent task profile'),
+      configDigest: requiredString(binding.configDigest, 'Agent task config digest'),
+    },
+    bounds: {
+      maxProviderTurns: requiredInteger(bounds.maxProviderTurns, 'Agent task provider turn limit'),
+      maxStepRevisions: requiredInteger(bounds.maxStepRevisions, 'Agent task revision limit'),
+      maxExecutorRetries: requiredInteger(bounds.maxExecutorRetries, 'Agent task executor retry limit'),
+      tokenLimit: requiredInteger(bounds.tokenLimit, 'Agent task token limit'),
+      costLimitMicros: requiredInteger(bounds.costLimitMicros, 'Agent task cost limit'),
+    },
+    accounting: {
+      providerTurns: requiredInteger(accounting.providerTurns, 'Agent task provider turns'),
+      executorRetries: requiredInteger(accounting.executorRetries, 'Agent task executor retries'),
+      semanticRevisions: requiredInteger(accounting.semanticRevisions, 'Agent task semantic revisions'),
+      promptTokens: requiredInteger(accounting.promptTokens, 'Agent task prompt tokens'),
+      completionTokens: requiredInteger(accounting.completionTokens, 'Agent task completion tokens'),
+      costMicros: requiredInteger(accounting.costMicros, 'Agent task cost'),
+    },
+    taskStartDocumentRevision: requiredInteger(raw.taskStartDocumentRevision, 'Agent task document revision'),
+    latestEventSequence: requiredInteger(raw.latestEventSequence, 'Agent task latest event sequence'),
+    activePlan: normalizeActivePlan(raw.plan, raw.steps),
+    waiting,
+    createdAt: requiredString(raw.createdAt, 'Agent task run createdAt'),
+    updatedAt: requiredString(raw.updatedAt, 'Agent task run updatedAt'),
+    completedAt: raw.completedAt === null ? null : requiredString(raw.completedAt, 'Agent task run completedAt'),
+  }
+}
+
+function normalizeTaskPublicEvent(value: unknown): AgentTaskPublicEvent {
+  const raw = objectRecord(value, 'Agent task event')
+  if (!taskPublicEventTypes.has(raw.type as AgentTaskPublicEventType)) throw new Error('Invalid Agent task event type')
+  const technicalDetails = normalizeTaskTechnicalDetails(raw.technicalDetails)
+  return {
+    taskRunId: requiredString(raw.taskRunId, 'Agent task event run id'),
+    seq: requiredInteger(raw.seq, 'Agent task event sequence'),
+    eventKey: requiredString(raw.eventKey, 'Agent task event key'),
+    stepId: raw.stepId === null ? null : requiredString(raw.stepId, 'Agent task event step id'),
+    type: raw.type as AgentTaskPublicEventType,
+    summary: requiredString(raw.summary, 'Agent task event summary'),
+    publicPayload: objectRecord(raw.publicPayload, 'Agent task public event payload'),
+    ...(technicalDetails === undefined ? {} : { technicalDetails }),
+    redactionVersion: requiredInteger(raw.redactionVersion, 'Agent task event redaction version'),
+    createdAt: requiredString(raw.createdAt, 'Agent task event createdAt'),
+  }
+}
 
 function normalizeRunTrace(value: unknown): AgentRunTrace | undefined {
   if (!value || typeof value !== 'object') return undefined
@@ -749,6 +974,165 @@ export async function respondAgentTask(input: AgentTaskResponseInput): Promise<A
   })
 }
 
+export type AgentTaskRunEventsPage = {
+  events: AgentTaskPublicEvent[]
+  latestEventSequence: number
+  retentionPolicy?: {
+    version: 'unbounded_v1'
+    earliestAvailableSequence: number
+  }
+  artifactPolicy?: { version: 'none_v1' }
+}
+
+export type CreateAgentTaskRunInput = AgentPlanInput & { idempotencyKey?: string }
+
+export async function createAgentTaskRun(input: CreateAgentTaskRunInput): Promise<AgentTaskRunDetail> {
+  const response = await withWorkspaceSyncRaceRetry(() =>
+    apiRequest<{ taskRun: unknown }>(`/api/projects/${encodeURIComponent(input.projectId)}/agent/task-runs`, {
+      method: 'POST',
+      body: jsonBody({
+        ...agentRunStartPayload(input),
+        ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      }),
+    }),
+  )
+  return normalizeTaskRunDetail(response.taskRun)
+}
+
+export async function getAgentTaskRunDetail(projectId: string, taskRunId: string): Promise<AgentTaskRunDetail> {
+  const response = await apiRequest<{ taskRun: unknown }>(
+    `/api/projects/${encodeURIComponent(projectId)}/agent/task-runs/${encodeURIComponent(taskRunId)}`,
+  )
+  return normalizeTaskRunDetail(response.taskRun)
+}
+
+export async function getAgentTaskRunEvents(
+  projectId: string,
+  taskRunId: string,
+  options: { afterSeq?: number; limit?: number } = {},
+): Promise<AgentTaskRunEventsPage> {
+  const afterSeq = Math.max(0, Math.trunc(options.afterSeq ?? 0))
+  const limit = Math.min(100, Math.max(1, Math.trunc(options.limit ?? 50)))
+  const query = new URLSearchParams({ afterSeq: String(afterSeq), limit: String(limit) })
+  const response = await apiRequest<{
+    events: unknown
+    latestEventSequence: unknown
+    retentionPolicy: unknown
+    artifactPolicy: unknown
+  }>(`/api/projects/${encodeURIComponent(projectId)}/agent/task-runs/${encodeURIComponent(taskRunId)}/events?${query}`)
+  if (!Array.isArray(response.events)) throw new Error('Invalid Agent task events')
+  const events = response.events.map(normalizeTaskPublicEvent)
+  let previous = afterSeq
+  for (const event of events) {
+    if (event.taskRunId !== taskRunId || event.seq <= previous)
+      throw new Error('Agent task events are not strictly ordered')
+    previous = event.seq
+  }
+  const latestEventSequence = requiredInteger(response.latestEventSequence, 'Agent task latest event sequence')
+  if (latestEventSequence < previous) throw new Error('Agent task event cursor regressed')
+  if (latestEventSequence > afterSeq && events.length === 0)
+    throw new Error('Agent task event page omitted available events')
+  const expectedEarliestSequence = latestEventSequence === 0 ? 0 : 1
+  const retentionPolicy =
+    response.retentionPolicy === undefined
+      ? { version: 'unbounded_v1', earliestAvailableSequence: expectedEarliestSequence }
+      : objectRecord(response.retentionPolicy, 'Agent task event retention policy')
+  if (retentionPolicy.version !== 'unbounded_v1') throw new Error('Invalid Agent task event retention policy')
+  const earliestAvailableSequence = requiredInteger(
+    retentionPolicy.earliestAvailableSequence,
+    'Agent task earliest available event sequence',
+  )
+  if (earliestAvailableSequence !== expectedEarliestSequence) {
+    throw new Error('Agent task event retention cursor is inconsistent')
+  }
+  const artifactPolicy =
+    response.artifactPolicy === undefined
+      ? { version: 'none_v1' }
+      : objectRecord(response.artifactPolicy, 'Agent task artifact policy')
+  if (artifactPolicy.version !== 'none_v1') throw new Error('Invalid Agent task artifact policy')
+  return {
+    events,
+    latestEventSequence,
+    retentionPolicy: { version: 'unbounded_v1', earliestAvailableSequence },
+    artifactPolicy: { version: 'none_v1' },
+  }
+}
+
+export type ContinueAgentTaskRunInput = {
+  projectId: string
+  taskRunId: string
+  questionId: string
+  response: string
+  attachmentIds?: string[]
+  idempotencyKey?: string
+}
+
+export async function continueAgentTaskRun(input: ContinueAgentTaskRunInput): Promise<AgentTaskRunDetail> {
+  const response = await apiRequest<{ taskRun: unknown }>(
+    `/api/projects/${encodeURIComponent(input.projectId)}/agent/task-runs/${encodeURIComponent(input.taskRunId)}/continue`,
+    {
+      method: 'POST',
+      body: jsonBody({
+        questionId: input.questionId,
+        response: input.response.trim().slice(0, 4_000),
+        ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),
+        ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      }),
+    },
+  )
+  return normalizeTaskRunDetail(response.taskRun)
+}
+
+export type AgentTaskRunSnapshot = {
+  detail: AgentTaskRunDetail
+  events: AgentTaskPublicEvent[]
+  latestEventSequence: number
+}
+
+const semanticPollingStops = new Set<AgentSemanticTaskRunStatus>([
+  'waiting_user',
+  'blocked_material',
+  'paused',
+  'completed',
+  'failed',
+  'canceled',
+  'rolled_back',
+  'rollback_blocked',
+])
+
+export async function pollAgentTaskRun(
+  projectId: string,
+  taskRunId: string,
+  options: {
+    afterSeq?: number
+    intervalMs?: number
+    maxAttempts?: number
+    wait?: (ms: number) => Promise<void>
+    onSnapshot?: (snapshot: AgentTaskRunSnapshot) => void | Promise<void>
+  } = {},
+): Promise<AgentTaskRunSnapshot> {
+  const wait = options.wait ?? (ms => new Promise(resolve => setTimeout(resolve, ms)))
+  let afterSeq = Math.max(0, Math.trunc(options.afterSeq ?? 0))
+  let lastSnapshot: AgentTaskRunSnapshot | undefined
+  for (let attempt = 0; attempt < (options.maxAttempts ?? 300); attempt += 1) {
+    let detail = await getAgentTaskRunDetail(projectId, taskRunId)
+    const page = await getAgentTaskRunEvents(projectId, taskRunId, { afterSeq })
+    if (page.latestEventSequence > detail.latestEventSequence) {
+      detail = await getAgentTaskRunDetail(projectId, taskRunId)
+    }
+    const events = page.events.filter(event => event.seq <= detail.latestEventSequence)
+    afterSeq = events.at(-1)?.seq ?? afterSeq
+    lastSnapshot = { detail, events, latestEventSequence: Math.min(afterSeq, detail.latestEventSequence) }
+    await options.onSnapshot?.(lastSnapshot)
+    const eventPageAhead = page.latestEventSequence > detail.latestEventSequence
+    if (semanticPollingStops.has(detail.status) && !eventPageAhead && afterSeq >= detail.latestEventSequence)
+      return lastSnapshot
+    if (!eventPageAhead && attempt + 1 < (options.maxAttempts ?? 300)) await wait(options.intervalMs ?? 1_000)
+  }
+  if (!lastSnapshot) throw new Error('Agent task run polling did not start')
+  return lastSnapshot
+}
+
 export async function getAgentRun(projectId: string, operationId: string): Promise<AgentRun> {
   const response = await apiRequest<{ run: Record<string, unknown> }>(
     `/api/projects/${encodeURIComponent(projectId)}/agent/runs/${encodeURIComponent(operationId)}`,
@@ -849,7 +1233,7 @@ export async function startAgentProject(input: StartAgentProjectInput): Promise<
   project: { id: string; name: string }
   conversation: AgentConversation
   workspace: AgentWorkspaceRemoteRecord
-  run: { operationId: string; taskId: string; status: 'planning' | 'paused' }
+  run?: { operationId: string; taskId: string; status: 'planning' | 'paused' }
 }> {
   return apiRequest('/api/agent/starts', { method: 'POST', body: jsonBody(input) })
 }

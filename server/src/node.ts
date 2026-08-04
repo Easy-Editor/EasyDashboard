@@ -3,8 +3,9 @@ import { parseEnv } from './env.js'
 import { createRuntime } from './runtime.js'
 
 const env = parseEnv()
-const { app, dispatcher } = createRuntime()
+const { app, dispatcher, taskOrchestrator } = createRuntime()
 dispatcher?.start()
+taskOrchestrator?.start()
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, info => {
   console.log(`EasyDashboard API listening on http://localhost:${info.port}`)
@@ -20,7 +21,7 @@ async function shutdown(signal: NodeJS.Signals) {
   const serverClosed = new Promise<void>((resolve, reject) => {
     server.close(error => (error ? reject(error) : resolve()))
   })
-  await Promise.all([serverClosed, dispatcher?.stop()])
+  await Promise.all([serverClosed, dispatcher?.stop(), taskOrchestrator?.stop()])
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

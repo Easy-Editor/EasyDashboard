@@ -73,6 +73,7 @@ export function createAgentStartRoutes(
   repository: Repository,
   now: () => Date = () => new Date(),
   dispatcher?: AgentRunDispatcher | null,
+  taskLoopEnabled = false,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>()
 
@@ -89,6 +90,7 @@ export function createAgentStartRoutes(
           project: { ...input.project, schema },
           prompt: input.prompt,
           attachments: input.attachments,
+          executionMode: taskLoopEnabled ? 'semantic_task_loop' : 'legacy_dispatch',
         }),
       )
       .digest('hex')
@@ -119,22 +121,6 @@ export function createAgentStartRoutes(
         {
           id: taskId,
           title: 'Agent 搭建任务',
-          status: input.attachments.length > 0 ? ('waiting' as const) : ('running' as const),
-          run: {
-            operationId,
-            status: input.attachments.length > 0 ? ('paused' as const) : ('planning' as const),
-          },
-          stages: [
-            { id: 'understand-requirements' as const, title: '理解需求', status: 'complete' as const },
-            {
-              id: 'plan-layout' as const,
-              title: '规划布局',
-              status: input.attachments.length > 0 ? ('waiting' as const) : ('running' as const),
-              detail: input.attachments.length > 0 ? '等待附件上传' : '等待 Agent 执行服务',
-            },
-            { id: 'bind-data' as const, title: '数据绑定', status: 'pending' as const },
-            { id: 'preview-check' as const, title: '预览检查', status: 'pending' as const },
-          ],
           createdAt,
           updatedAt: createdAt,
         },
@@ -144,7 +130,7 @@ export function createAgentStartRoutes(
     }
     const workspacePayload = parseAgentProjectWorkspacePayload(
       {
-        version: 1,
+        version: 2,
         ownerUserId: actorId,
         projectId,
         conversations: [conversation],
@@ -156,12 +142,15 @@ export function createAgentStartRoutes(
     const started = await repository.startAgentProject(actorId, {
       project: { ...input.project, id: projectId, schema },
       workspacePayload,
-      dispatch: {
-        conversationId,
-        taskId,
-        operationId,
-        waitingForUpload: input.attachments.length > 0,
-      },
+      createLegacyDispatch: !taskLoopEnabled,
+      dispatch: taskLoopEnabled
+        ? undefined
+        : {
+            conversationId,
+            taskId,
+            operationId,
+            waitingForUpload: input.attachments.length > 0,
+          },
       idempotencyKey: input.idempotencyKey,
       inputDigest,
     })
@@ -175,20 +164,33 @@ export function createAgentStartRoutes(
     const persistedConversation = persistedWorkspace.conversations[0]
     if (!persistedConversation) throw new Error('Atomic Agent start workspace did not preserve its conversation')
     const persistedTask = persistedConversation.tasks[0]
-    const persistedOperationId = started.dispatch?.operationId ?? persistedTask?.run?.operationId
-    if (!persistedTask || !persistedOperationId) throw new Error('Atomic Agent start did not preserve its initial run')
-    dispatcher?.wake()
+    const legacyOperationId =
+      persistedWorkspace.version === 1 ? persistedWorkspace.conversations[0]?.tasks[0]?.run?.operationId : undefined
+    const persistedOperationId = started.dispatch?.operationId ?? legacyOperationId
+    if (!persistedTask) throw new Error('Atomic Agent start workspace did not preserve its initial task')
+    if (!taskLoopEnabled && !persistedOperationId) {
+      throw new Error('Atomic Agent start did not preserve its initial run')
+    }
+    if (!taskLoopEnabled) dispatcher?.wake()
     return context.json(
       {
         project: started.project,
         conversation: persistedConversation,
         workspace: started.workspace,
-        run: {
-          operationId: persistedOperationId,
-          taskId: started.dispatch?.taskId ?? persistedTask.id,
-          status:
-            started.dispatch?.state === 'paused' || persistedTask.run?.status === 'paused' ? 'paused' : 'planning',
-        },
+        ...(taskLoopEnabled
+          ? {}
+          : {
+              run: {
+                operationId: persistedOperationId!,
+                taskId: started.dispatch?.taskId ?? persistedTask.id,
+                status:
+                  started.dispatch?.state === 'paused' ||
+                  (persistedWorkspace.version === 1 &&
+                    persistedWorkspace.conversations[0]?.tasks[0]?.run?.status === 'paused')
+                    ? 'paused'
+                    : 'planning',
+              },
+            }),
       },
       201,
     )

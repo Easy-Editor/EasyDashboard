@@ -14,6 +14,7 @@ import {
   agentRequiresRemoveForProviderInput,
   agentRequiresRemoveForRequest,
   createAgentChangeSetResponseFormat,
+  createAgentClarificationHistoryProviderInputSnapshot,
   createAgentProviderInputSnapshot,
   createAgentResponseProviderInputSnapshot,
   estimateAgentProviderInputTokens,
@@ -1202,6 +1203,60 @@ describe('Agent ChangeSet model boundary', () => {
       { assetId: responseImage.id, sha256: responseImage.sha256 },
     ])
     expect(estimateAgentProviderInputTokens(next)).toBeGreaterThan(estimateAgentProviderInputTokens(source))
+  })
+
+  it('keeps every bounded clarification and its new image in order', () => {
+    const source = createAgentProviderInputSnapshot({
+      prompt: '创建销售大屏',
+      project,
+      conversationId: 'conversation-1',
+      taskId: 'task-1',
+      attachments: [image],
+      projectContext: [],
+      images: [{ assetId: image.id, sha256: image.sha256 }],
+    })
+    const secondImage = {
+      ...image,
+      id: '77777777-7777-4777-8777-777777777777',
+      originalName: 'second-answer.png',
+      sha256: 'c'.repeat(64),
+    }
+    const history = [
+      {
+        question: { id: 'metric-focus', text: '突出哪些指标？' },
+        response: '突出销售额。',
+        attachmentIds: [] as string[],
+      },
+      {
+        question: { id: 'visual-reference', text: '是否有补充参考图？' },
+        response: '使用新截图。',
+        attachmentIds: [secondImage.id],
+      },
+    ]
+
+    const next = createAgentClarificationHistoryProviderInputSnapshot(
+      source,
+      history,
+      [image, secondImage],
+      [
+        { assetId: image.id, sha256: image.sha256 },
+        { assetId: secondImage.id, sha256: secondImage.sha256 },
+      ],
+    )
+    const payload = JSON.parse(next.userText) as Record<string, unknown>
+
+    expect(payload.clarificationHistory).toEqual(history)
+    expect(payload).toMatchObject({
+      clarification: {
+        question: { id: 'visual-reference', text: '是否有补充参考图？' },
+        response: '使用新截图。',
+      },
+      attachments: [{ id: image.id }, { id: secondImage.id }],
+    })
+    expect(next.images).toEqual([
+      { assetId: image.id, sha256: image.sha256 },
+      { assetId: secondImage.id, sha256: secondImage.sha256 },
+    ])
   })
 
   it('freezes the explicit linked PieChart capability across clarification snapshots', () => {

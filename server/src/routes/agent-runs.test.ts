@@ -1,7 +1,15 @@
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
-import { AgentChangeSetProviderResponseError, createAgentProviderInputSnapshot } from '../agent/change-set-model.js'
+import { encodeAssetModelInput } from '../agent/asset-model-input.js'
+import {
+  AgentChangeSetProviderResponseError,
+  createAgentProviderInputSnapshot,
+  type requestAgentChangeSet,
+} from '../agent/change-set-model.js'
 import { EXECUTOR_CONTRACT_VERSION, createDocumentDescriptor } from '../agent/executor-contract.js'
+import type { requestAgentTaskPlanningDecision } from '../agent/task-planning-model.js'
+import { AgentTaskPlanningProviderResponseError } from '../agent/task-planning-model.js'
+import { canonicalJsonSha256 } from '../db/agent-stage-commit.js'
 import type { AppEnv } from '../env.js'
 import { ApiError } from '../http.js'
 import type { AppVariables } from '../middleware/auth.js'
@@ -19,6 +27,7 @@ import {
   agentRunRequiresRemove,
   assertFrozenAgentTurnRuntime,
   createAgentRunRoutes,
+  createAgentTaskPlanningProvider,
   durablePendingQuestion,
   providerSettlementEstimateMicros,
   publicAgentProviderResponseFailure,
@@ -42,9 +51,45 @@ const project = {
   pageCount: 1,
 } as ProjectRecord
 
-function workspace(messages: Array<Record<string, unknown>> = []) {
+function workspace(messages: Array<Record<string, unknown>> = [], version: 1 | 2 = 1) {
+  const tasks = [
+    {
+      id: 'task-previous',
+      title: 'Previous task',
+      ...(version === 1
+        ? {
+            status: 'complete',
+            stages: [
+              { id: 'understand-requirements', title: 'Understand', status: 'complete' },
+              { id: 'plan-layout', title: 'Plan', status: 'complete' },
+              { id: 'bind-data', title: 'Bind', status: 'complete' },
+              { id: 'preview-check', title: 'Verify', status: 'complete' },
+            ],
+          }
+        : {}),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    },
+    {
+      id: 'task-1',
+      title: 'Task',
+      ...(version === 1
+        ? {
+            status: 'waiting',
+            stages: [
+              { id: 'understand-requirements', title: 'Understand', status: 'complete' },
+              { id: 'plan-layout', title: 'Plan', status: 'waiting' },
+              { id: 'bind-data', title: 'Bind', status: 'pending' },
+              { id: 'preview-check', title: 'Verify', status: 'pending' },
+            ],
+          }
+        : {}),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    },
+  ]
   return {
-    version: 1,
+    version,
     ownerUserId: actorId,
     projectId,
     conversations: [
@@ -55,34 +100,7 @@ function workspace(messages: Array<Record<string, unknown>> = []) {
         visibility: 'private',
         title: 'Conversation',
         messages,
-        tasks: [
-          {
-            id: 'task-previous',
-            title: 'Previous task',
-            status: 'complete',
-            stages: [
-              { id: 'understand-requirements', title: 'Understand', status: 'complete' },
-              { id: 'plan-layout', title: 'Plan', status: 'complete' },
-              { id: 'bind-data', title: 'Bind', status: 'complete' },
-              { id: 'preview-check', title: 'Verify', status: 'complete' },
-            ],
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
-          },
-          {
-            id: 'task-1',
-            title: 'Task',
-            status: 'waiting',
-            stages: [
-              { id: 'understand-requirements', title: 'Understand', status: 'complete' },
-              { id: 'plan-layout', title: 'Plan', status: 'waiting' },
-              { id: 'bind-data', title: 'Bind', status: 'pending' },
-              { id: 'preview-check', title: 'Verify', status: 'pending' },
-            ],
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
-          },
-        ],
+        tasks,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
       },
@@ -233,7 +251,15 @@ function committedOperation(operationId: string): AgentSpikeOperationRecord {
   }
 }
 
-function harness(input: { dispatcher?: AgentRunDispatcher | null; messages?: Array<Record<string, unknown>> } = {}) {
+function harness(
+  input: {
+    dispatcher?: AgentRunDispatcher | null
+    messages?: Array<Record<string, unknown>>
+    taskLoop?: boolean
+    wakeTaskOrchestrator?: () => void
+    taskOrchestratorLogger?: Pick<Console, 'warn'>
+  } = {},
+) {
   const turns = new Map<
     string,
     { turn: DurableAgentTurnRecord; dispatch: AgentRunDispatchRecord; cost: AgentRunCostRecord }
@@ -249,10 +275,20 @@ function harness(input: { dispatcher?: AgentRunDispatcher | null; messages?: Arr
   const finalizeAgentRunAttachments = vi.fn<NonNullable<Repository['finalizeAgentRunAttachments']>>()
   const repository = {
     getProject: vi.fn(async () => project),
-    getAgentWorkspace: vi.fn(async () => ({ payload: workspace(input.messages), updatedAt: now })),
+    getAgentWorkspace: vi.fn(async () => ({
+      payload: workspace(input.messages, input.taskLoop ? 2 : 1),
+      revision: 1,
+      updatedAt: now,
+    })),
+    upsertAgentWorkspace: vi.fn(async (_actor: string, _project: string, payload: Record<string, unknown>) => ({
+      payload,
+      revision: 2,
+      updatedAt: now,
+    })),
     getSettings: vi.fn(async () => ({})),
     getAgentProjectModelConfig: vi.fn(async () => null),
     getAgentAsset: vi.fn(async () => null),
+    getAgentAssetModelInput: vi.fn(async () => null),
     enqueueAgentTurn,
     getAgentTurnByDispatch: vi.fn(async (_actor: string, id: string) => {
       return [...turns.values()].find(item => item.dispatch.id === id)?.turn ?? null
@@ -271,6 +307,13 @@ function harness(input: { dispatcher?: AgentRunDispatcher | null; messages?: Arr
     respondToAgentTask: vi.fn(async (_actor: string, value: { turnId: string }) => ({
       dispatch: dispatch(`operation-${value.turnId}`),
     })),
+    createAgentTaskRun: vi.fn(),
+    getAgentTaskRunDetail: vi.fn(),
+    getAgentTaskRun: vi.fn(),
+    getAgentTaskTransitionProviderResult: vi.fn(async () => null),
+    listAgentTaskEvents: vi.fn(),
+    listAgentTaskEventPage: vi.fn(),
+    continueAgentTaskRun: vi.fn(),
   } as unknown as DurableTurnRepository
   const model = vi.fn(async () => {
     throw new Error('HTTP must never call the provider')
@@ -307,8 +350,11 @@ function harness(input: { dispatcher?: AgentRunDispatcher | null; messages?: Arr
         EASY_EDITOR_AGENT_MODEL: 'model',
         AGENT_EXECUTOR_GRANT_SECRET: 'grant-secret-that-is-at-least-32-bytes',
         AGENT_EXECUTOR_COMPATIBILITY_JSON: {},
+        AGENT_TASK_LOOP_V1: input.taskLoop ?? false,
       } as AppEnv,
       modelConfig: { now: () => now },
+      wakeTaskOrchestrator: input.wakeTaskOrchestrator,
+      taskOrchestratorLogger: input.taskOrchestratorLogger,
       spike: { repository, grantSecret: 'grant-secret-that-is-at-least-32-bytes', expectedCompatibility: {} as never },
     }),
   )
@@ -857,5 +903,715 @@ describe('durable Agent turn routes', () => {
       },
     })
     await expect(response.json()).resolves.toMatchObject({ taskId: 'task-1', turnId: 'turn-2' })
+  })
+})
+
+describe('semantic Agent task-run routes', () => {
+  const run = {
+    id: '33333333-3333-4333-8333-333333333333',
+    actorId,
+    projectId,
+    conversationId,
+    taskId: 'task-1',
+    idempotencyKey: 'task-run-request-1',
+    requestDigest: 'a'.repeat(64),
+    status: 'planning' as const,
+    activePlanVersion: 0,
+    currentTransitionKey: 'planning:1',
+    modelBindingId: 'binding-1',
+    provider: 'platform',
+    model: 'model',
+    profileId: 'platform:default',
+    configDigest: 'b'.repeat(64),
+    bounds: {
+      maxProviderTurns: 12,
+      maxStepRevisions: 2,
+      maxExecutorRetries: 2,
+      tokenLimit: 64_000,
+      costLimitMicros: 2_000_000,
+    },
+    providerTurns: 0,
+    executorRetries: 0,
+    semanticRevisions: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    costMicros: 0,
+    taskStartDocumentRevision: 1,
+    nextTransitionGeneration: 2,
+    nextEventSequence: 1,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: null,
+  }
+
+  it('creates a first-class task run without calling the provider or issuing an operation', async () => {
+    const wakeTaskOrchestrator = vi.fn()
+    const state = harness({ taskLoop: true, wakeTaskOrchestrator })
+    vi.mocked(state.repository.createAgentTaskRun!).mockResolvedValueOnce(run)
+    vi.mocked(state.repository.getAgentTaskRunDetail!).mockResolvedValue({
+      run,
+      activePlan: null,
+      waitingReason: null,
+      latestEventSequence: 0,
+    })
+
+    const response = await state.app.request(
+      new Request(`http://test/projects/${projectId}/agent/task-runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          taskId: 'task-1',
+          idempotencyKey: 'task-run-request-1',
+          prompt: 'Create a dashboard',
+          attachmentIds: [],
+          projectContext: [],
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(202)
+    expect(state.repository.createAgentTaskRun).toHaveBeenCalledWith(
+      actorId,
+      expect.objectContaining({
+        projectId,
+        conversationId,
+        taskId: 'task-1',
+        idempotencyKey: 'task-run-request-1',
+        planningInput: expect.objectContaining({
+          prompt: 'Create a dashboard',
+          providerInputSnapshot: expect.any(Object),
+          purpose: 'planning',
+        }),
+      }),
+    )
+    expect(state.model).not.toHaveBeenCalled()
+    expect(state.dispatcher?.enqueue).not.toHaveBeenCalled()
+    expect(wakeTaskOrchestrator).toHaveBeenCalledOnce()
+    expect(state.repository.upsertAgentWorkspace).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toMatchObject({
+      taskRun: {
+        id: run.id,
+        status: 'planning',
+        plan: null,
+        steps: [],
+        latestEventSequence: 0,
+      },
+    })
+  })
+
+  it('keeps the durable planning transition pollable and logs once when an eager wake fails', async () => {
+    const taskOrchestratorLogger = { warn: vi.fn() }
+    const state = harness({
+      taskLoop: true,
+      wakeTaskOrchestrator: () => {
+        throw new Error('raw-wake-error-SENTINEL')
+      },
+      taskOrchestratorLogger,
+    })
+    vi.mocked(state.repository.createAgentTaskRun!).mockResolvedValueOnce(run)
+    vi.mocked(state.repository.getAgentTaskRunDetail!).mockResolvedValueOnce({
+      run,
+      activePlan: null,
+      waitingReason: null,
+      latestEventSequence: 0,
+    })
+
+    const response = await state.app.request(
+      new Request(`http://test/projects/${projectId}/agent/task-runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          taskId: 'task-1',
+          idempotencyKey: 'task-run-wake-failure-1',
+          prompt: 'Create a dashboard',
+          attachmentIds: [],
+          projectContext: [],
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(202)
+    expect(state.repository.createAgentTaskRun).toHaveBeenCalledOnce()
+    expect(state.model).not.toHaveBeenCalled()
+    expect(taskOrchestratorLogger.warn).toHaveBeenCalledOnce()
+    expect(taskOrchestratorLogger.warn).toHaveBeenCalledWith({
+      code: 'AGENT_TASK_ORCHESTRATOR_WAKE_FAILED',
+      projectId,
+      taskRunId: run.id,
+    })
+    expect(JSON.stringify(taskOrchestratorLogger.warn.mock.calls)).not.toContain('raw-wake-error-SENTINEL')
+  })
+
+  it('returns strictly paged durable task activity', async () => {
+    const state = harness({ taskLoop: true })
+    vi.mocked(state.repository.getAgentTaskRunDetail!).mockResolvedValueOnce({
+      run: { ...run, nextEventSequence: 8 },
+      activePlan: null,
+      waitingReason: null,
+      latestEventSequence: 7,
+    })
+    vi.mocked(state.repository.listAgentTaskEventPage!).mockResolvedValueOnce({
+      latestEventSequence: 7,
+      events: [
+        {
+          taskRunId: run.id,
+          seq: 4,
+          eventKey: 'event-4',
+          stepId: null,
+          type: 'task_failed',
+          summary: '规划未能安全完成，任务已停止。',
+          publicPayload: { code: 'provider_response_invalid' },
+          technicalPayload: {
+            operationId: 'operation-safe-1',
+            receipt: 'receipt-safe-1',
+            cost: { amountMicros: 1200, accuracy: 'estimated', secret: 'nested-secret-SENTINEL' },
+            providerSecret: 'raw-provider-secret-SENTINEL',
+            stack: 'stack-secret-SENTINEL',
+          },
+          redactionVersion: 1,
+          createdAt: now,
+        },
+      ],
+    })
+
+    const response = await state.app.request(
+      new Request(`http://test/projects/${projectId}/agent/task-runs/${run.id}/events?afterSeq=3&limit=20`),
+    )
+
+    expect(response.status).toBe(200)
+    expect(state.repository.listAgentTaskEventPage).toHaveBeenCalledWith(actorId, projectId, run.id, {
+      afterSeq: 3,
+      limit: 20,
+    })
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      latestEventSequence: 7,
+      retentionPolicy: { version: 'unbounded_v1', earliestAvailableSequence: 1 },
+      artifactPolicy: { version: 'none_v1' },
+      events: [
+        {
+          seq: 4,
+          technicalDetails: {
+            errorCode: 'provider_response_invalid',
+            operationId: 'operation-safe-1',
+            receiptId: 'receipt-safe-1',
+            cost: { amountMicros: 1200, accuracy: 'estimated' },
+          },
+        },
+      ],
+    })
+    expect(JSON.stringify(payload)).not.toContain('raw-provider-secret-SENTINEL')
+    expect(JSON.stringify(payload)).not.toContain('nested-secret-SENTINEL')
+    expect(JSON.stringify(payload)).not.toContain('stack-secret-SENTINEL')
+    expect(JSON.stringify(payload)).not.toContain('technicalPayload')
+  })
+
+  it('keeps the authoritative latest event sequence on an empty page', async () => {
+    const state = harness({ taskLoop: true })
+    vi.mocked(state.repository.getAgentTaskRunDetail!).mockResolvedValueOnce({
+      run: { ...run, nextEventSequence: 8 },
+      activePlan: null,
+      waitingReason: null,
+      latestEventSequence: 7,
+    })
+    vi.mocked(state.repository.listAgentTaskEventPage!).mockResolvedValueOnce({
+      latestEventSequence: 7,
+      events: [],
+    })
+
+    const response = await state.app.request(
+      new Request(`http://test/projects/${projectId}/agent/task-runs/${run.id}/events?afterSeq=99&limit=1`),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      latestEventSequence: 7,
+      events: [],
+      retentionPolicy: { version: 'unbounded_v1', earliestAvailableSequence: 1 },
+      artifactPolicy: { version: 'none_v1' },
+    })
+  })
+
+  it('keeps a terminal planning failure visible after reload', async () => {
+    const state = harness({ taskLoop: true })
+    vi.mocked(state.repository.getAgentTaskRunDetail!).mockResolvedValueOnce({
+      run: { ...run, status: 'failed', currentTransitionKey: null, nextEventSequence: 2 },
+      activePlan: null,
+      waitingReason: null,
+      latestEventSequence: 1,
+    })
+
+    const response = await state.app.request(new Request(`http://test/projects/${projectId}/agent/task-runs/${run.id}`))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      taskRun: { id: run.id, status: 'failed', currentTransitionKey: null, latestEventSequence: 1 },
+    })
+  })
+
+  it('continues the same waiting task run without creating another run', async () => {
+    const waiting = { ...run, status: 'waiting_user' as const, currentTransitionKey: null }
+    const wakeTaskOrchestrator = vi.fn()
+    const state = harness({ taskLoop: true, wakeTaskOrchestrator })
+    const answerImageId = '88888888-8888-4888-8888-888888888888'
+    const answerImage = encodeAssetModelInput(
+      'image/png',
+      Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    )
+    vi.mocked(state.repository.getAgentAsset!).mockResolvedValue({
+      id: answerImageId,
+      projectId,
+      conversationId,
+      originalName: 'answer.png',
+      contentType: 'image/png',
+      size: answerImage.record.size,
+      sha256: answerImage.record.sha256,
+      status: 'ready',
+      extractedText: null,
+      storagePath: 'private/answer.png',
+      createdAt: now,
+      updatedAt: now,
+    })
+    vi.mocked(state.repository.getAgentAssetModelInput!).mockResolvedValue({
+      record: answerImage.record,
+      bytes: answerImage.copiedBytes,
+    })
+    vi.mocked(state.repository.continueAgentTaskRun!).mockResolvedValueOnce({
+      taskRun: { ...waiting, status: 'planning', currentTransitionKey: 'planning:2' },
+      transition: {} as never,
+    })
+    vi.mocked(state.repository.getAgentTaskRunDetail!).mockResolvedValue({
+      run: { ...waiting, status: 'planning', currentTransitionKey: 'planning:2' },
+      activePlan: null,
+      waitingReason: null,
+      latestEventSequence: 1,
+    })
+
+    const response = await state.app.request(
+      new Request(`http://test/projects/${projectId}/agent/task-runs/${run.id}/continue`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          questionId: 'question-focus',
+          response: '突出销售额与利润率',
+          attachmentIds: [answerImageId],
+          idempotencyKey: 'continue-1',
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(202)
+    expect(state.repository.continueAgentTaskRun).toHaveBeenCalledWith(actorId, {
+      projectId,
+      taskRunId: run.id,
+      questionId: 'question-focus',
+      response: '突出销售额与利润率',
+      attachmentIds: [answerImageId],
+      imageInputs: [{ assetId: answerImageId, sha256: answerImage.record.sha256 }],
+      idempotencyKey: 'continue-1',
+      now,
+    })
+    expect(state.repository.createAgentTaskRun).not.toHaveBeenCalled()
+    expect(wakeTaskOrchestrator).toHaveBeenCalledOnce()
+  })
+
+  it('runs planning through a transition-owned provider attempt with stable replay step ids', async () => {
+    const state = harness({ taskLoop: true })
+    const providerInputSnapshot = createAgentProviderInputSnapshot({
+      prompt: 'Create a dashboard',
+      project,
+      conversationId,
+      taskId: 'task-1',
+      attachments: [],
+      projectContext: [],
+    })
+    const configDigest = canonicalJsonSha256({
+      provider: 'platform',
+      model: 'model',
+      profileId: 'platform:default',
+      endpoint: 'https://models.example.com/v1',
+      capabilities: { vision: true, toolCalling: true, structuredOutput: true },
+      budget: { taskMicros: 2_000_000, projectMonthMicros: 20_000_000, warningRatio: 0.8 },
+      billingScope: 'project',
+      payerId: projectId,
+    })
+    vi.mocked(state.repository.getAgentTaskRun!).mockResolvedValue({ ...run, configDigest })
+    const prepared = {
+      id: 'attempt-1',
+      state: 'prepared' as const,
+      providerRequestKey: null,
+      requestBodyDigest: 'c'.repeat(64),
+      idempotencyMode: 'unsupported' as const,
+    }
+    vi.mocked(state.repository.prepareAgentProviderAttempt!).mockResolvedValue(prepared)
+    vi.mocked(state.repository.markAgentProviderAttemptStarted!).mockResolvedValue({
+      ...prepared,
+      state: 'started',
+    })
+    vi.mocked(state.repository.completeAgentProviderAttempt!).mockResolvedValue({
+      attempt: { ...prepared, state: 'succeeded' },
+      cost: null,
+      taskOutcomeClassification: 'within_budget',
+    })
+    const planningModel = vi.fn(async (input: Parameters<typeof requestAgentTaskPlanningDecision>[0]) => {
+      const metadata = await input.providerAttemptLifecycle?.prepare({
+        requestBodyDigest: 'c'.repeat(64),
+        idempotencyMode: 'unsupported',
+      })
+      if (!metadata) throw new Error('Expected provider attempt lifecycle')
+      await input.providerAttemptLifecycle?.markStarted(metadata)
+      return {
+        output: {
+          action: 'plan' as const,
+          summary: '搭建经营大屏',
+          assumptions: ['使用现有项目数据'],
+          risks: ['窄屏下需检查信息密度'],
+          verification: { strategy: '逐步预览', checks: ['左右面板对齐', '指标数据可见'] },
+          steps: [
+            { semanticKey: 'layout-side-panels', title: '搭建左右信息面板', intent: '建立稳定的三栏结构' },
+            { semanticKey: 'bind-core-metrics', title: '绑定核心指标', intent: '让指标展示真实项目数据' },
+          ],
+        },
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        trace: {
+          promptBundleId: 'dashboard-builder',
+          promptBundleVersion: '1.0.0',
+          promptBundleHash: 'd'.repeat(64),
+          skills: [],
+        },
+        providerAttempt: {
+          requestBodyDigest: 'c'.repeat(64),
+          idempotencyMode: 'unsupported' as const,
+          idempotencyHeaderSent: false,
+        },
+      }
+    })
+    const planner = createAgentTaskPlanningProvider({
+      repository: state.repository,
+      env: {
+        NODE_ENV: 'test',
+        EASY_EDITOR_AGENT_BASE_URL: 'https://models.example.com/v1',
+        EASY_EDITOR_AGENT_API_KEY: 'secret',
+        EASY_EDITOR_AGENT_MODEL: 'model',
+      } as AppEnv,
+      workerId: 'worker-1',
+      model: planningModel,
+      modelConfig: { now: () => now },
+    })
+    const transition = {
+      id: 'transition-1',
+      actorId,
+      taskRunId: run.id,
+      projectId,
+      stepId: null,
+      kind: 'planning' as const,
+      transitionKey: 'planning:1',
+      generation: 1,
+      leaseGeneration: 2,
+      leaseToken: 'lease-token',
+      claimAttempts: 1,
+      input: {
+        purpose: 'planning',
+        prompt: 'Create a dashboard',
+        attachmentIds: [],
+        providerInputSnapshot,
+      },
+    }
+
+    const first = await planner(transition)
+    const replay = await planner(transition)
+
+    expect(first).toMatchObject({ action: 'execute', steps: [{ ordinal: 1 }, { ordinal: 2 }] })
+    expect(replay).toEqual(first)
+    expect(state.repository.prepareAgentProviderAttempt).toHaveBeenCalledWith(
+      actorId,
+      {
+        kind: 'transition',
+        transitionId: 'transition-1',
+        workerId: 'worker-1',
+        leaseGeneration: 2,
+        leaseToken: 'lease-token',
+      },
+      expect.objectContaining({ taskId: 'task-1', turnId: 'planning:1' }),
+    )
+    expect(state.repository.completeAgentProviderAttempt).toHaveBeenCalledWith(
+      actorId,
+      'attempt-1',
+      expect.objectContaining({ kind: 'transition', transitionId: 'transition-1' }),
+      expect.objectContaining({
+        decisionOutput: expect.objectContaining({ purpose: 'planning' }),
+        decisionTrace: expect.objectContaining({ purpose: 'planning', transitionKey: 'planning:1' }),
+      }),
+    )
+    expect(state.dispatcher?.enqueue).not.toHaveBeenCalled()
+  })
+
+  it('replays a committed planning checkpoint without calling the provider again', async () => {
+    const state = harness({ taskLoop: true })
+    const providerInputSnapshot = createAgentProviderInputSnapshot({
+      prompt: 'Create a dashboard',
+      project,
+      conversationId,
+      taskId: 'task-1',
+      attachments: [],
+      projectContext: [],
+    })
+    vi.mocked(state.repository.getAgentTaskRun!).mockResolvedValue(run)
+    vi.mocked(state.repository.getAgentTaskTransitionProviderResult!).mockResolvedValue({
+      attemptId: 'attempt-committed',
+      decisionOutput: {
+        purpose: 'planning',
+        output: {
+          action: 'plan',
+          summary: '搭建经营大屏',
+          assumptions: ['使用现有项目数据'],
+          risks: ['窄屏下需检查信息密度'],
+          verification: { strategy: '逐步预览', checks: ['左右面板对齐', '指标数据可见'] },
+          steps: [
+            { semanticKey: 'layout-side-panels', title: '搭建左右信息面板', intent: '建立稳定的三栏结构' },
+            { semanticKey: 'bind-core-metrics', title: '绑定核心指标', intent: '让指标展示真实项目数据' },
+          ],
+        },
+      },
+      decisionUsage: null,
+      decisionTrace: { purpose: 'planning', transitionKey: 'planning:1' },
+    })
+    const planningModel = vi.fn(async () => {
+      throw new Error('provider must not be called during checkpoint replay')
+    })
+    const planner = createAgentTaskPlanningProvider({
+      repository: state.repository,
+      env: { NODE_ENV: 'test' } as AppEnv,
+      workerId: 'worker-1',
+      model: planningModel as typeof requestAgentTaskPlanningDecision,
+    })
+    const transition = {
+      id: 'transition-1',
+      actorId,
+      taskRunId: run.id,
+      projectId,
+      stepId: null,
+      kind: 'planning' as const,
+      transitionKey: 'planning:1',
+      generation: 1,
+      leaseGeneration: 2,
+      leaseToken: 'lease-token',
+      claimAttempts: 2,
+      input: {
+        purpose: 'planning',
+        prompt: 'Create a dashboard',
+        attachmentIds: [],
+        providerInputSnapshot,
+      },
+    }
+
+    const first = await planner(transition)
+    const second = await planner(transition)
+
+    expect(second).toEqual(first)
+    expect(first).toMatchObject({
+      action: 'execute',
+      steps: [
+        { ordinal: 1, title: '搭建左右信息面板' },
+        { ordinal: 2, title: '绑定核心指标' },
+      ],
+    })
+    expect(planningModel).not.toHaveBeenCalled()
+    expect(state.repository.prepareAgentProviderAttempt).not.toHaveBeenCalled()
+    expect(state.repository.markAgentProviderAttemptStarted).not.toHaveBeenCalled()
+    expect(state.repository.completeAgentProviderAttempt).not.toHaveBeenCalled()
+  })
+
+  it('checkpoints an invalid provider reply so a retry fails safely without calling the provider again', async () => {
+    const state = harness({ taskLoop: true })
+    const providerInputSnapshot = createAgentProviderInputSnapshot({
+      prompt: 'Create a dashboard',
+      project,
+      conversationId,
+      taskId: 'task-1',
+      attachments: [],
+      projectContext: [],
+    })
+    const configDigest = canonicalJsonSha256({
+      provider: 'platform',
+      model: 'model',
+      profileId: 'platform:default',
+      endpoint: 'https://models.example.com/v1',
+      capabilities: { vision: true, toolCalling: true, structuredOutput: true },
+      budget: { taskMicros: 2_000_000, projectMonthMicros: 20_000_000, warningRatio: 0.8 },
+      billingScope: 'project',
+      payerId: projectId,
+    })
+    vi.mocked(state.repository.getAgentTaskRun!).mockResolvedValue({ ...run, configDigest })
+    const prepared = {
+      id: 'attempt-invalid',
+      state: 'prepared' as const,
+      providerRequestKey: null,
+      requestBodyDigest: 'e'.repeat(64),
+      idempotencyMode: 'unsupported' as const,
+    }
+    vi.mocked(state.repository.prepareAgentProviderAttempt!).mockResolvedValue(prepared)
+    vi.mocked(state.repository.markAgentProviderAttemptStarted!).mockResolvedValue({ ...prepared, state: 'started' })
+    let checkpoint: Awaited<ReturnType<NonNullable<Repository['getAgentTaskTransitionProviderResult']>>> = null
+    vi.mocked(state.repository.getAgentTaskTransitionProviderResult!).mockImplementation(async () => checkpoint)
+    vi.mocked(state.repository.completeAgentProviderAttempt!).mockImplementation(
+      async (_actor, _attempt, _fence, input) => {
+        checkpoint = {
+          attemptId: prepared.id,
+          decisionOutput: input.decisionOutput ?? {},
+          decisionUsage: input.decisionUsage ?? null,
+          decisionTrace: input.decisionTrace ?? {},
+        }
+        return {
+          attempt: { ...prepared, state: 'succeeded' },
+          cost: null,
+          taskOutcomeClassification: 'transition_failed_terminal',
+        }
+      },
+    )
+    const planningModel = vi.fn(async (input: Parameters<typeof requestAgentTaskPlanningDecision>[0]) => {
+      const metadata = await input.providerAttemptLifecycle?.prepare({
+        requestBodyDigest: prepared.requestBodyDigest,
+        idempotencyMode: 'unsupported',
+      })
+      if (!metadata) throw new Error('Expected provider lifecycle')
+      await input.providerAttemptLifecycle?.markStarted(metadata)
+      throw new AgentTaskPlanningProviderResponseError(
+        { requestBodyDigest: prepared.requestBodyDigest, idempotencyMode: 'unsupported', idempotencyHeaderSent: false },
+        'invalid_output',
+        'AGENT_MODEL_OUTPUT_INVALID',
+        'raw-provider-secret-SENTINEL',
+        422,
+      )
+    })
+    const planner = createAgentTaskPlanningProvider({
+      repository: state.repository,
+      env: {
+        NODE_ENV: 'test',
+        EASY_EDITOR_AGENT_BASE_URL: 'https://models.example.com/v1',
+        EASY_EDITOR_AGENT_API_KEY: 'secret',
+        EASY_EDITOR_AGENT_MODEL: 'model',
+      } as AppEnv,
+      workerId: 'worker-1',
+      model: planningModel,
+      modelConfig: { now: () => now },
+    })
+    const transition = {
+      id: 'transition-invalid',
+      actorId,
+      taskRunId: run.id,
+      projectId,
+      stepId: null,
+      kind: 'planning' as const,
+      transitionKey: 'planning:1',
+      generation: 1,
+      leaseGeneration: 2,
+      leaseToken: 'lease-token',
+      claimAttempts: 2,
+      input: { purpose: 'planning', prompt: 'Create a dashboard', attachmentIds: [], providerInputSnapshot },
+    }
+
+    await expect(planner(transition)).rejects.toMatchObject({ code: 'provider_response_invalid' })
+    await expect(planner(transition)).rejects.toMatchObject({ code: 'provider_response_invalid' })
+
+    expect(planningModel).toHaveBeenCalledOnce()
+    expect(state.repository.completeAgentProviderAttempt).toHaveBeenCalledOnce()
+    expect(JSON.stringify(checkpoint)).not.toContain('raw-provider-secret-SENTINEL')
+  })
+
+  it('settles a transient planning response as definitely failed so the orchestrator may retry', async () => {
+    const state = harness({ taskLoop: true })
+    const providerInputSnapshot = createAgentProviderInputSnapshot({
+      prompt: 'Create a dashboard',
+      project,
+      conversationId,
+      taskId: 'task-1',
+      attachments: [],
+      projectContext: [],
+    })
+    const configDigest = canonicalJsonSha256({
+      provider: 'platform',
+      model: 'model',
+      profileId: 'platform:default',
+      endpoint: 'https://models.example.com/v1',
+      capabilities: { vision: true, toolCalling: true, structuredOutput: true },
+      budget: { taskMicros: 2_000_000, projectMonthMicros: 20_000_000, warningRatio: 0.8 },
+      billingScope: 'project',
+      payerId: projectId,
+    })
+    vi.mocked(state.repository.getAgentTaskRun!).mockResolvedValue({ ...run, configDigest })
+    const prepared = {
+      id: 'attempt-transient',
+      state: 'prepared' as const,
+      providerRequestKey: null,
+      requestBodyDigest: 'f'.repeat(64),
+      idempotencyMode: 'unsupported' as const,
+    }
+    vi.mocked(state.repository.prepareAgentProviderAttempt!).mockResolvedValue(prepared)
+    vi.mocked(state.repository.markAgentProviderAttemptStarted!).mockResolvedValue({ ...prepared, state: 'started' })
+    vi.mocked(state.repository.completeAgentProviderAttempt!).mockResolvedValue({
+      attempt: { ...prepared, state: 'failed_definite' },
+      cost: null,
+      taskOutcomeClassification: 'within_budget',
+    })
+    const planningModel = vi.fn(async (input: Parameters<typeof requestAgentTaskPlanningDecision>[0]) => {
+      const metadata = await input.providerAttemptLifecycle?.prepare({
+        requestBodyDigest: prepared.requestBodyDigest,
+        idempotencyMode: 'unsupported',
+      })
+      if (!metadata) throw new Error('Expected provider lifecycle')
+      await input.providerAttemptLifecycle?.markStarted(metadata)
+      throw new AgentTaskPlanningProviderResponseError(
+        { requestBodyDigest: prepared.requestBodyDigest, idempotencyMode: 'unsupported', idempotencyHeaderSent: false },
+        'transient',
+        'AGENT_MODEL_ERROR',
+        'raw-provider-secret-SENTINEL',
+        503,
+      )
+    })
+    const planner = createAgentTaskPlanningProvider({
+      repository: state.repository,
+      env: {
+        NODE_ENV: 'test',
+        EASY_EDITOR_AGENT_BASE_URL: 'https://models.example.com/v1',
+        EASY_EDITOR_AGENT_API_KEY: 'secret',
+        EASY_EDITOR_AGENT_MODEL: 'model',
+      } as AppEnv,
+      workerId: 'worker-1',
+      model: planningModel,
+      modelConfig: { now: () => now },
+    })
+
+    await expect(
+      planner({
+        id: 'transition-transient',
+        actorId,
+        taskRunId: run.id,
+        projectId,
+        stepId: null,
+        kind: 'planning',
+        transitionKey: 'planning:1',
+        generation: 1,
+        leaseGeneration: 2,
+        leaseToken: 'lease-token',
+        claimAttempts: 1,
+        input: { purpose: 'planning', prompt: 'Create a dashboard', attachmentIds: [], providerInputSnapshot },
+      }),
+    ).rejects.toMatchObject({ code: 'provider_response_transient', retryable: true, alreadyPersisted: false })
+
+    expect(state.repository.completeAgentProviderAttempt).toHaveBeenCalledWith(
+      actorId,
+      prepared.id,
+      expect.any(Object),
+      expect.objectContaining({
+        state: 'failed_definite',
+        providerAttempt: expect.objectContaining({ reason: 'provider_response_transient' }),
+      }),
+    )
+    expect(JSON.stringify(vi.mocked(state.repository.completeAgentProviderAttempt!).mock.calls)).not.toContain(
+      'raw-provider-secret-SENTINEL',
+    )
   })
 })

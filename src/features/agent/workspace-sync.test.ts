@@ -4,6 +4,7 @@ import {
   appendAgentTurn,
   createAgentConversation,
   createAgentStore,
+  createEmptyAgentWorkspace,
   deleteProjectContext,
   readAgentWorkspace,
   recordAgentRun,
@@ -11,10 +12,10 @@ import {
   upsertProjectContext,
 } from './store'
 import type {
-  AgentConversation,
   AgentProjectContext,
   AgentProjectWorkspacePayload,
   AgentStorage,
+  AgentWorkspaceConversationV2,
   AgentWorkspaceRemoteRecord,
 } from './types'
 import { AgentWorkspaceRevisionConflictError } from './workspace-api'
@@ -62,9 +63,9 @@ function remoteRecord(payload: AgentProjectWorkspacePayload, revision: number): 
 }
 
 function cloneConversation(
-  source: AgentConversation,
-  update: Partial<AgentConversation> & Pick<AgentConversation, 'id' | 'updatedAt'>,
-): AgentConversation {
+  source: AgentWorkspaceConversationV2,
+  update: Partial<AgentWorkspaceConversationV2> & Pick<AgentWorkspaceConversationV2, 'id' | 'updatedAt'>,
+): AgentWorkspaceConversationV2 {
   return { ...structuredClone(source), ...update }
 }
 
@@ -130,7 +131,7 @@ describe('project-scoped Agent workspace synchronization', () => {
     const remote: AgentProjectWorkspacePayload = {
       ...local,
       conversations: [
-        cloneConversation(localConversation, {
+        cloneConversation(local.conversations[0]!, {
           id: localConversation.id,
           title: 'remote-older',
           updatedAt: '2026-07-31T07:00:00.000Z',
@@ -168,14 +169,14 @@ describe('project-scoped Agent workspace synchronization', () => {
     const oldRemote = {
       ...local,
       conversations: [
-        cloneConversation(localConversation, {
+        cloneConversation(local.conversations[0]!, {
           id: localConversation.id,
           title: 'stale remote',
           updatedAt: '2026-07-31T08:00:00.000Z',
         }),
       ],
     }
-    const concurrentConversation = cloneConversation(localConversation, {
+    const concurrentConversation = cloneConversation(local.conversations[0]!, {
       id: 'remote-conversation',
       title: 'concurrent remote',
       updatedAt: '2026-07-31T11:00:00.000Z',
@@ -303,202 +304,369 @@ describe('project-scoped Agent workspace synchronization', () => {
       'tab B follow-up',
     ])
     expect(mergedConversation?.tasks).toHaveLength(3)
-    expect(mergedConversation?.tasks[0]?.run).toMatchObject({
-      operationId: 'operation-a',
-      status: 'committed',
-      outcome: { versionId: 'version-a' },
-      receipt: { commitId: 'commit-a' },
-    })
+    expect(mergedConversation?.tasks[0]).not.toHaveProperty('run')
   })
 
-  it('merges divergent attachments on the same message and progress on the same task independently', () => {
-    const storage = createStorage()
-    const conversation = createAgentConversation(
-      {
-        ownerUserId: 'user-a',
-        projectId: 'project-a',
-        initialMessage: 'shared request',
-        createdAt: '2026-07-31T08:00:00.000Z',
-      },
-      storage,
-    )
-    const base = sliceAgentWorkspaceByProject(readAgentWorkspace('user-a', storage), 'project-a')
-    const first = structuredClone(base)
-    const second = structuredClone(base)
-    const firstConversation = first.conversations[0]
-    const secondConversation = second.conversations[0]
-    const firstMessage = firstConversation?.messages[0]
-    const secondMessage = secondConversation?.messages[0]
-    const firstTask = firstConversation?.tasks[0]
-    const secondTask = secondConversation?.tasks[0]
-    if (!firstConversation || !secondConversation || !firstMessage || !secondMessage || !firstTask || !secondTask) {
-      throw new Error('Expected a conversation with a message and task')
-    }
-
-    firstConversation.updatedAt = '2026-07-31T09:00:00.000Z'
-    firstMessage.attachments = [
-      {
-        id: 'attachment-a',
-        name: 'requirements.md',
-        scope: 'project',
-        projectId: 'project-a',
-        conversationId: conversation.id,
-        createdAt: '2026-07-31T09:00:00.000Z',
-      },
-    ]
-    firstTask.updatedAt = firstConversation.updatedAt
-    firstTask.stages.find(stage => stage.id === 'plan-layout')!.status = 'complete'
-    firstTask.run = {
-      operationId: 'operation-shared',
-      status: 'running',
-      receipt: { preparedBy: 'tab-a' },
-      trace: {
-        promptBundleId: 'bundle',
-        promptBundleVersion: '1',
-        promptBundleHash: 'hash',
-        skills: ['layout'],
-      },
-    }
-
-    secondConversation.updatedAt = '2026-07-31T10:00:00.000Z'
-    secondMessage.attachments = [
-      {
-        id: 'attachment-b',
-        name: 'preview.png',
-        scope: 'conversation',
-        projectId: 'project-a',
-        conversationId: conversation.id,
-        createdAt: '2026-07-31T10:00:00.000Z',
-      },
-    ]
-    secondTask.updatedAt = secondConversation.updatedAt
-    secondTask.stages.find(stage => stage.id === 'bind-data')!.status = 'complete'
-    secondTask.run = {
-      operationId: 'operation-shared',
-      status: 'prepared',
-      outcome: { preparedBy: 'tab-b' },
-      trace: {
-        promptBundleId: 'bundle',
-        promptBundleVersion: '1',
-        promptBundleHash: 'hash',
-        skills: ['data'],
-      },
-    }
-
-    const merged = mergeAgentProjectWorkspacePayloads(first, second)
-    expect(mergeAgentProjectWorkspacePayloads(second, first)).toEqual(merged)
-    const mergedConversation = merged.conversations[0]
-    expect(mergedConversation?.messages[0]?.attachments.map(attachment => attachment.id)).toEqual([
-      'attachment-a',
-      'attachment-b',
-    ])
-    expect(mergedConversation?.tasks[0]?.stages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'plan-layout', status: 'complete' }),
-        expect.objectContaining({ id: 'bind-data', status: 'complete' }),
-      ]),
-    )
-    expect(mergedConversation?.tasks[0]?.run).toMatchObject({
-      receipt: { preparedBy: 'tab-a' },
-      outcome: { preparedBy: 'tab-b' },
-      trace: { skills: ['data', 'layout'] },
-    })
-  })
-
-  it.each([
-    { taskStatus: 'waiting_user' as const, stageStatus: 'waiting' as const, detail: '等待你的回答' },
-    { taskStatus: 'paused' as const, stageStatus: 'waiting' as const, detail: '任务已暂停' },
-    { taskStatus: 'canceled' as const, stageStatus: 'pending' as const, detail: '任务已取消' },
-  ])(
-    'lets a newer $taskStatus transition replace an older running stage and still converges',
-    ({ taskStatus, stageStatus, detail }) => {
-      const storage = createStorage()
-      createAgentConversation(
-        {
-          ownerUserId: 'user-a',
-          projectId: 'project-a',
-          initialMessage: 'shared request',
-          createdAt: '2026-07-31T08:00:00.000Z',
-        },
-        storage,
-      )
-      const base = sliceAgentWorkspaceByProject(readAgentWorkspace('user-a', storage), 'project-a')
-      const runningBranch = structuredClone(base)
-      const transitionBranch = structuredClone(base)
-      const runningConversation = runningBranch.conversations[0]
-      const transitionConversation = transitionBranch.conversations[0]
-      const runningTask = runningConversation?.tasks[0]
-      const transitionTask = transitionConversation?.tasks[0]
-      if (!runningConversation || !transitionConversation || !runningTask || !transitionTask) {
-        throw new Error('Expected a conversation with a task')
-      }
-
-      runningConversation.updatedAt = '2026-07-31T09:00:00.000Z'
-      runningTask.updatedAt = runningConversation.updatedAt
-      runningTask.status = 'running'
-      const runningStage = runningTask.stages.find(stage => stage.id === 'plan-layout')
-      const independentlyCompletedStage = runningTask.stages.find(stage => stage.id === 'bind-data')
-      if (!runningStage || !independentlyCompletedStage) throw new Error('Expected task stages')
-      runningStage.status = 'running'
-      runningStage.detail = '正在生成布局'
-      independentlyCompletedStage.status = 'complete'
-      independentlyCompletedStage.detail = '数据已绑定'
-
-      transitionConversation.updatedAt = '2026-07-31T10:00:00.000Z'
-      transitionTask.updatedAt = transitionConversation.updatedAt
-      transitionTask.status = taskStatus
-      const transitionedStage = transitionTask.stages.find(stage => stage.id === 'plan-layout')
-      if (!transitionedStage) throw new Error('Expected plan stage')
-      transitionedStage.status = stageStatus
-      transitionedStage.detail = detail
-
-      const merged = mergeAgentProjectWorkspacePayloads(runningBranch, transitionBranch)
-      expect(mergeAgentProjectWorkspacePayloads(transitionBranch, runningBranch)).toEqual(merged)
-      expect(mergeAgentProjectWorkspacePayloads(merged, merged)).toEqual(merged)
-      expect(merged.conversations[0]?.tasks[0]).toMatchObject({
-        status: taskStatus,
-        stages: expect.arrayContaining([
-          expect.objectContaining({ id: 'plan-layout', status: stageStatus, detail }),
-          expect.objectContaining({ id: 'bind-data', status: 'complete', detail: '数据已绑定' }),
-        ]),
-      })
-    },
-  )
-
-  it('lets a newer task state clear an obsolete stage detail', () => {
+  it('persists V2 task identity without client-owned lifecycle state', () => {
     const storage = createStorage()
     createAgentConversation(
       {
         ownerUserId: 'user-a',
         projectId: 'project-a',
-        initialMessage: 'shared request',
+        initialMessage: 'persisted request',
         createdAt: '2026-07-31T08:00:00.000Z',
       },
       storage,
     )
-    const base = sliceAgentWorkspaceByProject(readAgentWorkspace('user-a', storage), 'project-a')
-    const older = structuredClone(base)
-    const newer = structuredClone(base)
-    const olderTask = older.conversations[0]?.tasks[0]
-    const newerTask = newer.conversations[0]?.tasks[0]
-    if (!olderTask || !newerTask) throw new Error('Expected a task')
-    olderTask.updatedAt = '2026-07-31T09:00:00.000Z'
-    newerTask.updatedAt = '2026-07-31T10:00:00.000Z'
-    const olderPlan = olderTask.stages.find(stage => stage.id === 'plan-layout')
-    const newerPlan = newerTask.stages.find(stage => stage.id === 'plan-layout')
-    if (!olderPlan || !newerPlan) throw new Error('Expected plan stages')
-    olderPlan.status = 'running'
-    olderPlan.detail = '等待 Agent 执行服务'
-    newerPlan.status = 'running'
-    Reflect.deleteProperty(newerPlan, 'detail')
+    const workspace = readAgentWorkspace('user-a', storage)
+    const task = workspace.conversations[0]?.tasks[0]
+    if (!task) throw new Error('Expected a task')
+    task.taskRunId = '11111111-1111-4111-8111-111111111111'
+    task.status = 'running'
+    task.activePlan = {
+      id: 'plan-1',
+      version: 1,
+      summary: 'server plan',
+      assumptions: [],
+      verification: {},
+      createdAt: task.createdAt,
+      steps: [],
+    }
 
-    const merged = mergeAgentProjectWorkspacePayloads(older, newer)
-    expect(mergeAgentProjectWorkspacePayloads(newer, older)).toEqual(merged)
-    expect(merged.conversations[0]?.tasks[0]?.stages.find(stage => stage.id === 'plan-layout')).toEqual({
-      id: 'plan-layout',
-      title: '制定方案',
-      status: 'running',
+    const payload = sliceAgentWorkspaceByProject(workspace, 'project-a')
+    expect(payload.version).toBe(2)
+    expect(payload.conversations[0]?.tasks[0]).toEqual({
+      id: task.id,
+      title: task.title,
+      taskRunId: '11111111-1111-4111-8111-111111111111',
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
     })
+    expect(() =>
+      decodeAgentProjectWorkspacePayload(
+        {
+          ...payload,
+          conversations: [
+            {
+              ...payload.conversations[0]!,
+              tasks: [{ ...payload.conversations[0]!.tasks[0]!, status: 'complete' }],
+            },
+          ],
+        },
+        'user-a',
+        'project-a',
+      ),
+    ).toThrow('task projection')
+  })
+
+  it('omits server-owned taskRunId from PUT while preserving the GET binding after message updates', async () => {
+    const storage = createStorage()
+    const conversation = createAgentConversation(
+      {
+        ownerUserId: 'user-a',
+        projectId: 'project-a',
+        initialMessage: 'initial request',
+        createdAt: '2026-07-31T08:00:00.000Z',
+      },
+      storage,
+    )
+    const workspace = readAgentWorkspace('user-a', storage)
+    const task = workspace.conversations[0]?.tasks[0]
+    if (!task) throw new Error('Expected a task')
+    task.taskRunId = '11111111-1111-4111-8111-111111111111'
+    replaceAgentWorkspace(workspace, storage)
+    const remotePayload = sliceAgentWorkspaceByProject(workspace, 'project-a')
+    appendAgentTurn(
+      {
+        ownerUserId: 'user-a',
+        conversationId: conversation.id,
+        content: 'local follow-up',
+        createdAt: '2026-07-31T08:02:00.000Z',
+      },
+      storage,
+    )
+    const put = vi.fn<AgentWorkspaceTransport['put']>().mockImplementation(async (_projectId, input) => {
+      expect(input.payload.conversations[0]?.tasks[0]).not.toHaveProperty('taskRunId')
+      const savedPayload = structuredClone(input.payload)
+      const savedTask = savedPayload.conversations[0]?.tasks[0]
+      if (savedPayload.version === 2 && savedTask && !('status' in savedTask)) {
+        savedTask.taskRunId = '11111111-1111-4111-8111-111111111111'
+      }
+      return remoteRecord(savedPayload, 2)
+    })
+
+    const result = await syncAgentWorkspaceProject({
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      storage,
+      transport: { get: vi.fn().mockResolvedValue(remoteRecord(remotePayload, 1)), put },
+    })
+
+    expect(put).toHaveBeenCalledOnce()
+    expect(result.workspace.conversations[0]?.messages.map(message => message.content)).toContain('local follow-up')
+    expect(result.workspace.conversations[0]?.tasks[0]?.taskRunId).toBe('11111111-1111-4111-8111-111111111111')
+  })
+
+  it('reads a V1 four-stage task without inventing a semantic task run', () => {
+    const legacy = {
+      version: 1 as const,
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      conversations: [
+        {
+          id: 'conversation-legacy',
+          ownerUserId: 'user-a',
+          projectId: 'project-a',
+          visibility: 'private' as const,
+          title: '历史对话',
+          messages: [],
+          tasks: [
+            {
+              id: 'task-legacy',
+              title: '历史任务',
+              status: 'complete' as const,
+              stages: [
+                { id: 'understand-requirements' as const, title: '理解请求', status: 'complete' as const },
+                { id: 'plan-layout' as const, title: '制定方案', status: 'complete' as const },
+                { id: 'bind-data' as const, title: '执行修改', status: 'complete' as const },
+                { id: 'preview-check' as const, title: '检查结果', status: 'complete' as const },
+              ],
+              createdAt: '2026-07-31T08:00:00.000Z',
+              updatedAt: '2026-07-31T08:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-07-31T08:00:00.000Z',
+          updatedAt: '2026-07-31T08:01:00.000Z',
+        },
+      ],
+      projectContexts: [],
+      projectContextTombstones: [],
+    }
+
+    const hydrated = hydrateAgentProjectWorkspace(createEmptyAgentWorkspace('user-a'), legacy)
+    expect(hydrated.conversations[0]?.tasks[0]?.stages).toHaveLength(4)
+    expect(hydrated.conversations[0]?.tasks[0]?.taskRunId).toBeUndefined()
+  })
+
+  it('hydrates a V1 workspace read-only without stripping legacy task state through a V2 put', async () => {
+    const storage = createStorage()
+    const legacy: AgentProjectWorkspacePayload = {
+      version: 1,
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      conversations: [
+        {
+          id: 'conversation-legacy',
+          ownerUserId: 'user-a',
+          projectId: 'project-a',
+          visibility: 'private',
+          title: '历史对话',
+          messages: [],
+          tasks: [
+            {
+              id: 'task-legacy',
+              title: '历史任务',
+              status: 'complete',
+              stages: [
+                { id: 'understand-requirements', title: '理解请求', status: 'complete' },
+                { id: 'plan-layout', title: '制定方案', status: 'complete' },
+                { id: 'bind-data', title: '执行修改', status: 'complete' },
+                { id: 'preview-check', title: '检查结果', status: 'complete' },
+              ],
+              run: { operationId: 'operation-legacy', status: 'committed' },
+              createdAt: '2026-07-31T08:00:00.000Z',
+              updatedAt: '2026-07-31T08:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-07-31T08:00:00.000Z',
+          updatedAt: '2026-07-31T08:01:00.000Z',
+        },
+      ],
+      projectContexts: [],
+      projectContextTombstones: [],
+    }
+    const put = vi.fn<AgentWorkspaceTransport['put']>()
+    const result = await syncAgentWorkspaceProject({
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      storage,
+      transport: { get: vi.fn().mockResolvedValue(remoteRecord(legacy, 4)), put },
+    })
+
+    expect(result.status).toBe('remote')
+    expect(put).not.toHaveBeenCalled()
+    expect(readAgentWorkspace('user-a', storage).conversations[0]?.tasks[0]).toMatchObject({
+      stages: expect.arrayContaining([expect.objectContaining({ id: 'preview-check', status: 'complete' })]),
+      run: { operationId: 'operation-legacy', status: 'committed' },
+    })
+  })
+
+  it('migrates V1 to mixed V2 when a local conversation is added and preserves the legacy task exactly', async () => {
+    const storage = createStorage()
+    createAgentConversation(
+      {
+        ownerUserId: 'user-a',
+        projectId: 'project-a',
+        initialMessage: '新增语义任务',
+        createdAt: '2026-08-04T08:00:00.000Z',
+      },
+      storage,
+    )
+    const legacyTask = {
+      id: 'task-legacy',
+      title: '历史任务',
+      status: 'complete' as const,
+      stages: [
+        { id: 'understand-requirements' as const, title: '理解请求', status: 'complete' as const },
+        { id: 'plan-layout' as const, title: '制定方案', status: 'complete' as const },
+        { id: 'bind-data' as const, title: '执行修改', status: 'complete' as const },
+        { id: 'preview-check' as const, title: '检查结果', status: 'complete' as const },
+      ],
+      run: { operationId: 'operation-legacy', status: 'committed' as const },
+      createdAt: '2026-07-31T08:00:00.000Z',
+      updatedAt: '2026-07-31T08:01:00.000Z',
+    }
+    const legacy: AgentProjectWorkspacePayload = {
+      version: 1,
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      conversations: [
+        {
+          id: 'conversation-legacy',
+          ownerUserId: 'user-a',
+          projectId: 'project-a',
+          visibility: 'private',
+          title: '历史对话',
+          messages: [],
+          tasks: [legacyTask],
+          createdAt: '2026-07-31T08:00:00.000Z',
+          updatedAt: '2026-07-31T08:01:00.000Z',
+        },
+      ],
+      projectContexts: [],
+      projectContextTombstones: [],
+    }
+    const put = vi
+      .fn<AgentWorkspaceTransport['put']>()
+      .mockImplementation(async (_projectId, input) => remoteRecord(input.payload, 5))
+
+    const result = await syncAgentWorkspaceProject({
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      storage,
+      transport: { get: vi.fn().mockResolvedValue(remoteRecord(legacy, 4)), put },
+    })
+
+    expect(result.status).toBe('synced')
+    expect(put).toHaveBeenCalledOnce()
+    const written = put.mock.calls[0]?.[1].payload
+    expect(written.version).toBe(2)
+    const writtenLegacy = written.conversations
+      .find(conversation => conversation.id === 'conversation-legacy')
+      ?.tasks.find(task => task.id === 'task-legacy')
+    expect(writtenLegacy).toEqual(legacyTask)
+    expect(writtenLegacy).not.toHaveProperty('taskRunId')
+    const semanticTask = written.conversations.find(conversation => conversation.id !== 'conversation-legacy')?.tasks[0]
+    expect(semanticTask).toEqual(expect.objectContaining({ id: expect.any(String), title: 'Agent 修改任务' }))
+    expect(semanticTask).not.toHaveProperty('status')
+    expect(semanticTask).not.toHaveProperty('stages')
+    expect(semanticTask).not.toHaveProperty('taskRunId')
+  })
+
+  it('syncs attachment turns without writing authoritative legacy execution evidence into workspace', async () => {
+    const storage = createStorage()
+    const legacyTask = {
+      id: 'task-legacy',
+      title: '历史任务',
+      status: 'paused' as const,
+      stages: [
+        { id: 'understand-requirements' as const, title: '理解请求', status: 'complete' as const },
+        { id: 'plan-layout' as const, title: '制定方案', status: 'complete' as const },
+        { id: 'bind-data' as const, title: '执行修改', status: 'running' as const },
+        { id: 'preview-check' as const, title: '检查结果', status: 'pending' as const },
+      ],
+      run: { operationId: 'operation-legacy', status: 'paused' as const },
+      createdAt: '2026-07-31T08:00:00.000Z',
+      updatedAt: '2026-07-31T08:01:00.000Z',
+    }
+    const legacy: AgentProjectWorkspacePayload = {
+      version: 1,
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      conversations: [
+        {
+          id: 'conversation-legacy',
+          ownerUserId: 'user-a',
+          projectId: 'project-a',
+          visibility: 'private',
+          title: '历史对话',
+          messages: [],
+          tasks: [legacyTask],
+          createdAt: '2026-07-31T08:00:00.000Z',
+          updatedAt: '2026-07-31T08:01:00.000Z',
+        },
+      ],
+      projectContexts: [],
+      projectContextTombstones: [],
+    }
+    const get = vi.fn<AgentWorkspaceTransport['get']>().mockResolvedValue(remoteRecord(legacy, 4))
+    const put = vi
+      .fn<AgentWorkspaceTransport['put']>()
+      .mockImplementation(async (_projectId, input) => remoteRecord(input.payload, 5))
+
+    await syncAgentWorkspaceProject({
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      storage,
+      transport: { get, put },
+    })
+    recordAgentRun(
+      {
+        ownerUserId: 'user-a',
+        conversationId: 'conversation-legacy',
+        taskId: 'task-legacy',
+        operationId: 'operation-legacy',
+        status: 'failed',
+        message: '服务端权威执行失败',
+        localOnlyExecutionProjection: true,
+      },
+      storage,
+    )
+
+    await syncAgentWorkspaceProject({
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      storage,
+      transport: { get, put },
+    })
+    expect(put).not.toHaveBeenCalled()
+
+    appendAgentTurn(
+      {
+        ownerUserId: 'user-a',
+        conversationId: 'conversation-legacy',
+        content: '请结合附件继续',
+        attachments: [{ id: 'attachment-1', name: 'reference.png', scope: 'conversation' }],
+        createdAt: '2026-08-04T08:00:00.000Z',
+      },
+      storage,
+    )
+
+    await syncAgentWorkspaceProject({
+      ownerUserId: 'user-a',
+      projectId: 'project-a',
+      storage,
+      transport: { get, put },
+    })
+
+    expect(put).toHaveBeenCalledOnce()
+    const writtenConversation = put.mock.calls[0]?.[1].payload.conversations.find(
+      conversation => conversation.id === 'conversation-legacy',
+    )
+    expect(writtenConversation?.messages.find(message => message.content === '请结合附件继续')?.attachments).toEqual([
+      expect.objectContaining({ id: 'attachment-1', name: 'reference.png' }),
+    ])
+    expect(writtenConversation?.tasks.find(task => task.id === 'task-legacy')).toEqual(legacyTask)
   })
 
   it('converges three concurrent writers after consecutive CAS conflicts', async () => {

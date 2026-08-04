@@ -29,6 +29,8 @@ export interface AppDependencies {
   agentConfig?: Pick<AgentConfigRouteOptions, 'probe' | 'resolveHost' | 'now'>
   runner?: AgentExecutorRunner | null
   dispatcher?: AgentRunDispatcher | null
+  agentTaskWake?: () => void
+  agentTaskLogger?: Pick<Console, 'warn'>
 }
 
 export function createApp({
@@ -39,6 +41,8 @@ export function createApp({
   agentSpike,
   agentConfig,
   dispatcher,
+  agentTaskWake,
+  agentTaskLogger,
 }: AppDependencies) {
   const app = new Hono<{ Variables: AppVariables }>().basePath('/api')
   const agentSpikeRoutes = {
@@ -47,6 +51,11 @@ export function createApp({
     expectedCompatibility: env.AGENT_EXECUTOR_COMPATIBILITY_JSON,
     ...agentSpike,
   }
+  const authCookieSecure = new URL(env.APP_ORIGIN).protocol === 'https:'
+  app.use('*', async (c, next) => {
+    c.set('authCookieSecure', authCookieSecure)
+    await next()
+  })
   app.use('*', requestSecurity(env))
   app.get('/health/live', c => c.json({ status: 'ok' }))
   app.get('/health/ready', async c => {
@@ -68,7 +77,7 @@ export function createApp({
   app.route('/agent', createAgentPreferenceRoutes(repository))
   app.route('/agent', createAgentConfigRoutes({ repository, env, ...agentConfig }))
   app.route('/agent', createAgentWorkspaceRoutes(repository))
-  app.route('/agent', createAgentStartRoutes(repository, undefined, dispatcher))
+  app.route('/agent', createAgentStartRoutes(repository, undefined, dispatcher, env.AGENT_TASK_LOOP_V1 ?? false))
 
   app.use('/projects/*', requireAuth(auth))
   app.use('/projects', requireAuth(auth))
@@ -80,6 +89,8 @@ export function createApp({
       dispatcher,
       spike: agentSpikeRoutes,
       modelConfig: agentConfig,
+      wakeTaskOrchestrator: agentTaskWake,
+      taskOrchestratorLogger: agentTaskLogger,
     }),
   )
   app.route('/projects', createProjectMemberRoutes(repository))

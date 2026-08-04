@@ -255,9 +255,13 @@ export interface AgentProviderAttemptRecord {
   id: string
   actorId: string
   projectId: string
-  dispatchId: string
-  dispatchGeneration: number
-  dispatchWorkerId: string
+  dispatchId: string | null
+  dispatchGeneration: number | null
+  dispatchWorkerId: string | null
+  taskTransitionId: string | null
+  transitionLeaseGeneration: number | null
+  transitionLeaseToken: string | null
+  transitionWorkerId: string | null
   attemptNo: number
   providerRequestKey: string | null
   requestBodyDigest: string
@@ -285,6 +289,359 @@ export type DurableProviderAttemptRecord = Pick<
   AgentProviderAttemptRecord,
   'id' | 'state' | 'providerRequestKey' | 'requestBodyDigest'
 > & { idempotencyMode: 'unsupported' | 'stable' }
+
+export interface DispatchProviderAttemptFence {
+  kind?: 'dispatch'
+  dispatchId: string
+  workerId: string
+  leaseGeneration: number
+}
+
+export interface TransitionProviderAttemptFence {
+  kind: 'transition'
+  transitionId: string
+  workerId: string
+  leaseGeneration: number
+  leaseToken: string
+}
+
+export type AgentProviderAttemptFence = DispatchProviderAttemptFence | TransitionProviderAttemptFence
+
+export type AgentTaskRunStatus =
+  | 'planning'
+  | 'waiting_user'
+  | 'running'
+  | 'verifying'
+  | 'completed'
+  | 'blocked_material'
+  | 'paused'
+  | 'failed'
+  | 'canceled'
+  | 'rolling_back'
+  | 'rolled_back'
+  | 'rollback_blocked'
+export type AgentTaskStepStatus = 'pending' | 'running' | 'verifying' | 'passed' | 'revising' | 'failed' | 'superseded'
+export type AgentTaskTransitionKind = 'planning' | 'step_action' | 'observation' | 'final_verification' | 'rollback'
+export type AgentTaskTransitionStatus = 'pending' | 'leased' | 'completed' | 'failed' | 'canceled'
+export type AgentTaskEventType =
+  | 'plan_created'
+  | 'plan_revised'
+  | 'step_started'
+  | 'material_selected'
+  | 'change_prepared'
+  | 'change_committed'
+  | 'preview_checked'
+  | 'step_revising'
+  | 'fallback_selected'
+  | 'material_gap'
+  | 'waiting_user'
+  | 'step_passed'
+  | 'step_superseded'
+  | 'rollback_started'
+  | 'rollback_completed'
+  | 'rollback_blocked'
+  | 'task_failed'
+  | 'task_completed'
+
+export interface AgentConversationModelBindingRecord {
+  id: string
+  actorId: string
+  projectId: string
+  conversationId: string
+  provider: string
+  model: string
+  profileId: string
+  configDigest: string
+  boundAt: Date
+  createdAt: Date
+}
+export interface AgentTaskRunBounds {
+  maxProviderTurns: number
+  maxStepRevisions: number
+  maxExecutorRetries: number
+  tokenLimit: number
+  costLimitMicros: number
+}
+export interface AgentTaskRunRecord {
+  id: string
+  actorId: string
+  projectId: string
+  conversationId: string
+  taskId: string
+  idempotencyKey: string
+  requestDigest: string
+  status: AgentTaskRunStatus
+  activePlanVersion: number
+  currentTransitionKey: string | null
+  modelBindingId: string
+  provider: string
+  model: string
+  profileId: string
+  configDigest: string
+  bounds: AgentTaskRunBounds
+  providerTurns: number
+  executorRetries: number
+  semanticRevisions: number
+  promptTokens: number
+  completionTokens: number
+  costMicros: number
+  taskStartDocumentRevision: number
+  nextTransitionGeneration: number
+  nextEventSequence: number
+  createdAt: Date
+  updatedAt: Date
+  completedAt: Date | null
+}
+export interface AgentTaskPlanRecord {
+  id: string
+  taskRunId: string
+  version: number
+  summary: string
+  assumptions: unknown
+  verification: unknown
+  createdAt: Date
+}
+export interface AgentTaskStepRecord {
+  id: string
+  taskRunId: string
+  planVersion: number
+  ordinal: number
+  semanticStepKey: string
+  title: string
+  intent: Record<string, unknown>
+  status: AgentTaskStepStatus
+  lastObservation: Record<string, unknown> | null
+  createdAt: Date
+  updatedAt: Date
+}
+export interface AgentTaskStepAttemptRecord {
+  id: string
+  taskRunId: string
+  stepId: string
+  attemptNumber: number
+  decisionKind: string
+  transitionKey: string
+  providerCallReference: string | null
+  operationId: string | null
+  executorRetryCount: number
+  semanticRevisionCount: number
+  observation: Record<string, unknown> | null
+  terminalClassification: string | null
+  createdAt: Date
+  completedAt: Date | null
+}
+export interface AgentTaskTransitionRecord {
+  id: string
+  actorId: string
+  projectId: string
+  taskRunId: string
+  stepId: string | null
+  kind: AgentTaskTransitionKind
+  transitionKey: string
+  generation: number
+  status: AgentTaskTransitionStatus
+  availableAt: Date
+  leaseOwner: string | null
+  leaseGeneration: number
+  leaseToken: string | null
+  leaseUntil: Date | null
+  projectLeaseGeneration: number | null
+  projectLeaseToken: string | null
+  projectLeaseWorkerId: string | null
+  heartbeatAt: Date | null
+  claimAttempts: number
+  operationId: string | null
+  stepAttemptId: string | null
+  input: Record<string, unknown>
+  requestDigest: string
+  completionDigest: string | null
+  output: Record<string, unknown> | null
+  error: Record<string, unknown> | null
+  createdAt: Date
+  updatedAt: Date
+  completedAt: Date | null
+}
+export type AgentTaskReconciliationClassification =
+  | 'already_pending'
+  | 'lease_live'
+  | 'requeued'
+  | 'provider_outcome_unknown_paused'
+export interface AgentTaskReconciliationResult {
+  transition: AgentTaskTransitionRecord
+  classification: AgentTaskReconciliationClassification
+}
+export type AgentProviderTaskOutcomeClassification =
+  | 'within_budget'
+  | 'task_budget_exceeded_paused'
+  | 'provider_outcome_unknown_paused'
+  | 'transition_failed_terminal'
+export interface AgentProviderAttemptSettlementResult {
+  attempt: DurableProviderAttemptRecord
+  cost: AgentRunCostRecord | null
+  taskOutcomeClassification: AgentProviderTaskOutcomeClassification
+}
+export type AgentProviderAttemptReconciliationClassification =
+  | 'lease_live'
+  | 'prepared_failed_definite'
+  | 'started_outcome_unknown'
+export interface AgentProviderAttemptReconciliationResult {
+  attempt: DurableProviderAttemptRecord
+  classification: AgentProviderAttemptReconciliationClassification
+}
+export interface AgentTaskTransitionProviderResult {
+  attemptId: string
+  decisionOutput: Record<string, unknown>
+  decisionUsage: Record<string, unknown> | null
+  decisionTrace: Record<string, unknown>
+}
+export interface AgentTaskTransitionFence {
+  transitionId: string
+  workerId: string
+  leaseGeneration: number
+  leaseToken: string
+  projectLeaseGeneration?: number | null
+  projectLeaseToken?: string | null
+  projectLeaseWorkerId?: string | null
+}
+export interface AgentTaskEventRecord {
+  taskRunId: string
+  seq: number
+  eventKey: string
+  stepId: string | null
+  type: AgentTaskEventType
+  summary: string
+  publicPayload: Record<string, unknown>
+  technicalPayload: Record<string, unknown>
+  redactionVersion: number
+  createdAt: Date
+}
+export interface AgentTaskEventTechnicalDetails {
+  errorCode?: string
+  operationId?: string
+  receiptId?: string
+  cost?: {
+    amountMicros: number
+    accuracy?: 'actual' | 'estimated' | 'billing_indeterminate'
+  }
+}
+export interface AgentTaskPublicEventRecord {
+  taskRunId: string
+  seq: number
+  eventKey: string
+  stepId: string | null
+  type: AgentTaskEventType
+  summary: string
+  publicPayload: Record<string, unknown>
+  technicalDetails?: AgentTaskEventTechnicalDetails
+  redactionVersion: number
+  createdAt: Date
+}
+export interface AgentTaskRunDetailRecord {
+  run: AgentTaskRunRecord
+  activePlan: { plan: AgentTaskPlanRecord; steps: AgentTaskStepRecord[] } | null
+  waitingReason: { summary: string; publicPayload: Record<string, unknown> } | null
+  latestEventSequence: number
+}
+export interface AgentTaskEventPageRecord {
+  events: AgentTaskEventRecord[]
+  latestEventSequence: number
+}
+export interface AgentTaskEventRetentionPolicy {
+  version: 'unbounded_v1'
+  /** Zero when the run has no events; otherwise sequence one remains readable. */
+  earliestAvailableSequence: number
+}
+export interface AgentTaskArtifactPolicy {
+  /** V1 does not create task artifacts and therefore has no artifact expiry lifecycle. */
+  version: 'none_v1'
+}
+export interface AgentProjectTaskLeaseRecord {
+  projectId: string
+  taskRunId: string
+  leaseGeneration: number
+  leaseToken: string
+  leaseOwner: string
+  leaseUntil: Date
+  heartbeatAt: Date
+  createdAt: Date
+  updatedAt: Date
+}
+export interface AgentTaskOperationalEventRecord {
+  id: string
+  dedupeKey: string
+  actorId: string | null
+  projectId: string | null
+  taskRunId: string | null
+  transitionId: string | null
+  operationId: string | null
+  code: string
+  severity: 'info' | 'warning' | 'error' | 'critical'
+  details: Record<string, unknown>
+  createdAt: Date
+}
+
+export interface AgentTaskFinalVerificationEvidence {
+  operationId: string
+  receiptId: string
+  committedDraftVersion: number
+  verifiedAt: string
+  documentValid: true
+  renderReady: true
+  browserErrors: []
+  resourceErrors: []
+  freshContextVerified: true
+  receiptConsistent: true
+}
+
+export interface AgentTaskCompletionInput {
+  status: 'completed' | 'failed' | 'canceled'
+  output?: Record<string, unknown>
+  error?: Record<string, unknown>
+  taskRunPatch?: {
+    status?: AgentTaskRunStatus
+    currentTransitionKey?: string | null
+  }
+  accountingDelta?: {
+    executorRetries?: number
+    semanticRevisions?: number
+  }
+  stepPatch?: { stepId: string; status: AgentTaskStepStatus; lastObservation?: Record<string, unknown> | null }
+  plan?: {
+    summary: string
+    assumptions: unknown
+    verification: unknown
+    steps: Array<{ id?: string; ordinal?: number; title: string; intent: Record<string, unknown> }>
+  }
+  stepAttempt?: {
+    stepId: string
+    decisionKind: string
+    providerCallReference?: string | null
+    operationId?: string | null
+    executorRetryCount?: number
+    semanticRevisionCount?: number
+    observation?: Record<string, unknown> | null
+    terminalClassification?: string | null
+  }
+  finalVerification?: AgentTaskFinalVerificationEvidence
+  events?: Array<{
+    eventKey: string
+    stepId?: string | null
+    type: AgentTaskEventType
+    summary: string
+    publicPayload?: Record<string, unknown>
+    technicalPayload?: Record<string, unknown>
+    redactionVersion?: number
+  }>
+  nextTransition?: {
+    stepId?: string | null
+    stepOrdinal?: number
+    kind: AgentTaskTransitionKind
+    transitionKey: string
+    availableAt?: Date
+    input?: Record<string, unknown>
+  }
+  now: Date
+}
 
 export interface RevisionRecord {
   id: string
@@ -341,7 +698,7 @@ export interface ProjectPreviewRunRecord {
   id: string
   projectId: string
   publishSnapshotId: string
-  source: 'agent_executor' | 'owner_live_render_attestation' | 'editor_renderer_artifact'
+  source: 'agent_executor' | 'owner_live_render_attestation' | 'editor_renderer_artifact' | 'editor_blueprint_artifact'
   status: 'verified'
   documentSha256: string
   rendererVersion: string
@@ -477,6 +834,180 @@ export interface AgentProjectContextRecord {
 
 export interface Repository {
   ping(): Promise<void>
+  resolveAgentConversationModelBinding?(
+    actorId: string,
+    input: {
+      projectId: string
+      conversationId: string
+      provider: string
+      model: string
+      profileId: string
+      configDigest: string
+      now: Date
+    },
+  ): Promise<AgentConversationModelBindingRecord | 'configuration_drift' | null>
+  createAgentTaskRun?(
+    actorId: string,
+    input: {
+      projectId: string
+      conversationId: string
+      taskId: string
+      idempotencyKey: string
+      binding: { provider: string; model: string; profileId: string; configDigest: string }
+      bounds: AgentTaskRunBounds
+      taskStartDocumentRevision: number
+      planningInput?: Record<string, unknown>
+      now: Date
+    },
+  ): Promise<AgentTaskRunRecord | 'configuration_drift' | 'conflict' | 'workspace_unavailable' | null>
+  getAgentTaskRun?(actorId: string, taskRunId: string): Promise<AgentTaskRunRecord | null>
+  getAgentTaskRunDetail?(
+    actorId: string,
+    projectId: string,
+    taskRunId: string,
+  ): Promise<AgentTaskRunDetailRecord | null>
+  listAgentTaskEvents?(
+    actorId: string,
+    projectId: string,
+    taskRunId: string,
+    input: { afterSeq: number; limit: number },
+  ): Promise<AgentTaskEventRecord[] | null>
+  listAgentTaskEventPage?(
+    actorId: string,
+    projectId: string,
+    taskRunId: string,
+    input: { afterSeq: number; limit: number },
+  ): Promise<AgentTaskEventPageRecord | null>
+  continueAgentTaskRun?(
+    actorId: string,
+    input: {
+      projectId: string
+      taskRunId: string
+      idempotencyKey: string
+      questionId: string
+      response: string
+      attachmentIds: string[]
+      imageInputs: Array<{ assetId: string; sha256: string }>
+      now: Date
+    },
+  ): Promise<
+    { taskRun: AgentTaskRunRecord; transition: AgentTaskTransitionRecord } | 'conflict' | 'invalid_state' | null
+  >
+  getAgentTaskTransitionProviderResult?(
+    actorId: string,
+    taskRunId: string,
+    transitionId: string,
+  ): Promise<AgentTaskTransitionProviderResult | null>
+  getAgentTaskPlanningInput?(
+    actorId: string,
+    projectId: string,
+    taskRunId: string,
+  ): Promise<Record<string, unknown> | null>
+  enqueueAgentTaskTransition?(
+    actorId: string,
+    input: {
+      taskRunId: string
+      stepId?: string | null
+      kind: AgentTaskTransitionKind
+      transitionKey: string
+      availableAt?: Date
+      input?: Record<string, unknown>
+      now: Date
+    },
+  ): Promise<AgentTaskTransitionRecord | 'conflict' | 'invalid_state' | null>
+  createAgentTaskPlan?(
+    actorId: string,
+    taskRunId: string,
+    input: NonNullable<AgentTaskCompletionInput['plan']> & { now: Date },
+  ): Promise<{ plan: AgentTaskPlanRecord; steps: AgentTaskStepRecord[] } | 'invalid_state' | null>
+  reviseAgentTaskPlan?(
+    actorId: string,
+    taskRunId: string,
+    input: NonNullable<AgentTaskCompletionInput['plan']> & { now: Date },
+  ): Promise<{ plan: AgentTaskPlanRecord; steps: AgentTaskStepRecord[] } | 'invalid_state' | null>
+  appendAgentTaskEvent?(
+    actorId: string,
+    taskRunId: string,
+    input: NonNullable<AgentTaskCompletionInput['events']>[number] & { now: Date },
+  ): Promise<AgentTaskEventRecord | null>
+  acquireAgentProjectTaskLease?(
+    actorId: string,
+    input: { taskRunId: string; workerId: string; now: Date; leaseUntil: Date },
+  ): Promise<AgentProjectTaskLeaseRecord | 'busy' | 'stale' | null>
+  acquireNextAgentProjectTaskLease?(
+    workerId: string,
+    now: Date,
+    leaseUntil: Date,
+  ): Promise<AgentProjectTaskLeaseRecord | null>
+  releaseAgentProjectTaskLease?(
+    actorId: string,
+    input: { taskRunId: string; workerId: string; leaseGeneration: number; leaseToken: string; now: Date },
+  ): Promise<true | 'stale'>
+  claimAgentTaskTransition?(
+    workerId: string,
+    now: Date,
+    leaseUntil: Date,
+    kinds?: readonly AgentTaskTransitionKind[],
+  ): Promise<AgentTaskTransitionRecord | null>
+  heartbeatAgentTaskTransition?(
+    actorId: string,
+    fence: AgentTaskTransitionFence,
+    now: Date,
+    leaseUntil: Date,
+  ): Promise<AgentTaskTransitionRecord | 'stale'>
+  releaseAgentTaskTransition?(
+    actorId: string,
+    fence: AgentTaskTransitionFence,
+    now: Date,
+  ): Promise<AgentTaskTransitionRecord | 'stale'>
+  completeAgentTaskTransition?(
+    actorId: string,
+    fence: AgentTaskTransitionFence,
+    input: AgentTaskCompletionInput,
+  ): Promise<
+    | {
+        transition: AgentTaskTransitionRecord
+        taskRun: AgentTaskRunRecord
+        nextTransition: AgentTaskTransitionRecord | null
+      }
+    | 'stale'
+    | 'invalid_state'
+    | 'conflict'
+  >
+  reconcileAgentTaskTransition?(
+    actorId: string,
+    fence: AgentTaskTransitionFence,
+    now: Date,
+  ): Promise<AgentTaskReconciliationResult | 'stale' | null>
+  pauseAgentTaskTransitionUnknownOutcome?(
+    actorId: string,
+    fence: AgentTaskTransitionFence,
+    input: {
+      now: Date
+      event: NonNullable<AgentTaskCompletionInput['events']>[number]
+      operationalEvent: {
+        dedupeKey: string
+        code: string
+        severity: AgentTaskOperationalEventRecord['severity']
+        details?: Record<string, unknown>
+      }
+    },
+  ): Promise<AgentTaskReconciliationResult | 'stale' | 'invalid_state'>
+  reconcileAgentTaskTransitions?(now: Date, limit?: number): Promise<AgentTaskReconciliationResult[]>
+  appendAgentTaskOperationalEvent?(
+    actorId: string,
+    input: {
+      dedupeKey: string
+      projectId?: string | null
+      taskRunId?: string | null
+      transitionId?: string | null
+      operationId?: string | null
+      code: string
+      severity: AgentTaskOperationalEventRecord['severity']
+      details?: Record<string, unknown>
+      now: Date
+    },
+  ): Promise<AgentTaskOperationalEventRecord>
   ensurePersonalSpace(actorId: string): Promise<string>
   listProjects(actorId: string, scope?: 'active' | 'trashed'): Promise<ProjectSummaryRecord[]>
   createProject(
@@ -494,7 +1025,8 @@ export interface Repository {
         schema: ProjectSchema
       }
       workspacePayload: Record<string, unknown>
-      dispatch: {
+      createLegacyDispatch?: boolean
+      dispatch?: {
         conversationId: string
         taskId: string
         operationId: string
@@ -577,7 +1109,7 @@ export interface Repository {
   getAgentTurnByDispatch?(actorId: string, dispatchId: string): Promise<DurableAgentTurnRecord | null>
   prepareAgentProviderAttempt?(
     actorId: string,
-    dispatchAttempt: { dispatchId: string; workerId: string; leaseGeneration: number },
+    dispatchAttempt: AgentProviderAttemptFence,
     input: {
       projectId: string
       taskId: string
@@ -594,13 +1126,13 @@ export interface Repository {
   markAgentProviderAttemptStarted?(
     actorId: string,
     attemptId: string,
-    dispatchAttempt: { dispatchId: string; workerId: string; leaseGeneration: number },
+    dispatchAttempt: AgentProviderAttemptFence,
     now: Date,
   ): Promise<DurableProviderAttemptRecord | null>
   completeAgentProviderAttempt?(
     actorId: string,
     attemptId: string,
-    dispatchAttempt: { dispatchId: string; workerId: string; leaseGeneration: number },
+    dispatchAttempt: AgentProviderAttemptFence,
     input: {
       state: 'succeeded' | 'failed_definite' | 'outcome_unknown'
       providerAttempt: {
@@ -621,12 +1153,23 @@ export interface Repository {
       cachedTokens?: number
       estimatedMicros?: number
       providerAmountMicros?: number
+      terminalTransitionFailure?: {
+        code: string
+        summary: string
+        publicPayload: Record<string, unknown>
+        technicalPayload: Record<string, unknown>
+      }
       now: Date
     },
-  ): Promise<{ attempt: DurableProviderAttemptRecord; cost: AgentRunCostRecord } | 'stale'>
+  ): Promise<AgentProviderAttemptSettlementResult | 'stale'>
   reconcileAgentProviderAttempt?(
     actorId: string,
-    dispatchAttempt: { dispatchId: string; workerId: string; leaseGeneration: number },
+    dispatchAttempt: TransitionProviderAttemptFence,
+    now: Date,
+  ): Promise<AgentProviderAttemptReconciliationResult | 'stale' | null>
+  reconcileAgentProviderAttempt?(
+    actorId: string,
+    dispatchAttempt: DispatchProviderAttemptFence,
     now: Date,
   ): Promise<DurableProviderAttemptRecord | 'stale' | null>
   getAgentRunDispatch?(actorId: string, projectId: string, operationId: string): Promise<AgentRunDispatchRecord | null>

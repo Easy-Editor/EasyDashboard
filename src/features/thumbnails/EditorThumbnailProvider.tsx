@@ -106,7 +106,7 @@ export function EditorThumbnailProvider({ children }: { children: ReactNode }) {
       writeState(queueAutoThumbnail(stateRef.current, decision.draftVersion))
       try {
         const projectDocument = project.export(TRANSFORM_STAGE.SAVE) as ProjectSchema
-        await runAutoThumbnailPipeline(
+        const result = await runAutoThumbnailPipeline(
           {
             projectDocument,
             draftVersion: decision.draftVersion,
@@ -138,6 +138,13 @@ export function EditorThumbnailProvider({ children }: { children: ReactNode }) {
             },
           },
         )
+        if (result.captureWarning) {
+          console.warn('[EasyDashboard] Thumbnail renderer fell back to a blueprint artifact', {
+            code: result.captureWarning.code,
+            message: result.captureWarning.message,
+            cause: result.captureWarning.cause,
+          })
+        }
       } catch (error) {
         writeState(failAutoThumbnail(stateRef.current, decision.draftVersion, errorMessage(error)))
       }

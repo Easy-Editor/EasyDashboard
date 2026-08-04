@@ -1,14 +1,14 @@
 import { createRuntime } from './runtime.js'
 
-const { dispatcher } = createRuntime()
+const { dispatcher, taskOrchestrator } = createRuntime()
 
-if (!dispatcher) {
+if (!dispatcher && !taskOrchestrator) {
   throw new Error('Agent dispatch worker requires executor configuration and dispatch repository support')
 }
 
-const workerDispatcher = dispatcher
-workerDispatcher.start()
-console.log('EasyDashboard Agent dispatch worker started')
+dispatcher?.start()
+taskOrchestrator?.start()
+console.log('EasyDashboard Agent workers started')
 
 let shuttingDown = false
 const keepAlive = setInterval(() => undefined, 60_000)
@@ -18,7 +18,7 @@ async function shutdown(signal: NodeJS.Signals) {
   shuttingDown = true
   clearInterval(keepAlive)
   console.log(`EasyDashboard Agent dispatch worker received ${signal}; shutting down`)
-  await workerDispatcher.stop()
+  await Promise.all([dispatcher?.stop(), taskOrchestrator?.stop()])
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

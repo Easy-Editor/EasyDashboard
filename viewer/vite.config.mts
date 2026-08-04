@@ -3,6 +3,7 @@ import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { type Plugin, defineConfig, loadEnv } from 'vite'
+import { linkedMaterialsDevPlugin } from '../src/editor/remote/linked-materials-vite-plugin'
 import { probePublicViewerAccess, publicViewerErrorResponse } from './public-access-gate'
 
 const repositoryRoot = path.resolve(__dirname, '..')
@@ -89,6 +90,7 @@ export default defineConfig(({ mode }) => {
     envDir: repositoryRoot,
     publicDir: false,
     plugins: [
+      linkedMaterialsDevPlugin(environment.VITE_EASY_DASHBOARD_USE_LINKED_MATERIALS === 'true', repositoryRoot),
       react({
         babel: {
           exclude: 'node_modules/**',

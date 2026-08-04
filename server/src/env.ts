@@ -54,6 +54,10 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .transform(value => value === 'true')
     .optional(),
+  AGENT_TASK_LOOP_V1: z
+    .enum(['true', 'false'])
+    .transform(value => value === 'true')
+    .optional(),
   AGENT_MODEL_PROFILE_ENCRYPTION_KEY: modelProfileEncryptionKeySchema.optional(),
   AGENT_EXECUTOR_GRANT_SECRET: z.string().min(32).optional(),
   AGENT_EXECUTOR_COMPATIBILITY_JSON: agentExecutorCompatibilityJsonSchema.optional(),

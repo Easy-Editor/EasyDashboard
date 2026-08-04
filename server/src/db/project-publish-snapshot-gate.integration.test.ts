@@ -230,4 +230,102 @@ describeWithDatabase('project publish snapshot PostgreSQL gate', () => {
       await admin.query('delete from auth.users where id in ($1, $2)', [ownerId, editorId])
     }
   })
+
+  it('accepts the current editor renderer artifact as verified publish evidence', async () => {
+    if (!admin || !repository) throw new Error('Publish gate integration database is unavailable')
+    const ownerId = randomUUID()
+    await admin.query('insert into auth.users (id) values ($1)', [ownerId])
+    let projectId: string | null = null
+    try {
+      const project = await repository.createProject(ownerId, {
+        name: 'Editor renderer publish gate',
+        schema: { componentsTree: [{ id: 'renderer-page' }] },
+      })
+      projectId = project.id
+      const artifactId = randomUUID()
+      const artifactPath = `${ownerId}/${project.id}/${project.draftVersion}/${artifactId}.webp`
+      await admin.query(
+        `insert into app.project_thumbnail_artifacts
+          (id, project_id, path, status, draft_version, mode, source, content_type,
+           expected_size, expires_at, created_by)
+         values ($1, $2, $3, 'current', $4, 'auto', 'renderer', 'image/webp', 2048,
+           now() + interval '1 day', $5)`,
+        [artifactId, project.id, artifactPath, project.draftVersion, ownerId],
+      )
+
+      const created = await repository.createPublishSnapshot(ownerId, project.id, project.draftVersion)
+      expect(created).not.toBeNull()
+      expect(created).not.toBe('conflict')
+      if (!created || created === 'conflict') throw new Error('Snapshot was not created')
+      expect(created.previewRun).toMatchObject({
+        source: 'editor_renderer_artifact',
+        thumbnailArtifactId: artifactId,
+        artifactPath,
+        artifactSize: 2048,
+        artifactDraftVersion: project.draftVersion,
+      })
+      await expect(repository.approvePublishSnapshot(ownerId, project.id, created.snapshot.id)).resolves.toMatchObject({
+        previewRunId: created.previewRun?.id,
+      })
+      await expect(repository.publish(ownerId, project.id, { snapshotId: created.snapshot.id })).resolves.toMatchObject(
+        {
+          releaseNumber: 1,
+          isCurrent: true,
+          isPublished: true,
+        },
+      )
+    } finally {
+      if (projectId) await admin.query('delete from app.projects where id = $1', [projectId])
+      await admin.query('delete from auth.users where id = $1', [ownerId])
+    }
+  })
+
+  it('publishes with the current editor blueprint artifact when canvas encoding is unavailable', async () => {
+    if (!admin || !repository) throw new Error('Publish gate integration database is unavailable')
+    const ownerId = randomUUID()
+    await admin.query('insert into auth.users (id) values ($1)', [ownerId])
+    let projectId: string | null = null
+    try {
+      const project = await repository.createProject(ownerId, {
+        name: 'Editor blueprint publish fallback',
+        schema: { componentsTree: [{ id: 'blueprint-page' }] },
+      })
+      projectId = project.id
+      const artifactId = randomUUID()
+      const artifactPath = `${ownerId}/${project.id}/${project.draftVersion}/${artifactId}.svg`
+      await admin.query(
+        `insert into app.project_thumbnail_artifacts
+          (id, project_id, path, status, draft_version, mode, source, content_type,
+           expected_size, expires_at, created_by)
+         values ($1, $2, $3, 'current', $4, 'auto', 'blueprint', 'image/svg+xml', 2048,
+           now() + interval '1 day', $5)`,
+        [artifactId, project.id, artifactPath, project.draftVersion, ownerId],
+      )
+
+      const created = await repository.createPublishSnapshot(ownerId, project.id, project.draftVersion)
+      expect(created).not.toBeNull()
+      expect(created).not.toBe('conflict')
+      if (!created || created === 'conflict') throw new Error('Snapshot was not created')
+      expect(created.previewRun).toMatchObject({
+        source: 'editor_blueprint_artifact',
+        thumbnailArtifactId: artifactId,
+        artifactPath,
+        artifactSize: 2048,
+        artifactDraftVersion: project.draftVersion,
+      })
+      await expect(repository.approvePublishSnapshot(ownerId, project.id, created.snapshot.id)).resolves.toMatchObject({
+        previewRunId: created.previewRun?.id,
+      })
+      await expect(repository.publish(ownerId, project.id, { snapshotId: created.snapshot.id })).resolves.toMatchObject(
+        {
+          releaseNumber: 1,
+          isCurrent: true,
+          isPublished: true,
+        },
+      )
+    } finally {
+      if (projectId) await admin.query('delete from app.projects where id = $1', [projectId])
+      await admin.query('delete from auth.users where id = $1', [ownerId])
+    }
+  })
 })

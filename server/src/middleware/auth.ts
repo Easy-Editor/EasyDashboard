@@ -6,6 +6,7 @@ export interface AppVariables {
   actorId: string
   actorEmail: string | null
   accessToken: string
+  authCookieSecure: boolean
 }
 
 export function requireAuth(auth: AuthService): MiddlewareHandler<{ Variables: AppVariables }> {

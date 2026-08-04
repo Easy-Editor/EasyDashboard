@@ -21,6 +21,7 @@ import type {
   RecordAgentRunRollbackInput,
   RecordAgentTaskPlanInput,
   RecordAgentTaskQuestionInput,
+  RecordAgentTaskRunDetailInput,
   SetAgentMessageAttachmentsInput,
   UpdateTaskProgressInput,
   UpsertProjectContextInput,
@@ -61,7 +62,7 @@ function timestamp(value?: string): string {
 
 export function createEmptyAgentWorkspace(ownerUserId: string): AgentWorkspace {
   return {
-    version: 1,
+    version: 2,
     ownerUserId,
     preferences: { ...DEFAULT_AGENT_PREFERENCES },
     conversations: [],
@@ -179,7 +180,7 @@ function isPendingQuestion(value: unknown): value is NonNullable<AgentTask['pend
   )
 }
 
-function isTask(value: unknown): value is AgentTask {
+function isTask(value: unknown, workspaceVersion: 1 | 2): value is AgentTask {
   const candidate = record(value)
   const usage = candidate ? record(candidate.usage) : null
   const stages = candidate && Array.isArray(candidate.stages) ? candidate.stages : []
@@ -195,9 +196,10 @@ function isTask(value: unknown): value is AgentTask {
         candidate.status === 'complete' ||
         candidate.status === 'failed' ||
         candidate.status === 'canceled') &&
-      stages.length === 4 &&
       stages.every(isTaskStage) &&
-      stageIds.size === 4 &&
+      stageIds.size === stages.length &&
+      (workspaceVersion === 2 || stages.length === 4) &&
+      (candidate.taskRunId === undefined || typeof candidate.taskRunId === 'string') &&
       (candidate.plan === undefined || isTaskPlan(candidate.plan)) &&
       (candidate.pendingQuestion === undefined || isPendingQuestion(candidate.pendingQuestion)) &&
       typeof candidate.createdAt === 'string' &&
@@ -211,7 +213,7 @@ function isTask(value: unknown): value is AgentTask {
   )
 }
 
-function isConversation(value: unknown, ownerUserId: string): value is AgentConversation {
+function isConversation(value: unknown, ownerUserId: string, workspaceVersion: 1 | 2): value is AgentConversation {
   const candidate = record(value)
   return Boolean(
     candidate &&
@@ -224,7 +226,7 @@ function isConversation(value: unknown, ownerUserId: string): value is AgentConv
       Array.isArray(candidate.messages) &&
       candidate.messages.every(isMessage) &&
       Array.isArray(candidate.tasks) &&
-      candidate.tasks.every(isTask) &&
+      candidate.tasks.every(task => isTask(task, workspaceVersion)) &&
       typeof candidate.createdAt === 'string' &&
       typeof candidate.updatedAt === 'string',
   )
@@ -294,9 +296,10 @@ function isProjectContextTombstone(value: unknown): value is AgentProjectContext
 function isAgentWorkspace(value: unknown, ownerUserId: string): value is AgentWorkspace {
   const candidate = record(value)
   const preferences = candidate ? record(candidate.preferences) : null
+  const version = candidate?.version
   return Boolean(
     candidate &&
-      candidate.version === 1 &&
+      (version === 1 || version === 2) &&
       candidate.ownerUserId === ownerUserId &&
       preferences &&
       (preferences.defaultAttachmentScope === undefined ||
@@ -305,7 +308,7 @@ function isAgentWorkspace(value: unknown, ownerUserId: string): value is AgentWo
       (preferences.rememberProjectContext === undefined || typeof preferences.rememberProjectContext === 'boolean') &&
       (preferences.showTaskProgress === undefined || typeof preferences.showTaskProgress === 'boolean') &&
       Array.isArray(candidate.conversations) &&
-      candidate.conversations.every(conversation => isConversation(conversation, ownerUserId)) &&
+      candidate.conversations.every(conversation => isConversation(conversation, ownerUserId, version)) &&
       Array.isArray(candidate.projectContexts) &&
       candidate.projectContexts.every(isProjectContext) &&
       (candidate.projectContextTombstones === undefined ||
@@ -317,6 +320,7 @@ function isAgentWorkspace(value: unknown, ownerUserId: string): value is AgentWo
 function normalizeAgentWorkspace(workspace: AgentWorkspace): AgentWorkspace {
   return {
     ...workspace,
+    version: 2,
     preferences: { ...DEFAULT_AGENT_PREFERENCES, ...workspace.preferences },
     projectContexts: workspace.projectContexts.map(context => ({
       ...context,
@@ -395,10 +399,12 @@ function createMessage(
   attachments: AgentAttachment[],
   createdAt: string,
   taskId?: string,
+  localOnlyExecutionProjection = false,
 ): AgentMessage {
   return {
     id: nanoid(),
     ...(taskId ? { taskId } : {}),
+    ...(localOnlyExecutionProjection ? { localOnlyExecutionProjection: true as const } : {}),
     role,
     content,
     attachments,
@@ -407,18 +413,11 @@ function createMessage(
 }
 
 export function createInitialAgentTask(createdAt: string): AgentTask {
-  const stages: AgentTaskStage[] = [
-    { id: 'understand-requirements', title: '理解请求', status: 'complete' },
-    { id: 'plan-layout', title: '制定方案', status: 'waiting', detail: '等待 Agent 开始处理' },
-    { id: 'bind-data', title: '执行修改', status: 'pending' },
-    { id: 'preview-check', title: '检查结果', status: 'pending' },
-  ]
-
   return {
     id: nanoid(),
     title: 'Agent 修改任务',
     status: 'waiting',
-    stages,
+    stages: [],
     createdAt,
     updatedAt: createdAt,
   }
@@ -569,14 +568,17 @@ export function updateTaskProgress(input: UpdateTaskProgressInput, storage?: Age
   if (input.usage) task.usage = { ...input.usage }
   if (input.stageId) {
     const stage = task.stages.find(candidate => candidate.id === input.stageId)
-    if (!stage) throw new Error(`Unknown agent task stage: ${input.stageId}`)
-    if (input.stageStatus) stage.status = input.stageStatus
-    if (input.detail === undefined) {
-      if (input.stageStatus && input.stageStatus !== 'waiting') stage.detail = undefined
-    } else if (input.detail) {
-      stage.detail = input.detail
-    } else {
-      stage.detail = undefined
+    if (stage) {
+      if (input.stageStatus) stage.status = input.stageStatus
+      if (input.detail === undefined) {
+        if (input.stageStatus && input.stageStatus !== 'waiting') stage.detail = undefined
+      } else if (input.detail) {
+        stage.detail = input.detail
+      } else {
+        stage.detail = undefined
+      }
+    } else if (task.stages.length > 0) {
+      throw new Error(`Unknown agent task stage: ${input.stageId}`)
     }
   }
 
@@ -607,11 +609,12 @@ export function recordAgentPlanResult(input: RecordAgentPlanResultInput, storage
 
   const planningStage = task.stages.find(stage => stage.id === 'plan-layout')
   const dataStage = task.stages.find(stage => stage.id === 'bind-data')
-  if (!planningStage || !dataStage) throw new Error(`Agent task ${task.id} is missing required stages`)
-  planningStage.status = 'complete'
-  planningStage.detail = undefined
-  dataStage.status = 'waiting'
-  dataStage.detail = '方案已确定，正在执行修改'
+  if (planningStage && dataStage) {
+    planningStage.status = 'complete'
+    planningStage.detail = undefined
+    dataStage.status = 'waiting'
+    dataStage.detail = '方案已确定，正在执行修改'
+  }
   task.status = 'waiting'
   if (input.usage) task.usage = { ...input.usage }
   task.updatedAt = updatedAt
@@ -635,7 +638,14 @@ export function recordAgentTaskQuestion(
     ? conversation.messages.find(message => message.id === task.pendingQuestion?.messageId)
     : undefined
   if (!questionMessage || task.pendingQuestion?.id !== input.questionId) {
-    questionMessage = createMessage('assistant', input.message.trim(), [], updatedAt, task.id)
+    questionMessage = createMessage(
+      'assistant',
+      input.message.trim(),
+      [],
+      updatedAt,
+      task.id,
+      input.localOnlyExecutionProjection,
+    )
     conversation.messages.push(questionMessage)
   }
 
@@ -654,7 +664,7 @@ export function recordAgentTaskQuestion(
     planningStage.detail = '等待你的回答'
   }
   task.updatedAt = updatedAt
-  conversation.updatedAt = updatedAt
+  if (!input.localOnlyExecutionProjection) conversation.updatedAt = updatedAt
   replaceAgentWorkspace(workspace, storage)
   return structuredClone(conversation)
 }
@@ -689,7 +699,6 @@ export function recordAgentRun(input: RecordAgentRunInput, storage?: AgentStorag
   const plan = task.stages.find(stage => stage.id === 'plan-layout')
   const data = task.stages.find(stage => stage.id === 'bind-data')
   const preview = task.stages.find(stage => stage.id === 'preview-check')
-  if (!plan || !data || !preview) throw new Error(`Agent task ${task.id} is missing required stages`)
   const updatedAt = timestamp(input.updatedAt)
   const assistantMessage = input.message?.trim()
   if (
@@ -698,7 +707,9 @@ export function recordAgentRun(input: RecordAgentRunInput, storage?: AgentStorag
       message => message.role === 'assistant' && message.taskId === task.id && message.content === assistantMessage,
     )
   ) {
-    conversation.messages.push(createMessage('assistant', assistantMessage, [], updatedAt, task.id))
+    conversation.messages.push(
+      createMessage('assistant', assistantMessage, [], updatedAt, task.id, input.localOnlyExecutionProjection),
+    )
   }
   const trace = input.trace ?? task.run?.trace
   task.run = {
@@ -719,47 +730,229 @@ export function recordAgentRun(input: RecordAgentRunInput, storage?: AgentStorag
   if (input.usage) task.usage = { ...input.usage }
   if (input.status === 'planning') {
     task.status = 'running'
-    plan.status = 'running'
-    Reflect.deleteProperty(plan, 'detail')
+    if (plan) {
+      plan.status = 'running'
+      Reflect.deleteProperty(plan, 'detail')
+    }
   } else if (input.status === 'running') {
     task.status = 'running'
-    plan.status = 'complete'
-    Reflect.deleteProperty(plan, 'detail')
-    data.status = 'running'
-    Reflect.deleteProperty(data, 'detail')
+    if (plan && data) {
+      plan.status = 'complete'
+      Reflect.deleteProperty(plan, 'detail')
+      data.status = 'running'
+      Reflect.deleteProperty(data, 'detail')
+    }
   } else if (input.status === 'prepared') {
     task.status = 'running'
-    plan.status = 'complete'
-    Reflect.deleteProperty(plan, 'detail')
-    data.status = 'complete'
-    Reflect.deleteProperty(data, 'detail')
-    preview.status = 'waiting'
-    preview.detail = '候选变更已准备，等待持久提交'
+    if (plan && data && preview) {
+      plan.status = 'complete'
+      Reflect.deleteProperty(plan, 'detail')
+      data.status = 'complete'
+      Reflect.deleteProperty(data, 'detail')
+      preview.status = 'waiting'
+      preview.detail = '候选变更已准备，等待持久提交'
+    }
   } else if (input.status === 'committed') {
     task.status = 'complete'
-    plan.status = 'complete'
-    Reflect.deleteProperty(plan, 'detail')
-    data.status = 'complete'
-    Reflect.deleteProperty(data, 'detail')
-    preview.status = 'complete'
-    Reflect.deleteProperty(preview, 'detail')
+    if (plan && data && preview) {
+      plan.status = 'complete'
+      Reflect.deleteProperty(plan, 'detail')
+      data.status = 'complete'
+      Reflect.deleteProperty(data, 'detail')
+      preview.status = 'complete'
+      Reflect.deleteProperty(preview, 'detail')
+    }
   } else if (input.status === 'paused') {
     task.status = 'paused'
   } else if (input.status === 'canceled') {
     task.status = 'canceled'
   } else {
     task.status = 'failed'
-    Reflect.deleteProperty(plan, 'detail')
-    preview.status = 'failed'
-    preview.detail =
-      input.status === 'stale'
-        ? '项目版本已变化，请基于最新草稿重试'
-        : input.status === 'indeterminate'
-          ? '执行结果无法自动确认，请人工检查项目与账单后再决定是否重试'
-          : '真实执行未完成'
+    if (plan) Reflect.deleteProperty(plan, 'detail')
+    if (preview) {
+      preview.status = 'failed'
+      preview.detail =
+        input.status === 'stale'
+          ? '项目版本已变化，请基于最新草稿重试'
+          : input.status === 'indeterminate'
+            ? '执行结果无法自动确认，请人工检查项目与账单后再决定是否重试'
+            : '真实执行未完成'
+    }
   }
   task.updatedAt = updatedAt
-  conversation.updatedAt = updatedAt
+  if (!input.localOnlyExecutionProjection) conversation.updatedAt = updatedAt
+  replaceAgentWorkspace(workspace, storage)
+  return structuredClone(task)
+}
+
+function semanticTaskStatus(status: RecordAgentTaskRunDetailInput['detail']['status']): AgentTask['status'] {
+  if (status === 'waiting_user') return 'waiting_user'
+  if (status === 'paused' || status === 'blocked_material') return 'paused'
+  if (status === 'completed') return 'complete'
+  if (status === 'failed' || status === 'rollback_blocked') return 'failed'
+  if (status === 'canceled' || status === 'rolled_back') return 'canceled'
+  return 'running'
+}
+
+const terminalSemanticRunStatuses = new Set<RecordAgentTaskRunDetailInput['detail']['status']>([
+  'completed',
+  'failed',
+  'canceled',
+  'rolled_back',
+  'rollback_blocked',
+])
+
+const semanticRunStatusRank: Record<RecordAgentTaskRunDetailInput['detail']['status'], number> = {
+  planning: 0,
+  waiting_user: 1,
+  blocked_material: 1,
+  paused: 1,
+  running: 2,
+  verifying: 3,
+  rolling_back: 4,
+  completed: 5,
+  failed: 5,
+  canceled: 5,
+  rolled_back: 5,
+  rollback_blocked: 5,
+}
+
+function preferIncomingTaskRun(
+  current: NonNullable<AgentTask['taskRun']>,
+  incoming: NonNullable<AgentTask['taskRun']>,
+): boolean {
+  if (terminalSemanticRunStatuses.has(current.status)) return false
+  if (terminalSemanticRunStatuses.has(incoming.status)) return true
+  if (incoming.latestEventSequence !== current.latestEventSequence) {
+    return incoming.latestEventSequence > current.latestEventSequence
+  }
+  if (incoming.activePlanVersion !== current.activePlanVersion) {
+    return incoming.activePlanVersion > current.activePlanVersion
+  }
+  const incomingTime = Date.parse(incoming.updatedAt)
+  const currentTime = Date.parse(current.updatedAt)
+  if (incomingTime !== currentTime) return incomingTime > currentTime
+  return semanticRunStatusRank[incoming.status] > semanticRunStatusRank[current.status]
+}
+
+function mergeTaskRunAccounting(
+  current: NonNullable<AgentTask['taskRun']>['accounting'],
+  incoming: NonNullable<AgentTask['taskRun']>['accounting'],
+): NonNullable<AgentTask['taskRun']>['accounting'] {
+  return {
+    providerTurns: Math.max(current.providerTurns, incoming.providerTurns),
+    executorRetries: Math.max(current.executorRetries, incoming.executorRetries),
+    semanticRevisions: Math.max(current.semanticRevisions, incoming.semanticRevisions),
+    promptTokens: Math.max(current.promptTokens, incoming.promptTokens),
+    completionTokens: Math.max(current.completionTokens, incoming.completionTokens),
+    costMicros: Math.max(current.costMicros, incoming.costMicros),
+  }
+}
+
+function mergeSemanticTaskRun(
+  current: AgentTask['taskRun'],
+  incoming: NonNullable<AgentTask['taskRun']>,
+): { taskRun: NonNullable<AgentTask['taskRun']>; preferIncoming: boolean } {
+  if (!current) return { taskRun: structuredClone(incoming), preferIncoming: true }
+  const preferIncoming = preferIncomingTaskRun(current, incoming)
+  const preferred = preferIncoming ? incoming : current
+  return {
+    preferIncoming,
+    taskRun: {
+      ...structuredClone(preferred),
+      activePlanVersion: Math.max(current.activePlanVersion, incoming.activePlanVersion),
+      latestEventSequence: Math.max(current.latestEventSequence, incoming.latestEventSequence),
+      accounting: mergeTaskRunAccounting(current.accounting, incoming.accounting),
+      createdAt:
+        Date.parse(current.createdAt) <= Date.parse(incoming.createdAt) ? current.createdAt : incoming.createdAt,
+      updatedAt:
+        Date.parse(current.updatedAt) >= Date.parse(incoming.updatedAt) ? current.updatedAt : incoming.updatedAt,
+      completedAt: current.completedAt ?? incoming.completedAt,
+    },
+  }
+}
+
+const terminalSemanticStepStatuses = new Set(['passed', 'failed', 'superseded'])
+const semanticStepStatusRank = {
+  pending: 0,
+  running: 1,
+  revising: 2,
+  verifying: 3,
+  passed: 4,
+  failed: 4,
+  superseded: 4,
+}
+
+function mergeActivePlan(
+  current: AgentTask['activePlan'],
+  incoming: RecordAgentTaskRunDetailInput['detail']['activePlan'],
+): AgentTask['activePlan'] {
+  if (!incoming) return current ? structuredClone(current) : undefined
+  if (!current || incoming.version > current.version) return structuredClone(incoming)
+  if (incoming.version < current.version) return structuredClone(current)
+  const incomingSteps = new Map(incoming.steps.map(step => [step.id, step]))
+  const mergedSteps = current.steps.map(step => {
+    const candidate = incomingSteps.get(step.id)
+    if (!candidate) return structuredClone(step)
+    incomingSteps.delete(step.id)
+    if (terminalSemanticStepStatuses.has(step.status)) return structuredClone(step)
+    if (terminalSemanticStepStatuses.has(candidate.status)) return structuredClone(candidate)
+    if (semanticStepStatusRank[candidate.status] > semanticStepStatusRank[step.status])
+      return structuredClone(candidate)
+    if (semanticStepStatusRank[candidate.status] < semanticStepStatusRank[step.status]) return structuredClone(step)
+    return Date.parse(candidate.updatedAt) >= Date.parse(step.updatedAt)
+      ? structuredClone(candidate)
+      : structuredClone(step)
+  })
+  return {
+    ...structuredClone(current),
+    ...structuredClone(incoming),
+    steps: [...mergedSteps, ...incomingSteps.values()],
+  }
+}
+
+export function recordAgentTaskRunDetail(input: RecordAgentTaskRunDetailInput, storage?: AgentStorage): AgentTask {
+  const workspace = readAgentWorkspace(input.ownerUserId, storage)
+  const conversation = workspace.conversations.find(candidate => candidate.id === input.conversationId)
+  const task = conversation?.tasks.find(candidate => candidate.id === input.detail.taskId)
+  if (!conversation || !task) throw new Error(`Unknown Agent task: ${input.detail.taskId}`)
+  if (task.taskRunId && task.taskRunId !== input.detail.id) {
+    throw new Error(`Agent task ${task.id} is already bound to another task run`)
+  }
+
+  task.taskRunId = input.detail.id
+  const { activePlan, waiting, ...incomingTaskRun } = input.detail
+  const mergedRun = mergeSemanticTaskRun(task.taskRun, incomingTaskRun)
+  task.taskRun = mergedRun.taskRun
+  task.activePlan = mergeActivePlan(task.activePlan, activePlan)
+  if (mergedRun.preferIncoming) {
+    task.status = semanticTaskStatus(mergedRun.taskRun.status)
+    task.pendingQuestion = waiting
+      ? {
+          id: waiting.questionId,
+          messageId: `task-run:${input.detail.id}:question:${waiting.questionId}`,
+          prompt: waiting.text,
+          askedAt: input.detail.updatedAt,
+        }
+      : undefined
+  }
+  task.usage = {
+    promptTokens: mergedRun.taskRun.accounting.promptTokens,
+    completionTokens: mergedRun.taskRun.accounting.completionTokens,
+    totalTokens: mergedRun.taskRun.accounting.promptTokens + mergedRun.taskRun.accounting.completionTokens,
+  }
+  task.updatedAt = mergedRun.taskRun.updatedAt
+  conversation.updatedAt =
+    Date.parse(conversation.updatedAt) > Date.parse(task.updatedAt) ? conversation.updatedAt : task.updatedAt
+
+  const activitiesBySequence = new Map((task.activities ?? []).map(event => [event.seq, structuredClone(event)]))
+  for (const event of input.events ?? []) {
+    if (event.taskRunId !== input.detail.id || event.seq < 1 || activitiesBySequence.has(event.seq)) continue
+    activitiesBySequence.set(event.seq, structuredClone(event))
+  }
+  task.activities = [...activitiesBySequence.values()].sort((first, second) => first.seq - second.seq).slice(-200)
+  task.latestEventSequence = Math.max(task.latestEventSequence ?? 0, ...task.activities.map(event => event.seq))
+
   replaceAgentWorkspace(workspace, storage)
   return structuredClone(task)
 }

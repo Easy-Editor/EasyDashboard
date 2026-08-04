@@ -13,6 +13,10 @@ describe('project Agent workspace source contract', () => {
     expect(source).toContain('<ProjectSchemaRenderer')
     expect(source).toContain('<ProjectContextSheet')
     expect(source).toContain('await startAgentRun({')
+    expect(source).toContain('const createdTaskRun = await createAgentTaskRun({')
+    expect(source).toContain('await syncAgentTaskWorkspaceBarrier({')
+    expect(source).toContain('await pollAgentTaskRun(projectId, createdTaskRun.id')
+    expect(source).toContain("reason.code !== 'AGENT_TASK_RUN_NOT_FOUND'")
     expect(source).toContain('await respondAgentTask({')
     expect(source).toContain('questionId: pendingQuestion.id, turnId: userTurn.id')
     expect(source).toContain('recordAgentRunPendingQuestion({')
@@ -21,10 +25,11 @@ describe('project Agent workspace source contract', () => {
     expect(source).toContain('await resumeAgentRun(activeConversation, task)')
     expect(source).toContain("['planning', 'running', 'prepared'].includes(task.run.status)")
     expect(source).toContain('不会重复启动')
-    expect(source).toContain('const retryConversation = appendAgentTurn({')
-    expect(source).toContain('const retryTask = retryConversation.tasks.at(-1)')
-    expect(source).toContain('message.attachments, retryTask.id)')
-    expect(source).not.toContain('message.attachments, task.id)\n  }, [activeConversation')
+    expect(source).toContain('await retrySemanticTaskInPlace(')
+    expect(source).toContain('await syncAgentWorkspaceProject({')
+    expect(source).toContain('taskId: task.id')
+    expect(source).not.toContain('const retryConversation = appendAgentTurn({')
+    expect(source).not.toContain('const retryTask = retryConversation.tasks.at(-1)')
     expect(source).toContain('connectAgentWorkspaceSync({')
     expect(source).toContain('await uploadAgentFiles(projectId, conversation.id, files)')
     expect(source).toContain('getProjectAttachmentManifest(user.id, projectId)')
@@ -59,10 +64,39 @@ describe('project Agent workspace source contract', () => {
     expect(source).toContain('refreshedOperationIdsRef.current.delete(operationId)')
   })
 
+  it('rechecks the persisted run when the browser reconnects or becomes visible', async () => {
+    const source = await readFile(path.join(currentDirectory, 'ProjectAgentPage.tsx'), 'utf8')
+
+    expect(source).toContain("window.addEventListener('online', requestRunRecovery)")
+    expect(source).toContain("document.addEventListener('visibilitychange', handleVisibilityChange)")
+    expect(source).toContain("document.visibilityState === 'visible'")
+    expect(source).toContain('runRecoveryRevision')
+    expect(source).toContain('refreshLegacyAgentRunProjection({')
+    expect(source).toContain('!task.taskRunId && task.run?.operationId')
+    expect(source).toContain('legacyRunReadMarkersRef.current')
+    expect(source).toContain('resumeAgentRun(activeConversation, projectedTask)')
+    expect(source).toContain('hydratePersistedAgentTaskRun({')
+    expect(source).toContain('recordAgentTaskRunDetail({')
+  })
+
+  it('continues a waiting semantic task run instead of creating a replacement run', async () => {
+    const source = await readFile(path.join(currentDirectory, 'ProjectAgentPage.tsx'), 'utf8')
+
+    expect(source).toContain('if (pendingQuestion && latestTask?.taskRunId')
+    expect(source).toContain('await continueSemanticTaskRunForConversation({')
+    expect(source).toContain('taskRunId: task.taskRunId')
+    expect(source).toContain('attachmentIds: attachments.flatMap')
+    expect(source).toContain('继续任务失败：')
+    expect(source).toContain('if (task.taskRunId)')
+    expect(source).toContain('await refreshSemanticTaskRun(activeConversation.id, task.taskRunId)')
+  })
+
   it('auto-starts a waiting task without depending on mutable progress copy', async () => {
     const source = await readFile(path.join(currentDirectory, 'ProjectAgentPage.tsx'), 'utf8')
 
-    expect(source).toContain("planStage?.status !== 'waiting'")
+    expect(source).toContain("planStage?.status === 'waiting'")
+    expect(source).toContain("latestTask.stages.length === 0 ? latestTask.status === 'waiting'")
+    expect(source).toContain('!latestTask.taskRunId')
     expect(source).not.toContain("planStage.detail !== '等待 Agent 执行服务'")
     expect(source).not.toContain("planStage.detail !== '等待 Agent 开始处理'")
   })
@@ -77,7 +111,7 @@ describe('project Agent workspace source contract', () => {
   it('shows Skill trace only when a run records used skills', async () => {
     const taskSource = await readFile(path.join(currentDirectory, 'TaskThread.tsx'), 'utf8')
 
-    expect(taskSource).toContain('task.run.trace?.skills.length')
+    expect(taskSource).toContain('task.run?.trace?.skills.length')
     expect(taskSource).toContain('使用技能')
     expect(taskSource).toContain('task.run.trace.skills.map')
   })

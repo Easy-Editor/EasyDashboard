@@ -5,7 +5,11 @@ import { createSupabaseAuthService } from './auth/supabase.js'
 import { createPgRepository } from './db/repository.js'
 import { parseEnv } from './env.js'
 import { ApiError } from './http.js'
-import { type DurableTurnRepository, createAgentRunRoutes } from './routes/agent-runs.js'
+import {
+  type DurableTurnRepository,
+  createAgentRunRoutes,
+  createAgentTaskPlanningProvider,
+} from './routes/agent-runs.js'
 import { restoreAgentSpikeOperationExecution } from './routes/agent-spike.js'
 import { createAgentExecutorRunner } from './services/agent-executor-runner.js'
 import {
@@ -13,9 +17,24 @@ import {
   type AgentRunDispatcher,
   createAgentRunDispatcher,
 } from './services/agent-run-dispatcher.js'
+import {
+  type AgentTaskOperationalEventStore,
+  createAgentTaskObservability,
+} from './services/agent-task-observability.js'
+import {
+  type AgentTaskOrchestrator,
+  type AgentTaskOrchestratorStore,
+  createAgentTaskOrchestrator,
+} from './services/agent-task-orchestrator.js'
+import { type AgentTaskReconciliationStore, createAgentTaskReconciler } from './services/agent-task-reconciler.js'
+import { createAgentTaskStepRuntime } from './services/agent-task-step-runtime.js'
 import type { AgentSpikeOperationBinding, Repository } from './types.js'
 
 type DispatchRepository = Repository & AgentRunDispatchStore
+type TaskLoopRepository = Repository &
+  AgentTaskOrchestratorStore &
+  AgentTaskReconciliationStore &
+  AgentTaskOperationalEventStore
 
 const dispatchMethods = [
   'enqueueAgentRunDispatch',
@@ -29,6 +48,21 @@ const dispatchMethods = [
 
 function supportsAgentRunDispatch(repository: Repository): repository is DispatchRepository {
   return dispatchMethods.every(method => typeof repository[method] === 'function')
+}
+
+const taskLoopMethods = [
+  'claimAgentTaskTransition',
+  'heartbeatAgentTaskTransition',
+  'completeAgentTaskTransition',
+  'pauseAgentTaskTransitionUnknownOutcome',
+  'releaseAgentTaskTransition',
+  'reconcileAgentTaskTransitions',
+  'appendAgentTaskOperationalEvent',
+] as const
+
+function supportsAgentTaskLoop(repository: Repository): repository is TaskLoopRepository {
+  const candidate = repository as Repository & Record<string, unknown>
+  return taskLoopMethods.every(method => typeof candidate[method] === 'function')
 }
 
 function operationBinding(operation: {
@@ -207,18 +241,48 @@ export function createRuntime() {
             : undefined,
         })
       : null
+  let taskOrchestrator: AgentTaskOrchestrator | null = null
+  if (env.AGENT_TASK_LOOP_V1) {
+    if (!supportsAgentTaskLoop(repository)) {
+      throw new Error('Agent task loop is enabled but repository transition support is unavailable')
+    }
+    if (!runner || !dispatcher || !env.AGENT_EXECUTOR_GRANT_SECRET || !env.AGENT_EXECUTOR_COMPATIBILITY_JSON) {
+      throw new Error('Agent task loop is enabled but document executor dependencies are unavailable')
+    }
+    const observability = createAgentTaskObservability({ store: repository })
+    const workerId = `agent-task-runtime-${process.pid}`
+    const reconciler = createAgentTaskReconciler({ store: repository, observability, workerId })
+    const stepRuntime = createAgentTaskStepRuntime({
+      repository,
+      dispatcher,
+      spike: agentSpike,
+      env,
+      workerId,
+    })
+    taskOrchestrator = createAgentTaskOrchestrator({
+      store: repository,
+      observability,
+      reconciler,
+      workerId,
+      plan: createAgentTaskPlanningProvider({ repository, env, workerId }),
+      act: stepRuntime.act,
+      observe: stepRuntime.observe,
+      verify: stepRuntime.verify,
+    })
+  }
   const app = createApp({
     env,
     auth: createSupabaseAuthService(env),
     repository,
     runner,
     dispatcher,
+    agentTaskWake: taskOrchestrator ? () => taskOrchestrator.wake() : undefined,
     provisionPersonalSpace: async user => {
       await repository.ensurePersonalSpace(user.id)
     },
   })
 
-  return { app, dispatcher }
+  return { app, dispatcher, taskOrchestrator }
 }
 
 export function createRuntimeApp() {

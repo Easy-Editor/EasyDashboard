@@ -72,6 +72,13 @@ export interface AgentChangeSetPlanningOptions {
   allowedOperationTypes?: readonly AgentPlannedOperationType[]
   document?: unknown
   requireRemove?: boolean
+  /** Server-owned identities for deterministic transition/attempt replay. */
+  identities?: {
+    sessionId: string
+    stepId: string
+    callId: string
+    opIds: readonly string[]
+  }
 }
 
 type PlannedOperation = z.infer<typeof opIdLessOperationSchema>
@@ -200,17 +207,33 @@ export function planStrictChangeSet(
   if (protectedRootMutation) {
     throw new Error(`Agent cannot ${protectedRootMutation.type} the immutable Root document node`)
   }
-  return {
-    sessionId: `session-${randomUUID()}`,
-    stepId: `step-${randomUUID()}`,
-    callId: `call-${randomUUID()}`,
+  const identities = options.identities
+    ? {
+        sessionId: options.identities.sessionId,
+        stepId: options.identities.stepId,
+        callId: options.identities.callId,
+        opIds: [...options.identities.opIds],
+      }
+    : {
+        sessionId: `session-${randomUUID()}`,
+        stepId: `step-${randomUUID()}`,
+        callId: `call-${randomUUID()}`,
+        opIds: operations.map(() => `op-${randomUUID()}`),
+      }
+  if (identities.opIds.length !== operations.length) {
+    throw new Error('Deterministic ChangeSet identity count must match planned operations')
+  }
+  return screenApplyChangeSetInvocationSchema.parse({
+    sessionId: identities.sessionId,
+    stepId: identities.stepId,
+    callId: identities.callId,
     capability: 'screen.applyChangeSet',
     arguments: {
       schemaVersion: 1,
       documentId,
-      operations: operations.map(operation => ({ ...operation, opId: `op-${randomUUID()}` })),
+      operations: operations.map((operation, index) => ({ ...operation, opId: identities.opIds[index]! })),
     },
-  }
+  })
 }
 
 export function parseStrictChangeSet(value: unknown): ScreenApplyChangeSetInvocation {

@@ -35,6 +35,70 @@ function publicationApiUrl(viewerUrl: string): string {
   return new URL(pathname, appOrigin).toString()
 }
 
+async function appendTextNode(
+  page: Page,
+  projectId: string,
+  node: { id: string; text: string; y: number },
+): Promise<number> {
+  return page.evaluate(
+    async ({ projectId: targetProjectId, node: targetNode }) => {
+      const detailResponse = await fetch(`/api/projects/${targetProjectId}`, { credentials: 'same-origin' })
+      const detail = (await detailResponse.json()) as {
+        project: { draftVersion: number; draftSchema: { componentsTree: Array<Record<string, unknown>> } }
+      }
+      const root = detail.project.draftSchema.componentsTree[0]
+      if (!root) return 422
+      const children = Array.isArray(root.children) ? root.children : []
+      const schema = {
+        ...detail.project.draftSchema,
+        componentsTree: [
+          {
+            ...root,
+            children: [
+              ...children,
+              {
+                id: targetNode.id,
+                componentName: 'Text',
+                npm: {
+                  package: '@easy-editor/materials-dashboard-text',
+                  version: '0.0.22',
+                  globalName: 'EasyEditorMaterialsText',
+                  componentName: 'Text',
+                },
+                props: { text: targetNode.text },
+                $dashboard: { rect: { x: 120, y: targetNode.y, width: 480, height: 90 } },
+              },
+            ],
+          },
+        ],
+      }
+      const response = await fetch(`/api/projects/${targetProjectId}/draft`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '1' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ expectedVersion: detail.project.draftVersion, schema }),
+      })
+      return response.status
+    },
+    { projectId, node },
+  )
+}
+
+async function reloadAndWaitForThumbnail(page: Page, projectId: string) {
+  const completedThumbnail = page.waitForResponse(
+    response =>
+      response.url().includes(`/api/projects/${projectId}/thumbnail/complete`) &&
+      response.request().method() === 'POST',
+    { timeout: 30_000 },
+  )
+  await page.reload()
+  await expect(page.getByRole('region', { name: '项目画布' })).toHaveAttribute('data-state', 'ready')
+  const thumbnailResponse = await completedThumbnail
+  expect(thumbnailResponse.status()).toBe(200)
+  const thumbnail = (await thumbnailResponse.json()) as { project: { thumbnailPath: string | null } }
+  expect(thumbnail.project.thumbnailPath).toMatch(/\.(?:webp|svg)$/)
+}
+
 test.afterEach(async ({ page }) => {
   if (!createdProjectId) return
   await permanentlyDeleteProject(page, createdProjectId)
@@ -42,6 +106,7 @@ test.afterEach(async ({ page }) => {
 })
 
 test('个人大屏从注册到发布、下线和永久删除形成完整闭环', async ({ context, page }) => {
+  page.setDefaultTimeout(15_000)
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const email = `e2e-${runId}@example.com`
   const password = `EasyDashboard-${runId}-Aa!`
@@ -50,7 +115,7 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
   await test.step('未登录访问项目时引导登录和注册', async () => {
     await page.goto('/projects')
     await expect(page).toHaveURL(/\/login$/)
-    await expect(page.getByRole('heading', { name: '登录工作台' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible()
 
     await page.getByRole('link', { name: '创建账户' }).click()
     await expect(page).toHaveURL(/\/signup$/)
@@ -58,28 +123,41 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
 
     await page.getByLabel('邮箱').fill(email)
     await page.getByLabel('密码').fill(password)
+    const signUpResponse = page.waitForResponse(
+      response => response.url().endsWith('/api/auth/sign-up') && response.request().method() === 'POST',
+    )
     await page.getByRole('button', { name: '创建账户' }).click()
+    expect((await signUpResponse).status()).toBe(201)
 
-    const projectsLink = page.getByRole('link', { name: '所有项目' })
-    await expect(projectsLink).toBeVisible()
-    await projectsLink.click()
+    await page.goto('/projects')
     await expect(page).toHaveURL(/\/projects$/)
   })
 
   await test.step('注册后的账户可以退出并重新登录', async () => {
-    await page.getByRole('button', { name: '退出登录' }).click()
+    const signOutStatus = await page.evaluate(async () => {
+      const response = await fetch('/api/auth/sign-out', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '1' },
+        credentials: 'same-origin',
+      })
+      return response.status
+    })
+    expect(signOutStatus).toBe(204)
+    await page.goto('/login')
     await expect(page).toHaveURL(/\/login$/)
 
     await page.getByLabel('邮箱').fill(email)
     await page.getByLabel('密码').fill(password)
+    const signInResponse = page.waitForResponse(
+      response => response.url().endsWith('/api/auth/sign-in') && response.request().method() === 'POST',
+    )
     await page.getByRole('button', { name: '登录' }).click()
-    const projectsLink = page.getByRole('link', { name: '所有项目' })
-    await expect(projectsLink).toBeVisible()
-    await projectsLink.click()
+    expect((await signInResponse).status()).toBe(200)
+    await page.goto('/projects')
     await expect(page).toHaveURL(/\/projects$/)
   })
 
-  await test.step('通过项目对话框创建大屏并进入编辑器', async () => {
+  await test.step('通过项目对话框创建大屏并进入 Agent，再打开编辑器', async () => {
     await page.getByRole('button', { name: '新建项目' }).click()
     const dialog = page.getByRole('dialog', { name: '新建项目' })
     await expect(dialog).toBeVisible()
@@ -89,11 +167,13 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
     await dialog.getByLabel('说明').fill('Playwright 产品闭环回归项目')
     await dialog.getByRole('button', { name: '创建并打开' }).click()
 
-    await expect(page).toHaveURL(/\/projects\/[^/]+\/editor(?:\?.*)?$/)
-    const match = new URL(page.url()).pathname.match(/^\/projects\/([^/]+)\/editor$/)
-    expect(match, '编辑器 URL 应包含新建项目 ID').not.toBeNull()
+    await expect(page).toHaveURL(/\/projects\/[^/]+\/agent(?:\/[^/]+)?$/)
+    const match = new URL(page.url()).pathname.match(/^\/projects\/([^/]+)\/agent(?:\/[^/]+)?$/)
+    expect(match, 'Agent URL 应包含新建项目 ID').not.toBeNull()
     createdProjectId = match?.[1] ?? null
     expect(createdProjectId).not.toBeNull()
+    await page.goto(`/projects/${createdProjectId}/editor`)
+    await expect(page).toHaveURL(/\/projects\/[^/]+\/editor(?:\?.*)?$/)
   })
 
   const canvas = page.getByRole('region', { name: '项目画布' })
@@ -126,9 +206,50 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
     expect(pageErrors, `工具切换产生浏览器异常：\n${pageErrors.join('\n\n')}`).toEqual([])
   })
 
+  await test.step('双击远程物料会写入草稿并生成当前版本的真实渲染产物', async () => {
+    if (!createdProjectId) throw new Error('项目 ID 尚未创建')
+    await page.getByRole('button', { name: '组件', exact: true }).click()
+    await page.getByPlaceholder('搜索物料...').fill('饼图')
+    await page.getByRole('button', { name: '图表组件', exact: true }).click()
+
+    const draftSave = page.waitForResponse(
+      response =>
+        response.url().endsWith(`/api/projects/${createdProjectId}/draft`) && response.request().method() === 'PUT',
+      { timeout: 30_000 },
+    )
+    const completedThumbnail = page.waitForResponse(
+      response =>
+        response.url().includes(`/api/projects/${createdProjectId}/thumbnail/complete`) &&
+        response.request().method() === 'POST',
+      { timeout: 30_000 },
+    )
+    await page.getByLabel('Drag 饼图 to canvas (Remote)', { exact: true }).first().dblclick()
+
+    const savedDraftResponse = await draftSave
+    expect(savedDraftResponse.status()).toBe(200)
+    const savedDraft = (await savedDraftResponse.json()) as {
+      project: { draftSchema: { componentsTree: Array<{ children?: Array<{ npm?: { package?: string } }> }> } }
+    }
+    expect(savedDraft.project.draftSchema.componentsTree[0]?.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          npm: expect.objectContaining({ package: '@easy-editor/materials-dashboard-pie-chart' }),
+        }),
+      ]),
+    )
+
+    const thumbnailResponse = await completedThumbnail
+    expect(thumbnailResponse.status()).toBe(200)
+    const thumbnail = (await thumbnailResponse.json()) as { project: { thumbnailPath: string | null } }
+    expect(thumbnail.project.thumbnailPath).toMatch(/\.(?:webp|svg)$/)
+
+    await page.reload()
+    await expect(canvas).toHaveAttribute('data-state', 'ready')
+  })
+
   await test.step('草稿预览在新标签页打开且不离开编辑器', async () => {
     const previewPromise = context.waitForEvent('page')
-    await page.getByRole('button', { name: '预览草稿' }).click()
+    await page.getByRole('button', { name: '预览', exact: true }).click()
     const previewPage = await previewPromise
 
     try {
@@ -159,7 +280,21 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
     expect(stableUrl).toMatch(/\/view\/[^/]+$/)
     expect(firstVersionUrl).toMatch(/\/view\/[^/]+\/versions\/\d+$/)
 
-    await publishDialog.getByRole('button', { name: '发布新版本' }).click()
+    await page.keyboard.press('Escape')
+    await expect(publishDialog).not.toBeVisible()
+    if (!createdProjectId) throw new Error('项目 ID 尚未创建')
+    expect(
+      await appendTextNode(page, createdProjectId, {
+        id: 'e2e-subtitle',
+        text: 'E2E Dashboard Version 2',
+        y: 200,
+      }),
+    ).toBe(200)
+    await reloadAndWaitForThumbnail(page, createdProjectId)
+
+    await page.getByRole('button', { name: '发布与分享' }).click()
+    await expect(publishDialog).toBeVisible()
+    await publishDialog.getByRole('button', { name: '发布当前草稿' }).click()
     await expect(urlRows.nth(1)).not.toHaveAttribute('title', firstVersionUrl)
     expect(await urlRows.nth(0).getAttribute('title')).toBe(stableUrl)
     latestVersionUrl = (await urlRows.nth(1).getAttribute('title')) ?? ''
@@ -228,12 +363,13 @@ test('个人大屏从注册到发布、下线和永久删除形成完整闭环',
 
   await test.step('项目可移入回收站并通过名称确认永久删除', async () => {
     await page.goto('/projects')
-    await expect(page.getByRole('heading', { name: '所有项目' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '项目', exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: `${projectName}更多操作` }).click()
     await page.getByRole('menuitem', { name: '移入回收站' }).click()
     await expect(page.getByRole('heading', { name: projectName })).toBeHidden()
 
+    await page.getByRole('button', { name: '展开工作区导航' }).click()
     await page.getByRole('link', { name: '回收站' }).click()
     await expect(page).toHaveURL(/\/trash$/)
     await expect(page.getByRole('heading', { name: '回收站' })).toBeVisible()

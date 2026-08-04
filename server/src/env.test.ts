@@ -26,6 +26,13 @@ const compatibility = {
 }
 
 describe('Agent executor environment', () => {
+  it('keeps the durable Agent task loop off unless explicitly enabled', () => {
+    expect(parseEnv(baseEnv).AGENT_TASK_LOOP_V1 ?? false).toBe(false)
+    expect(parseEnv({ ...baseEnv, AGENT_TASK_LOOP_V1: 'true' })).toMatchObject({ AGENT_TASK_LOOP_V1: true })
+    expect(parseEnv({ ...baseEnv, AGENT_TASK_LOOP_V1: 'false' })).toMatchObject({ AGENT_TASK_LOOP_V1: false })
+    expect(() => parseEnv({ ...baseEnv, AGENT_TASK_LOOP_V1: '1' })).toThrow('AGENT_TASK_LOOP_V1')
+  })
+
   it('keeps the Agent planning model optional while validating a configured gateway', () => {
     expect(parseEnv(baseEnv)).not.toHaveProperty('EASY_EDITOR_AGENT_BASE_URL')
     expect(

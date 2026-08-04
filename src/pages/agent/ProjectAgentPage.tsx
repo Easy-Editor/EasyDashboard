@@ -13,6 +13,7 @@ import {
   buildProjectMemoryProposal,
   connectAgentWorkspaceSync,
   createAgentConversation,
+  createAgentTaskRun,
   deleteProjectContext,
   deleteSharedProjectContext,
   getAgentRun,
@@ -20,20 +21,25 @@ import {
   getProjectConversations,
   getTaskUserMessage,
   hasAgentWorkspaceRecovery,
+  hydratePersistedAgentTaskRun,
   isSharedProjectContextConflict,
   listSharedProjectContexts,
   pollAgentRun,
+  pollAgentTaskRun,
   readAgentPreferences,
   readAgentWorkspace,
   recordAgentRun,
   recordAgentRunPendingQuestion,
   recordAgentRunRollback,
   recordAgentTaskQuestion,
+  recordAgentTaskRunDetail,
+  refreshLegacyAgentRunProjection,
   respondAgentTask,
   rollbackProjectContext,
   rollbackSharedProjectContext,
   saveSharedProjectContext,
   startAgentRun,
+  syncAgentWorkspaceProject,
   undoAgentRun,
   updateAgentPreferences,
   updateTaskProgress,
@@ -61,6 +67,12 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { type PreviewDataSourceEngine, ProjectSchemaRenderer } from '../preview/ProjectSchemaRenderer'
 import { ConversationThread } from './ConversationThread'
 import { ProjectContextSheet } from './ProjectContextSheet'
+import {
+  continueSemanticTaskRunForConversation,
+  retrySemanticTaskInPlace,
+  semanticTaskStartIdempotencyKey,
+  syncAgentTaskWorkspaceBarrier,
+} from './project-agent-continuation'
 import { resolveActiveConversation } from './project-agent-model'
 import { refreshProjectDraftAfterMutation } from './project-draft-refresh'
 
@@ -112,9 +124,11 @@ export function ProjectAgentPage() {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [rollbackPendingOperationId, setRollbackPendingOperationId] = useState<string | null>(null)
   const [rolledBackOperationIds, setRolledBackOperationIds] = useState<Set<string>>(() => new Set())
+  const [runRecoveryRevision, setRunRecoveryRevision] = useState(0)
   const planningRef = useRef(false)
   const activeOperationIdsRef = useRef(new Set<string>())
   const refreshedOperationIdsRef = useRef(new Set<string>())
+  const legacyRunReadMarkersRef = useRef(new Map<string, string>())
   const autoPlanKeyRef = useRef<string | null>(null)
   const routeConversationIdRef = useRef<string | null>(conversationId ?? null)
   routeConversationIdRef.current = conversationId ?? null
@@ -315,29 +329,21 @@ export function ProjectAgentPage() {
       setContextRetryMode(null)
 
       try {
-        try {
-          updateTaskProgress({
-            ownerUserId: user.id,
-            conversationId: conversation.id,
-            taskId,
-            taskStatus: 'running',
-            stageId: 'plan-layout',
-            stageStatus: 'running',
-          })
-          refreshLocalState(conversation.id)
-        } catch {
-          setPlanError('无法更新本地任务状态，规划请求尚未发出。请重试当前阶段。')
-          return
-        }
-
         let run: Awaited<ReturnType<typeof startAgentRun>>
         let startedOperationId: string | null = null
+        let startedTaskRunId: string | null = null
         try {
           const confirmedContexts = await refreshSharedContexts()
           const requestAttachments = [
             ...getProjectAttachmentManifest(user.id, projectId),
             ...attachments.filter(attachment => attachment.scope === 'conversation'),
           ]
+          await syncAgentTaskWorkspaceBarrier({
+            ownerUserId: user.id,
+            projectId,
+            conversationId: conversation.id,
+            taskId,
+          })
           if (clarification) {
             const response = await respondAgentTask({
               projectId,
@@ -363,6 +369,62 @@ export function ProjectAgentPage() {
             }
             run = response.run
           } else {
+            try {
+              const createdTaskRun = await createAgentTaskRun({
+                projectId,
+                conversationId: conversation.id,
+                taskId,
+                idempotencyKey: semanticTaskStartIdempotencyKey(taskId),
+                prompt,
+                attachments: requestAttachments,
+                projectContext: confirmedContexts.map(context => ({
+                  title: context.title,
+                  content: context.content,
+                  status: context.status,
+                })),
+              })
+              startedTaskRunId = createdTaskRun.id
+              recordAgentTaskRunDetail({
+                ownerUserId: user.id,
+                conversationId: conversation.id,
+                detail: createdTaskRun,
+                events: [],
+              })
+              await pollAgentTaskRun(projectId, createdTaskRun.id, {
+                afterSeq: createdTaskRun.latestEventSequence,
+                maxAttempts: 1,
+                onSnapshot: snapshot => {
+                  recordAgentTaskRunDetail({
+                    ownerUserId: user.id,
+                    conversationId: conversation.id,
+                    detail: snapshot.detail,
+                    events: snapshot.events,
+                  })
+                  refreshLocalState(conversation.id)
+                },
+              })
+              return
+            } catch (reason) {
+              if (!(reason instanceof ApiError) || reason.code !== 'AGENT_TASK_RUN_NOT_FOUND') throw reason
+            }
+
+            try {
+              const hasLegacyPlanStage =
+                conversation.tasks
+                  .find(candidate => candidate.id === taskId)
+                  ?.stages.some(stage => stage.id === 'plan-layout') ?? false
+              updateTaskProgress({
+                ownerUserId: user.id,
+                conversationId: conversation.id,
+                taskId,
+                taskStatus: 'running',
+                ...(hasLegacyPlanStage ? { stageId: 'plan-layout', stageStatus: 'running' } : {}),
+              })
+              refreshLocalState(conversation.id)
+            } catch {
+              setPlanError('无法更新本地任务状态，规划请求尚未发出。请重试当前阶段。')
+              return
+            }
             run = await startAgentRun({
               projectId,
               conversationId: conversation.id,
@@ -425,20 +487,29 @@ export function ProjectAgentPage() {
           })
         } catch (reason) {
           const detail = planningErrorMessage(reason)
+          if (startedTaskRunId) {
+            setPlanError(`任务状态查询失败：${detail}；已保留任务 ${startedTaskRunId}，不会重复启动。`)
+            return
+          }
           if (startedOperationId) {
             setPlanError(`任务状态查询失败：${detail}；已保留执行 ${startedOperationId}，不会重复启动。`)
             return
           }
           setPlanError(detail)
           try {
+            const hasLegacyPlanStage =
+              readAgentWorkspace(user.id)
+                .conversations.find(candidate => candidate.id === conversation.id)
+                ?.tasks.find(candidate => candidate.id === taskId)
+                ?.stages.some(stage => stage.id === 'plan-layout') ?? false
             updateTaskProgress({
               ownerUserId: user.id,
               conversationId: conversation.id,
               taskId,
               taskStatus: 'waiting',
-              stageId: 'plan-layout',
-              stageStatus: 'waiting',
-              detail: `规划请求失败：${detail}`,
+              ...(hasLegacyPlanStage
+                ? { stageId: 'plan-layout', stageStatus: 'waiting', detail: `规划请求失败：${detail}` }
+                : {}),
             })
           } catch {
             setPlanError(`${detail} 本地任务状态也未能保存。`)
@@ -532,14 +603,137 @@ export function ProjectAgentPage() {
     [createContextProposal, projectId, refreshLocalState, refreshProjectDraft, user],
   )
 
+  const refreshSemanticTaskRun = useCallback(
+    async (conversationId: string, taskRunId: string) => {
+      if (!user || !projectId) return null
+      const snapshot = await hydratePersistedAgentTaskRun({
+        ownerUserId: user.id,
+        projectId,
+        conversationId,
+        taskRunId,
+      })
+      refreshLocalState(conversationId)
+      return snapshot.detail
+    },
+    [projectId, refreshLocalState, user],
+  )
+
   useEffect(() => {
-    if (!activeConversation || !workspaceReady || planPending) return
-    const resumableTask = [...activeConversation.tasks]
-      .reverse()
-      .find(task => task.run && ['planning', 'running', 'prepared'].includes(task.run.status))
-    if (!resumableTask) return
-    void resumeAgentRun(activeConversation, resumableTask)
-  }, [activeConversation, planPending, resumeAgentRun, workspaceReady])
+    const requestRunRecovery = () => {
+      legacyRunReadMarkersRef.current.clear()
+      setRunRecoveryRevision(current => current + 1)
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') requestRunRecovery()
+    }
+    window.addEventListener('online', requestRunRecovery)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('online', requestRunRecovery)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
+  const semanticRecoveryTask = activeConversation
+    ? [...activeConversation.tasks].reverse().find(task => task.taskRunId)
+    : undefined
+  const semanticRecoveryConversationId = activeConversation?.id
+  const semanticRecoveryTaskRunId = semanticRecoveryTask?.taskRunId
+  const semanticRecoveryAfterSeq = semanticRecoveryTask?.latestEventSequence ?? 0
+
+  useEffect(() => {
+    void runRecoveryRevision
+    void semanticRecoveryAfterSeq
+    if (!semanticRecoveryConversationId || !semanticRecoveryTaskRunId || !workspaceReady || planPending) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refresh = async () => {
+      try {
+        const detail = await refreshSemanticTaskRun(semanticRecoveryConversationId, semanticRecoveryTaskRunId)
+        const needsAnotherRefresh =
+          detail &&
+          (['planning', 'verifying', 'rolling_back'].includes(detail.status) ||
+            (detail.status === 'running' && detail.activePlan === null))
+        if (!cancelled && needsAnotherRefresh) {
+          timer = setTimeout(() => void refresh(), 1_000)
+        }
+      } catch (reason) {
+        if (!cancelled) {
+          setPlanError(`恢复任务状态失败：${planningErrorMessage(reason)}；任务已保留，不会重复启动。`)
+        }
+      }
+    }
+    void refresh()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [
+    planPending,
+    refreshSemanticTaskRun,
+    runRecoveryRevision,
+    semanticRecoveryAfterSeq,
+    semanticRecoveryConversationId,
+    semanticRecoveryTaskRunId,
+    workspaceReady,
+  ])
+
+  useEffect(() => {
+    void runRecoveryRevision
+    if (!activeConversation || !projectId || !user || !workspaceReady || planPending) return
+    const legacyTasks = activeConversation.tasks.filter(task => !task.taskRunId && task.run?.operationId)
+    if (!legacyTasks.length) return
+    let cancelled = false
+    void (async () => {
+      for (const task of legacyTasks) {
+        const operationId = task.run?.operationId
+        if (!operationId || cancelled) continue
+        const marker = `${task.run?.status ?? 'unknown'}:${task.updatedAt}`
+        if (legacyRunReadMarkersRef.current.get(operationId) === marker) continue
+        legacyRunReadMarkersRef.current.set(operationId, marker)
+        try {
+          const run = await refreshLegacyAgentRunProjection({
+            ownerUserId: user.id,
+            projectId,
+            conversationId: activeConversation.id,
+            taskId: task.id,
+            operationId,
+          })
+          if (cancelled) continue
+          const projectedTask = readAgentWorkspace(user.id)
+            .conversations.find(candidate => candidate.id === activeConversation.id)
+            ?.tasks.find(candidate => candidate.id === task.id)
+          if (projectedTask?.run) {
+            legacyRunReadMarkersRef.current.set(operationId, `${projectedTask.run.status}:${projectedTask.updatedAt}`)
+          }
+          if (['committed', 'stale', 'failed', 'canceled', 'indeterminate'].includes(run.status)) {
+            refreshedOperationIdsRef.current.add(operationId)
+          }
+          refreshLocalState(activeConversation.id)
+          if (projectedTask && ['planning', 'running', 'prepared'].includes(run.status)) {
+            await resumeAgentRun(activeConversation, projectedTask)
+          }
+        } catch (reason) {
+          legacyRunReadMarkersRef.current.delete(operationId)
+          if (!cancelled) {
+            setPlanError(`恢复历史任务状态失败：${planningErrorMessage(reason)}；不会重复启动任务。`)
+          }
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeConversation,
+    planPending,
+    projectId,
+    refreshLocalState,
+    resumeAgentRun,
+    runRecoveryRevision,
+    user,
+    workspaceReady,
+  ])
 
   useEffect(() => {
     if (!activeConversation || !projectId || !user || !workspaceReady) return
@@ -608,7 +802,11 @@ export function ProjectAgentPage() {
     const latestMessage = activeConversation.messages.at(-1)
     const latestTask = activeConversation.tasks.at(-1)
     const planStage = latestTask?.stages.find(stage => stage.id === 'plan-layout')
-    if (!latestMessage || latestMessage.role !== 'user' || !latestTask || planStage?.status !== 'waiting') {
+    const readyForPlanning =
+      latestTask &&
+      !latestTask.taskRunId &&
+      (latestTask.stages.length === 0 ? latestTask.status === 'waiting' : planStage?.status === 'waiting')
+    if (!latestMessage || latestMessage.role !== 'user' || !latestTask || !readyForPlanning) {
       return
     }
     const key = `${activeConversation.id}:${latestTask.id}`
@@ -621,6 +819,41 @@ export function ProjectAgentPage() {
       latestTask.id,
     ).catch(() => undefined)
   }, [activeConversation, planPending, runPlan])
+
+  const continueSemanticRun = useCallback(
+    async (
+      conversation: AgentConversation,
+      task: AgentConversation['tasks'][number],
+      questionId: string,
+      response: string,
+      turnId: string,
+      attachments: AgentAttachmentInput[],
+    ) => {
+      if (!user || !projectId || !task.taskRunId || planningRef.current) return
+      planningRef.current = true
+      setPlanPending(true)
+      setPlanError(null)
+      try {
+        await continueSemanticTaskRunForConversation({
+          ownerUserId: user.id,
+          projectId,
+          conversationId: conversation.id,
+          taskRunId: task.taskRunId,
+          questionId,
+          response,
+          turnId,
+          attachmentIds: attachments.flatMap(attachment => (attachment.id ? [attachment.id] : [])),
+        })
+        refreshLocalState(conversation.id)
+      } catch (reason) {
+        setPlanError(`继续任务失败：${planningErrorMessage(reason)}；回复与任务进度均已保留。`)
+      } finally {
+        planningRef.current = false
+        setPlanPending(false)
+      }
+    },
+    [projectId, refreshLocalState, user],
+  )
 
   const sendMessage = useCallback(
     async (content: string, attachments: AgentAttachmentInput[], files: AgentFileSelection[]) => {
@@ -649,6 +882,17 @@ export function ProjectAgentPage() {
         navigate(`/projects/${projectId}/agent/${updated.id}`, { replace: true })
       }
       if (task) {
+        if (pendingQuestion && latestTask?.taskRunId && userTurn?.role === 'user') {
+          await continueSemanticRun(
+            updated,
+            latestTask,
+            pendingQuestion.id,
+            content || '请继续当前任务',
+            userTurn.id,
+            uploadedAttachments,
+          )
+          return
+        }
         await runPlan(
           updated,
           content || '请结合附件规划当前项目',
@@ -660,12 +904,31 @@ export function ProjectAgentPage() {
         )
       }
     },
-    [activeConversation, conversationId, navigate, project, projectId, refreshLocalState, runPlan, user],
+    [
+      activeConversation,
+      continueSemanticRun,
+      conversationId,
+      navigate,
+      project,
+      projectId,
+      refreshLocalState,
+      runPlan,
+      user,
+    ],
   )
 
   const retryCurrentPlan = useCallback(async () => {
     const task = activeConversation?.tasks.at(-1)
     if (!user || !activeConversation || !task) return
+    if (task.taskRunId) {
+      try {
+        await refreshSemanticTaskRun(activeConversation.id, task.taskRunId)
+        setPlanError(null)
+      } catch (reason) {
+        setPlanError(`恢复任务状态失败：${planningErrorMessage(reason)}；任务已保留，不会重复启动。`)
+      }
+      return
+    }
     if (task.run && ['planning', 'running', 'prepared'].includes(task.run.status)) {
       await resumeAgentRun(activeConversation, task)
       return
@@ -675,20 +938,34 @@ export function ProjectAgentPage() {
       setPlanError('找不到当前任务的原始输入，请发送一条新消息。')
       return
     }
-    const retryConversation = appendAgentTurn({
-      ownerUserId: user.id,
-      conversationId: activeConversation.id,
-      content: message.content,
-      attachments: message.attachments,
-    })
-    const retryTask = retryConversation.tasks.at(-1)
-    if (!retryTask) {
-      setPlanError('无法创建新的重试任务，请重新发送一条消息。')
-      return
+    try {
+      await retrySemanticTaskInPlace(
+        {
+          conversation: activeConversation,
+          taskId: task.id,
+          prompt: message.content || '请结合附件规划当前项目',
+          attachments: message.attachments,
+        },
+        {
+          reloadWorkspace: async () => {
+            const result = await syncAgentWorkspaceProject({
+              ownerUserId: user.id,
+              projectId: activeConversation.projectId,
+            })
+            return result.status !== 'local-offline'
+          },
+          readConversation: () =>
+            readAgentWorkspace(user.id).conversations.find(candidate => candidate.id === activeConversation.id),
+          refreshRun: refreshSemanticTaskRun,
+          replayTask: runPlan,
+        },
+      )
+      refreshLocalState(activeConversation.id)
+      setPlanError(null)
+    } catch (reason) {
+      setPlanError(`恢复任务状态失败：${planningErrorMessage(reason)}；任务已保留，不会重复启动。`)
     }
-    refreshLocalState(retryConversation.id)
-    await runPlan(retryConversation, message.content || '请结合附件规划当前项目', message.attachments, retryTask.id)
-  }, [activeConversation, refreshLocalState, resumeAgentRun, runPlan, user])
+  }, [activeConversation, refreshLocalState, refreshSemanticTaskRun, resumeAgentRun, runPlan, user])
 
   const retryContextProposal = useCallback(async () => {
     const task = activeConversation?.tasks.at(-1)

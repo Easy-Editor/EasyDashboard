@@ -78,6 +78,64 @@ describe('Agent ChangeSet decision contract', () => {
     })
   })
 
+  it('replays identical server-owned identities byte-for-byte', () => {
+    const decision = {
+      action: 'execute' as const,
+      summary: '更新主标题',
+      plan: ['更新主标题'],
+      operations: [{ type: 'set' as const, nodeId: 'title', fieldId: 'props.text', value: '城市态势' }],
+    }
+    const options = {
+      identities: {
+        sessionId: 'session-replay-1',
+        stepId: 'step-replay-1',
+        callId: 'call-replay-1',
+        opIds: ['op-replay-1'],
+      },
+    }
+    const first = planStrictChangeSet(decision, 'page-root', options)
+    const replay = planStrictChangeSet(decision, 'page-root', options)
+
+    expect(replay).toEqual(first)
+    expect(JSON.stringify(replay)).toBe(JSON.stringify(first))
+  })
+
+  it('allows a revised attempt to provide a distinct identity set', () => {
+    const decision = {
+      action: 'execute' as const,
+      summary: '更新主标题',
+      plan: ['更新主标题'],
+      operations: [{ type: 'set' as const, nodeId: 'title', fieldId: 'props.text', value: '城市态势' }],
+    }
+    const first = planStrictChangeSet(decision, 'page-root', {
+      identities: { sessionId: 'session-1', stepId: 'step-1', callId: 'call-1', opIds: ['op-1'] },
+    })
+    const revised = planStrictChangeSet(decision, 'page-root', {
+      identities: { sessionId: 'session-2', stepId: 'step-2', callId: 'call-2', opIds: ['op-2'] },
+    })
+
+    expect(revised).not.toEqual(first)
+  })
+
+  it('validates supplied identities and operation-id cardinality', () => {
+    const decision = {
+      action: 'execute' as const,
+      summary: '更新主标题',
+      plan: ['更新主标题'],
+      operations: [{ type: 'set' as const, nodeId: 'title', fieldId: 'props.text', value: '城市态势' }],
+    }
+    expect(() =>
+      planStrictChangeSet(decision, 'page-root', {
+        identities: { sessionId: '', stepId: 'step-1', callId: 'call-1', opIds: ['op-1'] },
+      }),
+    ).toThrow()
+    expect(() =>
+      planStrictChangeSet(decision, 'page-root', {
+        identities: { sessionId: 'session-1', stepId: 'step-1', callId: 'call-1', opIds: [] },
+      }),
+    ).toThrow('identity count')
+  })
+
   it.each([
     { type: 'remove', nodeId: 'page-home-root' },
     { type: 'move', nodeId: 'page-home-root', parentId: 'layout' },

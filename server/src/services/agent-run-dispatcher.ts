@@ -10,6 +10,22 @@ import {
 
 export type AgentRunDispatchControl = 'pause' | 'resume' | 'cancel'
 export type AgentRunDispatchTerminalState = 'succeeded' | 'failed' | 'canceled' | 'indeterminate'
+export type AgentRunRecoveryClass =
+  | 'committed'
+  | 'retry_same'
+  | 'recover_operation'
+  | 'revise_step'
+  | 'replan_remaining'
+  | 'terminal'
+
+export interface AgentRunOutcomeReport {
+  recoveryClass: AgentRunRecoveryClass
+  operationId: string
+  durableStatus: AgentSpikeOperationRecord['status']
+  committedDraftVersion?: number
+  hasCommitReceipt: boolean
+  errorCode: string | null
+}
 
 export interface AgentRunDispatchStore {
   enqueueAgentRunDispatch(
@@ -74,6 +90,7 @@ export interface AgentRunDispatcherOptions {
     operation: AgentSpikeOperationRecord,
     outcome: Record<string, unknown>,
   ): Promise<AgentSpikeOperationRecord | 'integrity_conflict' | 'invalid_state' | null>
+  reportOutcome?(outcome: AgentRunOutcomeReport): Promise<void> | void
   workerId?: string
   leaseMs?: number
   heartbeatMs?: number
@@ -146,6 +163,40 @@ function safeExecutionError(error: unknown): { code: string; message: string } {
   return { code: 'executor_failed', message: `Agent executor failed (${name})` }
 }
 
+function hasDurableCommitReceipt(operation: AgentSpikeOperationRecord): boolean {
+  return (
+    operation.status === 'committed' &&
+    operation.candidateSchema !== null &&
+    operation.candidateDigest !== null &&
+    operation.hostReceipt !== null &&
+    operation.committedDraftVersion !== null &&
+    operation.completedAt !== null
+  )
+}
+
+function isProvenTransientExecutorFailure(error: unknown): boolean {
+  return (
+    error instanceof AgentExecutorRunnerError &&
+    (error.code === 'EXECUTOR_TIMEOUT' || error.code === 'EXECUTOR_PROCESS_FAILED')
+  )
+}
+
+function isRevisionEligibleFailure(error: unknown): boolean {
+  return (
+    (error instanceof ApiError && error.status === 422) ||
+    (error instanceof AgentExecutorRunnerError && error.code === 'EXECUTOR_INVALID_WORKFLOW_RESULT')
+  )
+}
+
+function failedOperationRecoveryClass(
+  operation: AgentSpikeOperationRecord,
+  error?: unknown,
+): Extract<AgentRunRecoveryClass, 'revise_step' | 'terminal'> {
+  if (error && isRevisionEligibleFailure(error)) return 'revise_step'
+  const reason = typeof operation.outcome?.reason === 'string' ? operation.outcome.reason : null
+  return reason === 'EXECUTOR_INVALID_WORKFLOW_RESULT' || reason === 'VALIDATION_FAILED' ? 'revise_step' : 'terminal'
+}
+
 export function createAgentRunDispatcher(options: AgentRunDispatcherOptions): AgentRunDispatcher {
   const workerId = options.workerId ?? `agent-worker-${randomUUID()}`
   const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS
@@ -167,31 +218,82 @@ export function createAgentRunDispatcher(options: AgentRunDispatcherOptions): Ag
     error: { code: string; message: string } | null = null,
   ) => options.store.finishAgentRunDispatch(job.actorId, job.id, workerId, job.generation, state, error, now())
 
-  const reconcileOperation = async (
-    job: AgentRunDispatchRecord,
-    fallback: AgentRunDispatchTerminalState,
-    error: { code: string; message: string } | null,
+  const reportOutcome = async (
+    operation: AgentSpikeOperationRecord,
+    recoveryClass: AgentRunRecoveryClass,
+    errorCode: string | null,
   ): Promise<void> => {
-    const operation = await options.readOperation(job.actorId, job.operationId)
-    const durableState = operationTerminalState(operation)
-    if (durableState) {
-      await finish(job, durableState, durableState === 'succeeded' ? null : error)
-      return
+    if (!options.reportOutcome) return
+    await options.reportOutcome({
+      recoveryClass,
+      operationId: operation.operationId,
+      durableStatus: operation.status,
+      ...(operation.committedDraftVersion === null ? {} : { committedDraftVersion: operation.committedDraftVersion }),
+      hasCommitReceipt: hasDurableCommitReceipt(operation),
+      errorCode,
+    })
+  }
+
+  const finishFromDurableTerminal = async (
+    job: AgentRunDispatchRecord,
+    operation: AgentSpikeOperationRecord,
+    error?: unknown,
+  ): Promise<boolean> => {
+    if (operation.status === 'committed') {
+      await finish(job, 'succeeded')
+      await reportOutcome(operation, 'committed', null)
+      return true
     }
-    await finish(job, fallback, error)
+    if (operation.status === 'indeterminate') {
+      const unknownOutcome = {
+        code: 'unknown_commit_outcome',
+        message: 'Durable operation commit outcome is unknown',
+      }
+      await finish(job, 'indeterminate', unknownOutcome)
+      await reportOutcome(operation, 'terminal', unknownOutcome.code)
+      return true
+    }
+    if (operation.status === 'rejected_stale') {
+      const stale = {
+        code: 'replan_remaining',
+        message: 'Project document changed before the operation could commit',
+      }
+      await finish(job, 'failed', stale)
+      await reportOutcome(operation, 'replan_remaining', stale.code)
+      return true
+    }
+    if (operation.status === 'failed_not_applied') {
+      const safeError = error ? safeExecutionError(error) : null
+      const recoveryClass = failedOperationRecoveryClass(operation, error)
+      await finish(
+        job,
+        'failed',
+        safeError ?? {
+          code: recoveryClass,
+          message:
+            recoveryClass === 'revise_step'
+              ? 'Executor rejected the proposed document change'
+              : 'Executor did not apply the document change',
+        },
+      )
+      await reportOutcome(operation, recoveryClass, safeError?.code ?? recoveryClass)
+      return true
+    }
+    return false
   }
 
   const persistOperationFailure = async (
     job: AgentRunDispatchRecord,
     operation: AgentSpikeOperationRecord,
     outcome: Record<string, unknown>,
-  ): Promise<void> => {
+  ): Promise<AgentSpikeOperationRecord> => {
     if (!options.failOperation) throw new Error('Agent operation failure persistence is unavailable')
     const failed = await options.failOperation(job.actorId, operation, outcome)
     if (!failed || failed === 'integrity_conflict' || failed === 'invalid_state') {
       throw new Error('Agent operation failure could not be persisted')
     }
     if (!operationTerminalState(failed)) throw new Error('Agent operation remained nonterminal after failure')
+    return failed
   }
 
   const execute = async (job: AgentRunDispatchRecord): Promise<void> => {
@@ -264,21 +366,33 @@ export function createAgentRunDispatcher(options: AgentRunDispatcherOptions): Ag
         operation = await options.readOperation(job.actorId, job.operationId)
         if (!operation) throw new Error('Agent run planning did not issue an operation')
       }
+      if (await finishFromDurableTerminal(job, operation)) return
       const restored = await options.restoreExecution(job.actorId, job.operationId, {
         dispatchId: job.id,
         workerId,
         leaseGeneration: job.generation,
       })
-      const alreadyTerminal = operationTerminalState(restored.operation)
-      if (alreadyTerminal) {
-        await finish(job, alreadyTerminal)
+      if (await finishFromDurableTerminal(job, restored.operation)) return
+      await options.runner.run({ ...restored.input, signal: execution.controller.signal })
+      const durable = await options.readOperation(job.actorId, job.operationId)
+      if (!durable) {
+        await finish(job, 'indeterminate', {
+          code: 'unknown_commit_outcome',
+          message: 'Executor returned without a durable operation outcome',
+        })
+        await reportOutcome(restored.operation, 'terminal', 'unknown_commit_outcome')
         return
       }
-      await options.runner.run({ ...restored.input, signal: execution.controller.signal })
-      await reconcileOperation(job, 'indeterminate', {
-        code: 'executor_outcome_missing',
-        message: '执行器已返回，但持久化结果仍待确认',
+      if (await finishFromDurableTerminal(job, durable)) return
+      if (durable.status === 'prepared') {
+        await reportOutcome(durable, 'recover_operation', null)
+        return
+      }
+      await finish(job, 'indeterminate', {
+        code: 'unknown_commit_outcome',
+        message: 'Executor returned without a durable commit outcome',
       })
+      await reportOutcome(durable, 'terminal', 'unknown_commit_outcome')
     } catch (error) {
       const durable = await options.readOperation(job.actorId, job.operationId)
       if (!durable) {
@@ -295,25 +409,48 @@ export function createAgentRunDispatcher(options: AgentRunDispatcherOptions): Ag
         await finish(job, 'failed', { code: 'planning_failed', message: safeError.message })
         return
       }
-      const terminal = operationTerminalState(durable)
-      if (terminal) {
-        await finish(job, terminal, terminal === 'succeeded' ? null : safeExecutionError(error))
-        return
-      }
+      if (await finishFromDurableTerminal(job, durable, error)) return
       if (execution.stopReason === 'lease_lost' || execution.stopReason === 'shutdown') return
       if (execution.stopReason === 'pause') {
         await finish(job, 'paused')
         return
       }
       if (execution.stopReason === 'cancel') {
-        if (durable) await persistOperationFailure(job, durable, { reason: 'user_canceled' })
+        const failed = await persistOperationFailure(job, durable, { reason: 'user_canceled' })
+        if (failed.status !== 'failed_not_applied' && (await finishFromDurableTerminal(job, failed, error))) return
         await finish(job, 'canceled')
+        await reportOutcome(failed, 'terminal', 'executor_canceled')
         return
       }
 
       const safeError = safeExecutionError(error)
-      if (durable) await persistOperationFailure(job, durable, { reason: safeError.code })
-      await reconcileOperation(job, 'failed', safeError)
+      if (durable.status === 'prepared') {
+        await reportOutcome(durable, 'recover_operation', safeError.code)
+        return
+      }
+      if (isProvenTransientExecutorFailure(error) && job.attemptCount < 2) {
+        await reportOutcome(durable, 'retry_same', safeError.code)
+        return
+      }
+      if (isProvenTransientExecutorFailure(error)) {
+        const failed = await persistOperationFailure(job, durable, {
+          reason: 'executor_retry_exhausted',
+          executorErrorCode: safeError.code,
+        })
+        if (failed.status !== 'failed_not_applied' && (await finishFromDurableTerminal(job, failed, error))) return
+        const exhausted = {
+          code: 'executor_retry_exhausted',
+          message: 'Document executor retry limit was exhausted',
+        }
+        await finish(job, 'failed', exhausted)
+        await reportOutcome(failed, 'terminal', exhausted.code)
+        return
+      }
+      const failed = await persistOperationFailure(job, durable, { reason: safeError.code })
+      if (failed.status !== 'failed_not_applied' && (await finishFromDurableTerminal(job, failed, error))) return
+      const recoveryClass = isRevisionEligibleFailure(error) ? 'revise_step' : 'terminal'
+      await finish(job, 'failed', safeError)
+      await reportOutcome(failed, recoveryClass, safeError.code)
     } finally {
       clearInterval(heartbeat)
       active.delete(job.operationId)

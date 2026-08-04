@@ -1,10 +1,10 @@
 const IMPLEMENTATION_DETAIL_PATTERNS: readonly RegExp[] = [
-  /\b(?:nodeId|fieldId|componentName|parentId|ChangeSet|JSON)\b/iu,
+  /\b(?:node\s*id|field\s*(?:id|path)|component\s*name|parent\s*id|change\s*set|operations?|coordinates?|rect|JSON)\b/iu,
   /\bprops(?:\.|\b)/iu,
-  /\b(?:width|height)\s*[:=]\s*-?\d/iu,
-  /(?:^|[\s,，;(（])(?:x|y)\s*[:=]\s*-?\d/iu,
+  /(?:^|[^\p{L}\p{N}_])["']?(?:x|y|width|height)["']?\s*[:=]\s*-?(?:\d+(?:\.\d+)?|\.\d+)/iu,
   /(?:x|y)\s*(?:坐标|位置|是多少|多少|值)/iu,
   /shared\.rect/iu,
+  /[\[{]\s*["'][^"']+["']\s*:/u,
 ]
 
 export class UnsafeAgentUserFacingTextError extends Error {
@@ -25,9 +25,23 @@ export function renderAgentConversationPolicy(): string {
   ].join('')
 }
 
+export function isAgentConversationImplementationDetailText(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const text = value.trim()
+  if (!text) return false
+  if (IMPLEMENTATION_DETAIL_PATTERNS.some(pattern => pattern.test(text))) return true
+  if (/(?:^|[=:]\s*)\[[^\]]*\]/u.test(text)) return true
+  if (!((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']')))) return false
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return typeof parsed === 'object' && parsed !== null
+  } catch {
+    return false
+  }
+}
+
 function assertTextSafe(value: unknown): void {
-  if (typeof value !== 'string') return
-  if (IMPLEMENTATION_DETAIL_PATTERNS.some(pattern => pattern.test(value))) {
+  if (isAgentConversationImplementationDetailText(value)) {
     throw new UnsafeAgentUserFacingTextError()
   }
 }

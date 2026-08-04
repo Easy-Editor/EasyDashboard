@@ -859,6 +859,54 @@ describe('Agent creation idempotency repository', () => {
     expect(tx.insert).not.toHaveBeenCalled()
   })
 
+  it('replays a semantic start without requiring or fabricating a legacy dispatch', async () => {
+    const createdAt = new Date('2026-08-04T12:00:00.000Z')
+    const project = {
+      id: 'project-semantic',
+      name: 'Semantic dashboard',
+      description: null,
+      draftSchema: { componentsTree: [] },
+      createdAt,
+      updatedAt: createdAt,
+    }
+    const workspace = {
+      ownerId: 'actor-1',
+      projectId: project.id,
+      revision: 1,
+      payload: { version: 2, conversations: [{ id: 'conversation-1', tasks: [{ id: 'task-1' }] }] },
+      createdAt,
+      updatedAt: createdAt,
+    }
+    const selections = [
+      selectResult([{ id: project.id, inputDigest: 'b'.repeat(64) }], []),
+      selectResult([workspace], []),
+      selectResult([project], []),
+    ]
+    const tx = {
+      execute: vi.fn(),
+      select: vi.fn(() => selections.shift()),
+      insert: vi.fn(),
+    }
+    transaction.mockImplementation(async run => run(tx))
+    const { createPgRepository } = await import('./repository.js')
+
+    await expect(
+      createPgRepository(env).startAgentProject?.('actor-1', {
+        project: {
+          id: 'unused-project-id',
+          name: project.name,
+          schema: { componentsTree: [] },
+        },
+        workspacePayload: {},
+        createLegacyDispatch: false,
+        idempotencyKey: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        inputDigest: 'b'.repeat(64),
+      }),
+    ).resolves.toEqual({ project, workspace })
+    expect(tx.select).toHaveBeenCalledTimes(3)
+    expect(tx.insert).not.toHaveBeenCalled()
+  })
+
   it('returns the same asset upload binding for a selected-file retry', async () => {
     const existing = {
       id: 'asset-1',

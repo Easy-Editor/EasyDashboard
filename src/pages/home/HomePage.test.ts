@@ -2,12 +2,14 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ProjectSummary } from '@/api/contracts'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   deriveAgentProjectName,
   formatPublishedProjectActivity,
+  getLegacyAgentStartOperationId,
   resolveRecentProjectTarget,
+  runAgentStartAttachmentFlow,
   selectRecentDesigns,
   selectRecentPublications,
 } from './HomePage'
@@ -202,19 +204,104 @@ describe('HomePage project timelines', () => {
     expect(source).toContain('startIdempotencyKeyRef.current ?? crypto.randomUUID()')
     expect(source).toContain('idempotencyKey: attachment.id')
     expect(source).toContain('if (!started) {')
-    expect(source).toContain('uploadedAttachmentsRef.current.get(attachment.id)')
+    expect(source).toContain('input.uploadedAttachments.get(attachment.id)')
     expect(source).toContain("detail: '等待 Agent 执行服务'")
-    expect(source).toContain('const attachmentSync = await syncAgentWorkspaceProject')
+    expect(source).toContain('const attachmentSync = await dependencies.syncAgentWorkspaceProject')
     expect(source).toContain("if (attachmentSync.status === 'local-offline')")
-    expect(source).toContain('await finalizeAgentStartAttachments(started.project.id, started.run.operationId)')
+    expect(source).toContain('const legacyOperationId = getLegacyAgentStartOperationId(input.started)')
+    expect(source).toContain('if (legacyOperationId) {')
+    expect(source).toContain('dependencies.finalizeAgentStartAttachments(')
     expect(source.indexOf('setAgentMessageAttachments({')).toBeLessThan(
-      source.indexOf('const attachmentSync = await syncAgentWorkspaceProject'),
+      source.indexOf('const attachmentSync = await dependencies.syncAgentWorkspaceProject'),
     )
-    expect(source.indexOf('const attachmentSync = await syncAgentWorkspaceProject')).toBeLessThan(
-      source.indexOf('await finalizeAgentStartAttachments(started.project.id, started.run.operationId)'),
+    expect(source.indexOf('const attachmentSync = await dependencies.syncAgentWorkspaceProject')).toBeLessThan(
+      source.indexOf('dependencies.finalizeAgentStartAttachments('),
     )
     expect(source).not.toContain("controlAgentRun(started.project.id, started.run.operationId, 'resume')")
     expect(source).toContain('请在此重试，不会重复创建项目。')
     expect(source).not.toContain('项目已创建，但附件上传失败')
+  })
+
+  it('only exposes a legacy start operation when the atomic response contains one', () => {
+    expect(getLegacyAgentStartOperationId({})).toBeNull()
+    expect(getLegacyAgentStartOperationId({ run: { operationId: 'operation-legacy' } })).toBe('operation-legacy')
+  })
+
+  it('uploads and syncs semantic start attachments without legacy finalization or fake stages', async () => {
+    const uploadAgentFile = vi.fn().mockResolvedValue({
+      id: 'attachment-uploaded',
+      name: 'reference.png',
+      scope: 'project',
+      projectId: 'project-1',
+      conversationId: 'conversation-1',
+      createdAt: '2026-08-04T08:00:00.000Z',
+    })
+    const syncAgentWorkspaceProject = vi.fn().mockResolvedValue({ status: 'synced' })
+    const updateTaskProgress = vi.fn()
+    const finalizeAgentStartAttachments = vi.fn()
+    const recordAgentRun = vi.fn()
+    const route = await runAgentStartAttachmentFlow(
+      {
+        ownerUserId: 'user-a',
+        started: {
+          project: { id: 'project-1', name: '大屏' },
+          conversation: {
+            id: 'conversation-1',
+            ownerUserId: 'user-a',
+            projectId: 'project-1',
+            visibility: 'private',
+            title: '大屏',
+            messages: [
+              {
+                id: 'message-1',
+                role: 'user',
+                content: '照图实现',
+                attachments: [],
+                createdAt: '2026-08-04T08:00:00.000Z',
+              },
+            ],
+            tasks: [
+              {
+                id: 'task-1',
+                title: '照图实现',
+                status: 'waiting',
+                stages: [],
+                createdAt: '2026-08-04T08:00:00.000Z',
+                updatedAt: '2026-08-04T08:00:00.000Z',
+              },
+            ],
+            createdAt: '2026-08-04T08:00:00.000Z',
+            updatedAt: '2026-08-04T08:00:00.000Z',
+          },
+          workspace: {} as never,
+        },
+        attachments: [
+          {
+            id: 'attachment-local',
+            name: 'reference.png',
+            size: 100,
+            type: 'image/png',
+            scope: 'project',
+            file: { name: 'reference.png', size: 100, type: 'image/png' } as File,
+          },
+        ],
+        uploadedAttachments: new Map(),
+      },
+      {
+        uploadAgentFile,
+        setAgentMessageAttachments: vi.fn(),
+        updateTaskProgress,
+        syncAgentWorkspaceProject,
+        finalizeAgentStartAttachments,
+        recordAgentRun,
+      } as unknown as Parameters<typeof runAgentStartAttachmentFlow>[1],
+    )
+
+    expect(uploadAgentFile).toHaveBeenCalledOnce()
+    expect(syncAgentWorkspaceProject).toHaveBeenCalledOnce()
+    expect(updateTaskProgress).not.toHaveBeenCalled()
+    expect(finalizeAgentStartAttachments).not.toHaveBeenCalled()
+    expect(recordAgentRun).not.toHaveBeenCalled()
+    expect(route).toBe('/projects/project-1/agent/conversation-1')
   })
 })

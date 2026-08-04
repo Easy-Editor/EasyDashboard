@@ -851,6 +851,26 @@ export function createAgentResponseProviderInputSnapshot(
   images: readonly { assetId: string; sha256: string }[],
   selectionContext?: AgentSelectionContext,
 ): AgentProviderInputSnapshot {
+  return createAgentClarificationHistoryProviderInputSnapshot(
+    source,
+    [{ question, response, attachmentIds: attachments.map(attachment => attachment.id) }],
+    attachments,
+    images,
+    selectionContext,
+  )
+}
+
+export function createAgentClarificationHistoryProviderInputSnapshot(
+  source: AgentProviderInputSnapshot,
+  history: readonly {
+    question: { id: string; text: string }
+    response: string
+    attachmentIds: readonly string[]
+  }[],
+  attachments: readonly AgentAssetRecord[],
+  images: readonly { assetId: string; sha256: string }[],
+  selectionContext?: AgentSelectionContext,
+): AgentProviderInputSnapshot {
   let payload: Record<string, unknown>
   try {
     const parsed = JSON.parse(source.userText) as unknown
@@ -875,7 +895,11 @@ export function createAgentResponseProviderInputSnapshot(
   }
   const mergedImages = new Map(source.images.map(image => [image.assetId, { ...image }]))
   for (const image of images) mergedImages.set(image.assetId, { ...image })
-  const skillManifest = selectDashboardAgentSkillManifest(`${originalRequirement}\n${question.text}\n${response}`)
+  const latest = history.at(-1)
+  if (!latest) throw new ApiError(409, 'AGENT_TURN_SNAPSHOT_INVALID', 'Agent clarification history is unavailable')
+  const skillManifest = selectDashboardAgentSkillManifest(
+    [originalRequirement, ...history.flatMap(item => [item.question.text, item.response])].join('\n'),
+  )
   const bundle = systemPrompt(skillManifest, {
     linkedPieChartStyles: source.systemPrompt.includes(DASHBOARD_AGENT_LINKED_PIE_CHART_CATALOG_VERSION),
   })
@@ -886,9 +910,14 @@ export function createAgentResponseProviderInputSnapshot(
       ...payload,
       requirement: originalRequirement,
       clarification: {
-        question: { id: safeModelText(question.id), text: safeModelText(question.text) },
-        response: safeModelText(response),
+        question: { id: safeModelText(latest.question.id), text: safeModelText(latest.question.text) },
+        response: safeModelText(latest.response),
       },
+      clarificationHistory: history.map(item => ({
+        question: { id: safeModelText(item.question.id), text: safeModelText(item.question.text) },
+        response: safeModelText(item.response),
+        attachmentIds: item.attachmentIds.map(id => safeModelText(id)),
+      })),
       ...(nextSelectionContext ? { selectionContext: nextSelectionContext } : {}),
       attachments: [...mergedAttachments.values()],
     }),

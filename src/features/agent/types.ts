@@ -40,6 +40,7 @@ export type AgentMessageRole = 'user' | 'assistant' | 'system'
 export type AgentMessage = {
   id: string
   taskId?: string
+  localOnlyExecutionProjection?: true
   role: AgentMessageRole
   content: string
   attachments: AgentAttachment[]
@@ -71,6 +72,139 @@ export type AgentTaskPlan = {
   steps: AgentTaskPlanStep[]
 }
 
+export type AgentSemanticTaskRunStatus =
+  | 'planning'
+  | 'waiting_user'
+  | 'running'
+  | 'verifying'
+  | 'completed'
+  | 'blocked_material'
+  | 'paused'
+  | 'failed'
+  | 'canceled'
+  | 'rolling_back'
+  | 'rolled_back'
+  | 'rollback_blocked'
+
+export type AgentSemanticTaskStepStatus =
+  | 'pending'
+  | 'running'
+  | 'verifying'
+  | 'passed'
+  | 'revising'
+  | 'failed'
+  | 'superseded'
+
+export type AgentSemanticTaskStep = {
+  id: string
+  planVersion: number
+  ordinal: number
+  semanticStepKey: string
+  title: string
+  intent: Record<string, unknown>
+  status: AgentSemanticTaskStepStatus
+  lastObservation: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type AgentTaskActivePlan = {
+  id: string
+  version: number
+  summary: string
+  assumptions: unknown
+  verification: unknown
+  createdAt: string
+  steps: AgentSemanticTaskStep[]
+}
+
+export type AgentTaskPublicEventType =
+  | 'plan_created'
+  | 'plan_revised'
+  | 'step_started'
+  | 'material_selected'
+  | 'change_prepared'
+  | 'change_committed'
+  | 'preview_checked'
+  | 'step_revising'
+  | 'fallback_selected'
+  | 'material_gap'
+  | 'waiting_user'
+  | 'step_passed'
+  | 'step_superseded'
+  | 'rollback_started'
+  | 'rollback_completed'
+  | 'rollback_blocked'
+  | 'task_failed'
+  | 'task_completed'
+
+export type AgentTaskTechnicalDetails = {
+  errorCode?: string
+  operationId?: string
+  receiptId?: string
+  cost?: {
+    amountMicros: number
+    accuracy?: 'actual' | 'estimated' | 'billing_indeterminate'
+  }
+}
+
+export type AgentTaskPublicEvent = {
+  taskRunId: string
+  seq: number
+  eventKey: string
+  stepId: string | null
+  type: AgentTaskPublicEventType
+  summary: string
+  publicPayload: Record<string, unknown>
+  technicalDetails?: AgentTaskTechnicalDetails
+  redactionVersion: number
+  createdAt: string
+}
+
+export type AgentTaskRunModelBinding = {
+  provider: string
+  model: string
+  profileId: string
+  configDigest: string
+}
+
+export type AgentTaskRunBounds = {
+  maxProviderTurns: number
+  maxStepRevisions: number
+  maxExecutorRetries: number
+  tokenLimit: number
+  costLimitMicros: number
+}
+
+export type AgentTaskRunAccounting = {
+  providerTurns: number
+  executorRetries: number
+  semanticRevisions: number
+  promptTokens: number
+  completionTokens: number
+  costMicros: number
+}
+
+export type AgentTaskRunDetail = {
+  id: string
+  projectId: string
+  conversationId: string
+  taskId: string
+  status: AgentSemanticTaskRunStatus
+  activePlanVersion: number
+  currentTransitionKey: string | null
+  modelBinding: AgentTaskRunModelBinding
+  bounds: AgentTaskRunBounds
+  accounting: AgentTaskRunAccounting
+  taskStartDocumentRevision: number
+  latestEventSequence: number
+  activePlan: AgentTaskActivePlan | null
+  waiting: { questionId: string; text: string } | null
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+}
+
 export type AgentPendingQuestion = {
   id: string
   messageId: string
@@ -100,6 +234,13 @@ export type AgentTask = {
   title: string
   status: AgentTaskStatus
   stages: AgentTaskStage[]
+  taskRunId?: string
+  activePlan?: AgentTaskActivePlan
+  activities?: AgentTaskPublicEvent[]
+  latestEventSequence?: number
+  taskRun?: Omit<AgentTaskRunDetail, 'activePlan' | 'waiting'>
+  legacyCompatibility?: true
+  legacyCompatibilitySnapshot?: AgentWorkspaceLegacyTaskV2
   plan?: AgentTaskPlan
   pendingQuestion?: AgentPendingQuestion
   usage?: {
@@ -191,7 +332,7 @@ export type AgentPreferences = {
 }
 
 export type AgentWorkspace = {
-  version: 1
+  version: 1 | 2
   ownerUserId: string
   preferences: AgentPreferences
   conversations: AgentConversation[]
@@ -199,7 +340,7 @@ export type AgentWorkspace = {
   projectContextTombstones: AgentProjectContextTombstone[]
 }
 
-export type AgentProjectWorkspacePayload = {
+export type AgentProjectWorkspacePayloadV1 = {
   version: 1
   ownerUserId: string
   projectId: string
@@ -207,6 +348,30 @@ export type AgentProjectWorkspacePayload = {
   projectContexts: AgentProjectContext[]
   projectContextTombstones?: AgentProjectContextTombstone[]
 }
+
+export type AgentWorkspaceTaskV2 = Pick<AgentTask, 'id' | 'title' | 'createdAt' | 'updatedAt'> & {
+  taskRunId?: string
+}
+
+export type AgentWorkspaceLegacyTaskV2 = Pick<
+  AgentTask,
+  'id' | 'title' | 'status' | 'stages' | 'plan' | 'pendingQuestion' | 'usage' | 'run' | 'createdAt' | 'updatedAt'
+>
+
+export type AgentWorkspaceConversationV2 = Omit<AgentConversation, 'tasks'> & {
+  tasks: Array<AgentWorkspaceTaskV2 | AgentWorkspaceLegacyTaskV2>
+}
+
+export type AgentProjectWorkspacePayloadV2 = {
+  version: 2
+  ownerUserId: string
+  projectId: string
+  conversations: AgentWorkspaceConversationV2[]
+  projectContexts: AgentProjectContext[]
+  projectContextTombstones?: AgentProjectContextTombstone[]
+}
+
+export type AgentProjectWorkspacePayload = AgentProjectWorkspacePayloadV1 | AgentProjectWorkspacePayloadV2
 
 export type AgentWorkspaceRemoteRecord = {
   ownerId: string
@@ -275,6 +440,7 @@ export type RecordAgentRunInput = {
   rollbackReceipt?: unknown
   message?: string
   usage?: AgentTask['usage']
+  localOnlyExecutionProjection?: boolean
   updatedAt?: string
 }
 
@@ -304,6 +470,7 @@ export type RecordAgentTaskQuestionInput = {
   prompt?: string
   plan?: AgentTaskPlan
   usage?: AgentTask['usage']
+  localOnlyExecutionProjection?: boolean
   updatedAt?: string
 }
 
@@ -315,6 +482,13 @@ export type RecordAgentTaskPlanInput = {
   taskStatus?: AgentTaskStatus
   usage?: AgentTask['usage']
   updatedAt?: string
+}
+
+export type RecordAgentTaskRunDetailInput = {
+  ownerUserId: string
+  conversationId: string
+  detail: AgentTaskRunDetail
+  events?: AgentTaskPublicEvent[]
 }
 
 export type UpsertProjectContextInput = {

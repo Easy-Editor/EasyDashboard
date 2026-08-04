@@ -13,13 +13,24 @@ import type {
   AgentProjectContext,
   AgentProjectContextTombstone,
   AgentProjectWorkspacePayload,
+  AgentProjectWorkspacePayloadV2,
   AgentStorage,
   AgentTask,
   AgentTaskStage,
   AgentWorkspace,
+  AgentWorkspaceLegacyTaskV2,
   AgentWorkspaceListener,
   AgentWorkspaceRemoteRecord,
 } from './types'
+
+type AgentProjectWorkspaceState = {
+  version: 2
+  ownerUserId: string
+  projectId: string
+  conversations: AgentConversation[]
+  projectContexts: AgentProjectContext[]
+  projectContextTombstones: AgentProjectContextTombstone[]
+}
 import {
   type PutAgentWorkspaceInput,
   getAgentProjectWorkspace,
@@ -185,6 +196,18 @@ function newerTask(first: AgentTask, second: AgentTask): AgentTask {
   const run = mergeTaskRun(earlier.run, latest.run)
   const usage =
     earlier.usage || latest.usage ? { ...structuredClone(earlier.usage), ...structuredClone(latest.usage) } : undefined
+  const activePlan =
+    !first.activePlan || (second.activePlan && second.activePlan.version >= first.activePlan.version)
+      ? second.activePlan
+      : first.activePlan
+  const activitiesBySequence = new Map((first.activities ?? []).map(event => [event.seq, structuredClone(event)]))
+  for (const event of second.activities ?? []) {
+    if (!activitiesBySequence.has(event.seq)) activitiesBySequence.set(event.seq, structuredClone(event))
+  }
+  const taskRunCandidates = [first.taskRun, second.taskRun].filter(candidate => Boolean(candidate)) as NonNullable<
+    AgentTask['taskRun']
+  >[]
+  const taskRun = taskRunCandidates.sort((a, b) => time(b.updatedAt) - time(a.updatedAt))[0]
   return {
     ...structuredClone(latest),
     stages: mergeEntities(first.stages, second.stages, (firstStage, secondStage) =>
@@ -192,6 +215,23 @@ function newerTask(first: AgentTask, second: AgentTask): AgentTask {
     ).sort((firstStage, secondStage) => taskStageOrder[firstStage.id] - taskStageOrder[secondStage.id]),
     ...(usage ? { usage } : {}),
     ...(run ? { run } : {}),
+    ...((first.taskRunId ?? second.taskRunId) ? { taskRunId: first.taskRunId ?? second.taskRunId } : {}),
+    ...(activePlan ? { activePlan: structuredClone(activePlan) } : {}),
+    ...(activitiesBySequence.size > 0
+      ? { activities: [...activitiesBySequence.values()].sort((a, b) => a.seq - b.seq).slice(-200) }
+      : {}),
+    ...((first.latestEventSequence ?? second.latestEventSequence) !== undefined
+      ? { latestEventSequence: Math.max(first.latestEventSequence ?? 0, second.latestEventSequence ?? 0) }
+      : {}),
+    ...(taskRun ? { taskRun: structuredClone(taskRun) } : {}),
+    ...(first.legacyCompatibility || second.legacyCompatibility ? { legacyCompatibility: true as const } : {}),
+    ...((second.legacyCompatibilitySnapshot ?? first.legacyCompatibilitySnapshot)
+      ? {
+          legacyCompatibilitySnapshot: structuredClone(
+            second.legacyCompatibilitySnapshot ?? first.legacyCompatibilitySnapshot!,
+          ),
+        }
+      : {}),
   }
 }
 
@@ -234,9 +274,62 @@ function mergeEntities<T extends { id: string }>(
 export function sliceAgentWorkspaceByProject(
   workspace: AgentWorkspace,
   projectId: string,
-): AgentProjectWorkspacePayload {
+): AgentProjectWorkspacePayloadV2 {
   return {
-    version: 1,
+    version: 2,
+    ownerUserId: workspace.ownerUserId,
+    projectId,
+    conversations: sortByCreatedAt(
+      workspace.conversations
+        .filter(conversation => conversation.projectId === projectId)
+        .map(conversation => ({
+          ...structuredClone(conversation),
+          messages: conversation.messages
+            .filter(message => !message.localOnlyExecutionProjection)
+            .map(message => structuredClone(message)),
+          tasks: conversation.tasks.map(task =>
+            task.legacyCompatibility
+              ? structuredClone(task.legacyCompatibilitySnapshot ?? legacyTaskProjection(task))
+              : {
+                  id: task.id,
+                  title: task.title,
+                  ...(task.taskRunId ? { taskRunId: task.taskRunId } : {}),
+                  createdAt: task.createdAt,
+                  updatedAt: task.updatedAt,
+                },
+          ),
+        })),
+    ),
+    projectContexts: sortByCreatedAt(
+      workspace.projectContexts
+        .filter(context => context.projectId === projectId)
+        .map(context => structuredClone(context)),
+    ),
+    projectContextTombstones: workspace.projectContextTombstones
+      .filter(tombstone => tombstone.projectId === projectId)
+      .map(tombstone => structuredClone(tombstone))
+      .sort((first, second) => time(first.deletedAt) - time(second.deletedAt) || first.id.localeCompare(second.id)),
+  }
+}
+
+function legacyTaskProjection(task: AgentTask): AgentWorkspaceLegacyTaskV2 {
+  return {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    stages: structuredClone(task.stages),
+    ...(task.plan ? { plan: structuredClone(task.plan) } : {}),
+    ...(task.pendingQuestion ? { pendingQuestion: structuredClone(task.pendingQuestion) } : {}),
+    ...(task.usage ? { usage: structuredClone(task.usage) } : {}),
+    ...(task.run ? { run: structuredClone(task.run) } : {}),
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  }
+}
+
+function sliceAgentWorkspaceStateByProject(workspace: AgentWorkspace, projectId: string): AgentProjectWorkspaceState {
+  return {
+    version: 2,
     ownerUserId: workspace.ownerUserId,
     projectId,
     conversations: sortByCreatedAt(
@@ -251,30 +344,109 @@ export function sliceAgentWorkspaceByProject(
     ),
     projectContextTombstones: workspace.projectContextTombstones
       .filter(tombstone => tombstone.projectId === projectId)
-      .map(tombstone => structuredClone(tombstone))
-      .sort((first, second) => time(first.deletedAt) - time(second.deletedAt) || first.id.localeCompare(second.id)),
+      .map(tombstone => structuredClone(tombstone)),
   }
 }
 
-export function decodeAgentProjectWorkspacePayload(
+function isV2TaskProjection(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const task = value as Record<string, unknown>
+  const allowedKeys = new Set(['id', 'title', 'taskRunId', 'createdAt', 'updatedAt'])
+  return Boolean(
+    Object.keys(task).every(key => allowedKeys.has(key)) &&
+      typeof task.id === 'string' &&
+      typeof task.title === 'string' &&
+      (task.taskRunId === undefined || typeof task.taskRunId === 'string') &&
+      typeof task.createdAt === 'string' &&
+      typeof task.updatedAt === 'string',
+  )
+}
+
+function isLegacyV2TaskProjection(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const task = value as Record<string, unknown>
+  return (
+    typeof task.id === 'string' &&
+    typeof task.title === 'string' &&
+    typeof task.status === 'string' &&
+    Array.isArray(task.stages) &&
+    task.stages.length === 4 &&
+    typeof task.createdAt === 'string' &&
+    typeof task.updatedAt === 'string'
+  )
+}
+
+function decodeAgentProjectWorkspaceState(
   value: unknown,
   ownerUserId: string,
   projectId: string,
-): AgentProjectWorkspacePayload {
+): AgentProjectWorkspaceState {
   if (!value || typeof value !== 'object') throw new Error('Invalid Agent project workspace payload')
-  const candidate = value as Partial<AgentProjectWorkspacePayload>
-  if (candidate.version !== 1 || candidate.ownerUserId !== ownerUserId || candidate.projectId !== projectId) {
+  const candidate = value as Record<string, unknown>
+  if (
+    (candidate.version !== 1 && candidate.version !== 2) ||
+    candidate.ownerUserId !== ownerUserId ||
+    candidate.projectId !== projectId ||
+    !Array.isArray(candidate.conversations)
+  ) {
     throw new Error('Agent project workspace identity mismatch')
   }
+  const conversations =
+    candidate.version === 1
+      ? candidate.conversations
+      : candidate.conversations.map(value => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            throw new Error('Invalid Agent workspace conversation')
+          }
+          const conversation = value as Record<string, unknown>
+          if (
+            !Array.isArray(conversation.tasks) ||
+            !conversation.tasks.every(task => isV2TaskProjection(task) || isLegacyV2TaskProjection(task))
+          ) {
+            throw new Error('Invalid Agent workspace task projection')
+          }
+          return {
+            ...conversation,
+            tasks: conversation.tasks.map(value => {
+              const task = value as Record<string, unknown>
+              if (isLegacyV2TaskProjection(task)) {
+                const legacyTask = task as AgentWorkspaceLegacyTaskV2
+                return {
+                  ...task,
+                  legacyCompatibility: true,
+                  legacyCompatibilitySnapshot: structuredClone(legacyTask),
+                }
+              }
+              return {
+                id: task.id,
+                title: task.title,
+                ...(task.taskRunId ? { taskRunId: task.taskRunId } : {}),
+                status: 'waiting',
+                stages: [],
+                createdAt: task.createdAt,
+                updatedAt: task.updatedAt,
+              }
+            }),
+          }
+        })
   const workspace = decodeAgentWorkspace(
     {
       ...createEmptyAgentWorkspace(ownerUserId),
-      conversations: candidate.conversations,
+      version: candidate.version,
+      conversations,
       projectContexts: candidate.projectContexts,
       projectContextTombstones: candidate.projectContextTombstones,
     },
     ownerUserId,
   )
+  if (candidate.version === 1) {
+    for (const conversation of workspace.conversations) {
+      for (const task of conversation.tasks) {
+        task.legacyCompatibility = true
+        task.legacyCompatibilitySnapshot = legacyTaskProjection(task)
+      }
+    }
+  }
   if (
     workspace.conversations.some(conversation => conversation.projectId !== projectId) ||
     workspace.projectContexts.some(context => context.projectId !== projectId) ||
@@ -282,14 +454,33 @@ export function decodeAgentProjectWorkspacePayload(
   ) {
     throw new Error('Agent project workspace contains cross-project data')
   }
-  return sliceAgentWorkspaceByProject(workspace, projectId)
+  return sliceAgentWorkspaceStateByProject(workspace, projectId)
+}
+
+export function decodeAgentProjectWorkspacePayload(
+  value: unknown,
+  ownerUserId: string,
+  projectId: string,
+): AgentProjectWorkspacePayload {
+  const state = decodeAgentProjectWorkspaceState(value, ownerUserId, projectId)
+  return sliceAgentWorkspaceByProject(
+    {
+      version: 2,
+      ownerUserId,
+      preferences: createEmptyAgentWorkspace(ownerUserId).preferences,
+      conversations: state.conversations,
+      projectContexts: state.projectContexts,
+      projectContextTombstones: state.projectContextTombstones,
+    },
+    projectId,
+  )
 }
 
 function decodeRemoteProject(
   record: AgentWorkspaceRemoteRecord,
   ownerUserId: string,
   projectId: string,
-): AgentProjectWorkspacePayload {
+): AgentProjectWorkspaceState {
   if (
     record.ownerId !== ownerUserId ||
     record.projectId !== projectId ||
@@ -298,24 +489,24 @@ function decodeRemoteProject(
   ) {
     throw new Error('Agent workspace record identity or revision mismatch')
   }
-  return decodeAgentProjectWorkspacePayload(record.payload, ownerUserId, projectId)
+  return decodeAgentProjectWorkspaceState(record.payload, ownerUserId, projectId)
 }
 
-export function mergeAgentProjectWorkspacePayloads(
-  first: AgentProjectWorkspacePayload,
-  second: AgentProjectWorkspacePayload,
-): AgentProjectWorkspacePayload {
+function mergeAgentProjectWorkspaceStates(
+  first: AgentProjectWorkspaceState,
+  second: AgentProjectWorkspaceState,
+): AgentProjectWorkspaceState {
   if (first.ownerUserId !== second.ownerUserId || first.projectId !== second.projectId) {
     throw new Error('Cannot merge Agent workspaces with different identities')
   }
   const projectContextTombstones = mergeEntities(
-    first.projectContextTombstones ?? [],
-    second.projectContextTombstones ?? [],
+    first.projectContextTombstones,
+    second.projectContextTombstones,
     newerTombstone,
   )
   const deletedContextIds = new Set(projectContextTombstones.map(tombstone => tombstone.id))
   return {
-    version: 1,
+    version: 2,
     ownerUserId: first.ownerUserId,
     projectId: first.projectId,
     conversations: sortByCreatedAt(mergeEntities(first.conversations, second.conversations, mergeConversation)),
@@ -332,13 +523,75 @@ export function mergeAgentProjectWorkspacePayloads(
   }
 }
 
+function serializeAgentProjectWorkspaceState(state: AgentProjectWorkspaceState): AgentProjectWorkspacePayloadV2 {
+  return sliceAgentWorkspaceByProject(
+    {
+      version: 2,
+      ownerUserId: state.ownerUserId,
+      preferences: createEmptyAgentWorkspace(state.ownerUserId).preferences,
+      conversations: state.conversations,
+      projectContexts: state.projectContexts,
+      projectContextTombstones: state.projectContextTombstones,
+    },
+    state.projectId,
+  )
+}
+
+function serializeAgentProjectWorkspaceWriteState(state: AgentProjectWorkspaceState): AgentProjectWorkspacePayloadV2 {
+  return {
+    version: 2,
+    ownerUserId: state.ownerUserId,
+    projectId: state.projectId,
+    conversations: state.conversations.map(conversation => ({
+      ...structuredClone(conversation),
+      messages: conversation.messages
+        .filter(message => !message.localOnlyExecutionProjection)
+        .map(message => structuredClone(message)),
+      tasks: conversation.tasks.map(task =>
+        task.legacyCompatibility
+          ? structuredClone(task.legacyCompatibilitySnapshot ?? legacyTaskProjection(task))
+          : {
+              id: task.id,
+              title: task.title,
+              createdAt: task.createdAt,
+              updatedAt: task.updatedAt,
+            },
+      ),
+    })),
+    projectContexts: state.projectContexts.map(context => structuredClone(context)),
+    projectContextTombstones: state.projectContextTombstones.map(tombstone => structuredClone(tombstone)),
+  }
+}
+
+export function mergeAgentProjectWorkspacePayloads(
+  first: AgentProjectWorkspacePayload,
+  second: AgentProjectWorkspacePayload,
+): AgentProjectWorkspacePayload {
+  const merged = mergeAgentProjectWorkspaceStates(
+    decodeAgentProjectWorkspaceState(first, first.ownerUserId, first.projectId),
+    decodeAgentProjectWorkspaceState(second, second.ownerUserId, second.projectId),
+  )
+  return serializeAgentProjectWorkspaceState(merged)
+}
+
 export function hydrateAgentProjectWorkspace(
   workspace: AgentWorkspace,
   project: AgentProjectWorkspacePayload,
 ): AgentWorkspace {
   if (workspace.ownerUserId !== project.ownerUserId) throw new Error('Agent workspace owner mismatch')
-  const localProject = sliceAgentWorkspaceByProject(workspace, project.projectId)
-  const merged = mergeAgentProjectWorkspacePayloads(localProject, project)
+  return hydrateAgentProjectWorkspaceState(
+    workspace,
+    decodeAgentProjectWorkspaceState(project, project.ownerUserId, project.projectId),
+  )
+}
+
+function hydrateAgentProjectWorkspaceState(
+  workspace: AgentWorkspace,
+  project: AgentProjectWorkspaceState,
+): AgentWorkspace {
+  if (workspace.ownerUserId !== project.ownerUserId) throw new Error('Agent workspace owner mismatch')
+  const localProject = sliceAgentWorkspaceStateByProject(workspace, project.projectId)
+  const merged = mergeAgentProjectWorkspaceStates(localProject, project)
   return {
     ...structuredClone(workspace),
     conversations: [
@@ -382,7 +635,7 @@ export async function syncAgentWorkspaceProject(input: {
 }): Promise<AgentWorkspaceSyncResult> {
   const { ownerUserId, projectId, storage, transport = defaultTransport } = input
   let localWorkspace = readAgentWorkspace(ownerUserId, storage)
-  let localProject = sliceAgentWorkspaceByProject(localWorkspace, projectId)
+  let localProject = sliceAgentWorkspaceStateByProject(localWorkspace, projectId)
   let remote: AgentWorkspaceRemoteRecord | null
 
   try {
@@ -393,31 +646,42 @@ export async function syncAgentWorkspaceProject(input: {
   }
 
   if (remote) {
+    const remoteIsLegacy = remote.payload.version === 1
     const remoteProject = decodeRemoteProject(remote, ownerUserId, projectId)
     localWorkspace = readAgentWorkspace(ownerUserId, storage)
-    localProject = sliceAgentWorkspaceByProject(localWorkspace, projectId)
-    localProject = mergeAgentProjectWorkspacePayloads(localProject, remoteProject)
-    localWorkspace = hydrateAgentProjectWorkspace(localWorkspace, localProject)
+    localProject = sliceAgentWorkspaceStateByProject(localWorkspace, projectId)
+    localProject = mergeAgentProjectWorkspaceStates(localProject, remoteProject)
+    localWorkspace = hydrateAgentProjectWorkspaceState(localWorkspace, localProject)
     replaceAgentWorkspace(localWorkspace, storage)
-    if (samePayload(localProject, remoteProject)) {
-      return { workspace: localWorkspace, project: localProject, revision: remote.revision, status: 'remote' }
+    const localPayload = serializeAgentProjectWorkspaceState(localProject)
+    const remotePayload = serializeAgentProjectWorkspaceState(remoteProject)
+    if (remoteIsLegacy && samePayload(localPayload, remotePayload)) {
+      return {
+        workspace: localWorkspace,
+        project: structuredClone(remote.payload),
+        revision: remote.revision,
+        status: 'remote',
+      }
+    }
+    if (samePayload(localPayload, remotePayload)) {
+      return { workspace: localWorkspace, project: localPayload, revision: remote.revision, status: 'remote' }
     }
   }
 
   localWorkspace = readAgentWorkspace(ownerUserId, storage)
   localProject = remote
-    ? mergeAgentProjectWorkspacePayloads(sliceAgentWorkspaceByProject(localWorkspace, projectId), localProject)
-    : sliceAgentWorkspaceByProject(localWorkspace, projectId)
+    ? mergeAgentProjectWorkspaceStates(sliceAgentWorkspaceStateByProject(localWorkspace, projectId), localProject)
+    : sliceAgentWorkspaceStateByProject(localWorkspace, projectId)
 
   let expectedRevision = remote?.revision
   for (let attempt = 0; attempt < MAX_AGENT_WORKSPACE_CAS_ATTEMPTS; attempt += 1) {
     try {
       const saved = await transport.put(projectId, {
         ...(expectedRevision === undefined ? {} : { expectedRevision }),
-        payload: localProject,
+        payload: serializeAgentProjectWorkspaceWriteState(localProject),
       })
       const savedProject = decodeRemoteProject(saved, ownerUserId, projectId)
-      const workspace = hydrateAgentProjectWorkspace(readAgentWorkspace(ownerUserId, storage), savedProject)
+      const workspace = hydrateAgentProjectWorkspaceState(readAgentWorkspace(ownerUserId, storage), savedProject)
       replaceAgentWorkspace(workspace, storage)
       return {
         workspace,
@@ -443,11 +707,11 @@ export async function syncAgentWorkspaceProject(input: {
     if (!latest) throw new Error('Agent workspace disappeared during conflict resolution')
     const latestProject = decodeRemoteProject(latest, ownerUserId, projectId)
     localWorkspace = readAgentWorkspace(ownerUserId, storage)
-    localProject = mergeAgentProjectWorkspacePayloads(
-      sliceAgentWorkspaceByProject(localWorkspace, projectId),
+    localProject = mergeAgentProjectWorkspaceStates(
+      sliceAgentWorkspaceStateByProject(localWorkspace, projectId),
       latestProject,
     )
-    localWorkspace = hydrateAgentProjectWorkspace(localWorkspace, localProject)
+    localWorkspace = hydrateAgentProjectWorkspaceState(localWorkspace, localProject)
     replaceAgentWorkspace(localWorkspace, storage)
     expectedRevision = latest.revision
   }

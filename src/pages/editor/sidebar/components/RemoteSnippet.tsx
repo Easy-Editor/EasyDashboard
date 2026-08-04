@@ -5,6 +5,7 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { materialManager } from '@/editor/remote'
+import { parseVersionedName } from '@/editor/remote/managers/material-manager/utils'
 import { cn } from '@/lib/utils'
 import { type ComponentMeta, type Snippet as ISnippet, type Point, project } from '@easy-editor/core'
 import { observer } from 'mobx-react'
@@ -27,6 +28,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
   const npmVersion = metadata.npm?.version
   const npmGlobalName = metadata.npm?.globalName
   const npmComponentName = metadata.npm?.componentName
+  const registeredVersion = parseVersionedName(componentName)?.version ?? npmVersion
   const snippetSchema = snippet.schema
   const snippetTitle = snippet.title
   const ref = useRef<HTMLDivElement>(null)
@@ -49,7 +51,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
         // 1. 加载组件代码（如果未加载）
         if (!hasRemoteComponent) {
           // 修复：传入 version 参数，避免 cache key 不匹配
-          await materialManager.addComponent(npmPackage, npmVersion)
+          await materialManager.addComponent(npmPackage, registeredVersion)
         }
 
         // 2. 获取当前文档
@@ -133,7 +135,16 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
         setIsLoading(false)
       }
     },
-    [componentName, hasRemoteComponent, npmComponentName, npmGlobalName, npmPackage, npmVersion, snippetSchema],
+    [
+      componentName,
+      hasRemoteComponent,
+      npmComponentName,
+      npmGlobalName,
+      npmPackage,
+      npmVersion,
+      registeredVersion,
+      snippetSchema,
+    ],
   )
 
   const handleCanvasDragOver = useCallback((e: DragEvent) => {

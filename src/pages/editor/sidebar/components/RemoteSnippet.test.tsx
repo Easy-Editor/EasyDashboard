@@ -80,13 +80,13 @@ const componentMeta = {
   }),
 } as ComponentMeta
 
-function renderSnippet() {
+function renderSnippet(meta = componentMeta) {
   const component = RemoteSnippet as unknown as (props: {
     componentMeta: ComponentMeta
     snippet: Snippet
   }) => ReactElement<{ onDoubleClick: () => Promise<void> }>
 
-  return component({ componentMeta, snippet })
+  return component({ componentMeta: meta, snippet })
 }
 
 function createDeferred() {
@@ -124,6 +124,25 @@ describe('RemoteSnippet', () => {
     deferred.resolve()
     await addSnippet
 
+    expect(testContext.insertNode).toHaveBeenCalledOnce()
+  })
+
+  it('loads the version registered by the material manager when package metadata reports a newer linked build', async () => {
+    const linkedComponentMeta = {
+      getMetadata: () => ({
+        componentName: 'RemoteChart@1.2.3',
+        npm: {
+          componentName: 'RemoteChart',
+          globalName: 'RemoteChartLibrary',
+          package: '@example/remote-chart',
+          version: '1.2.4',
+        },
+      }),
+    } as ComponentMeta
+
+    await renderSnippet(linkedComponentMeta).props.onDoubleClick()
+
+    expect(testContext.addComponent).toHaveBeenCalledWith('@example/remote-chart', '1.2.3')
     expect(testContext.insertNode).toHaveBeenCalledOnce()
   })
 

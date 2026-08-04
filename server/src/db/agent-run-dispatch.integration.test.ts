@@ -243,6 +243,39 @@ describeWithDatabase('agent run dispatch PostgreSQL integration', () => {
     }
   })
 
+  it('atomically creates and replays a semantic project start without a legacy dispatch', async () => {
+    const fixture = await seedProject()
+    const projectId = randomUUID()
+    const idempotencyKey = randomUUID()
+    const input = {
+      project: { id: projectId, name: 'Semantic start integration', schema: baseSchema },
+      workspacePayload: { version: 2, projectId, conversations: [] },
+      createLegacyDispatch: false,
+      idempotencyKey,
+      inputDigest: '4'.repeat(64),
+    }
+    try {
+      if (!repository?.startAgentProject) throw new Error('Agent start repository is unavailable')
+      const created = await repository.startAgentProject(fixture.actorId, input)
+      const replay = await repository.startAgentProject(fixture.actorId, input)
+
+      expect(created).not.toBe('conflict')
+      expect(replay).toEqual(created)
+      if (created === 'conflict') throw new Error('Semantic Agent start unexpectedly conflicted')
+      expect(created.dispatch).toBeUndefined()
+      const persisted = await admin!.query<{ projects: string; workspaces: string; dispatches: string }>(
+        `select
+           (select count(*)::text from app.projects where owner_id = $1 and agent_start_idempotency_key = $2) as projects,
+           (select count(*)::text from app.agent_workspaces where owner_id = $1 and project_id = $3) as workspaces,
+           (select count(*)::text from app.agent_run_dispatches where actor_id = $1 and project_id = $3 and kind = 'initial') as dispatches`,
+        [fixture.actorId, idempotencyKey, projectId],
+      )
+      expect(persisted.rows[0]).toEqual({ projects: '1', workspaces: '1', dispatches: '0' })
+    } finally {
+      await cleanupActor(fixture.actorId)
+    }
+  })
+
   it('releases only an initial upload wait and leaves later pauses untouched', async () => {
     const fixture = await seedProject()
     const projectId = randomUUID()

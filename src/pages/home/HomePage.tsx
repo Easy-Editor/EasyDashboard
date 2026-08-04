@@ -42,6 +42,103 @@ type PendingAttachment = {
 
 type PendingAgentStart = Awaited<ReturnType<typeof startAgentProject>>
 
+type AgentStartAttachmentFlowDependencies = {
+  uploadAgentFile: typeof uploadAgentFile
+  setAgentMessageAttachments: typeof setAgentMessageAttachments
+  updateTaskProgress: typeof updateTaskProgress
+  syncAgentWorkspaceProject: typeof syncAgentWorkspaceProject
+  finalizeAgentStartAttachments: typeof finalizeAgentStartAttachments
+  recordAgentRun: typeof recordAgentRun
+}
+
+const agentStartAttachmentFlowDependencies: AgentStartAttachmentFlowDependencies = {
+  uploadAgentFile,
+  setAgentMessageAttachments,
+  updateTaskProgress,
+  syncAgentWorkspaceProject,
+  finalizeAgentStartAttachments,
+  recordAgentRun,
+}
+
+export function getLegacyAgentStartOperationId(started: { run?: { operationId?: string } }): string | null {
+  return started.run?.operationId?.trim() || null
+}
+
+export async function runAgentStartAttachmentFlow(
+  input: {
+    ownerUserId: string
+    started: PendingAgentStart
+    attachments: PendingAttachment[]
+    uploadedAttachments: Map<string, AgentAttachmentInput>
+  },
+  dependencies: AgentStartAttachmentFlowDependencies = agentStartAttachmentFlowDependencies,
+): Promise<string> {
+  const uploaded: AgentAttachmentInput[] = []
+  for (const attachment of input.attachments) {
+    let completed = input.uploadedAttachments.get(attachment.id)
+    if (!completed) {
+      completed = await dependencies.uploadAgentFile(input.started.project.id, input.started.conversation.id, {
+        file: attachment.file,
+        scope: attachment.scope,
+        idempotencyKey: attachment.id,
+      })
+      input.uploadedAttachments.set(attachment.id, completed)
+    }
+    uploaded.push(completed)
+  }
+  const firstMessage = input.started.conversation.messages[0]
+  const firstTask = input.started.conversation.tasks[0]
+  if (!firstMessage || !firstTask) throw new Error('原子启动未返回首条任务')
+  dependencies.setAgentMessageAttachments({
+    ownerUserId: input.ownerUserId,
+    conversationId: input.started.conversation.id,
+    messageId: firstMessage.id,
+    attachments: uploaded,
+  })
+  const legacyOperationId = getLegacyAgentStartOperationId(input.started)
+  if (legacyOperationId) {
+    dependencies.updateTaskProgress({
+      ownerUserId: input.ownerUserId,
+      conversationId: input.started.conversation.id,
+      taskId: firstTask.id,
+      taskStatus: 'waiting',
+      stageId: 'plan-layout',
+      stageStatus: 'waiting',
+      detail: '等待 Agent 执行服务',
+    })
+  }
+  const attachmentSync = await dependencies.syncAgentWorkspaceProject({
+    ownerUserId: input.ownerUserId,
+    projectId: input.started.project.id,
+  })
+  if (attachmentSync.status === 'local-offline') {
+    throw new Error('附件已经上传，但工作区尚未同步到服务端')
+  }
+  if (legacyOperationId) {
+    const resumedRun = await dependencies.finalizeAgentStartAttachments(input.started.project.id, legacyOperationId)
+    dependencies.recordAgentRun({
+      ownerUserId: input.ownerUserId,
+      conversationId: input.started.conversation.id,
+      taskId: firstTask.id,
+      operationId: resumedRun.operationId,
+      status: resumedRun.status,
+      outcome: resumedRun.outcome,
+      receipt: resumedRun.receipt,
+      cost: resumedRun.cost,
+      trace: resumedRun.trace,
+      rollback: resumedRun.rollback,
+      rolledBackAt: resumedRun.rolledBackAt,
+      rollbackReceipt: resumedRun.rollbackReceipt,
+      usage: resumedRun.usage,
+    })
+    await dependencies.syncAgentWorkspaceProject({
+      ownerUserId: input.ownerUserId,
+      projectId: input.started.project.id,
+    })
+  }
+  return `/projects/${input.started.project.id}/agent/${input.started.conversation.id}`
+}
+
 function timestamp(value: string | null): number {
   if (!value) return Number.NEGATIVE_INFINITY
   const parsed = new Date(value).getTime()
@@ -229,66 +326,21 @@ export function HomePage() {
         replaceAgentWorkspace(hydrateAgentProjectWorkspace(readAgentWorkspace(user.id), started.workspace.payload))
       }
 
+      let destination = `/projects/${started.project.id}/agent/${started.conversation.id}`
       if (attachments.length > 0) {
-        const uploaded: AgentAttachmentInput[] = []
-        for (const attachment of attachments) {
-          let completed = uploadedAttachmentsRef.current.get(attachment.id)
-          if (!completed) {
-            completed = await uploadAgentFile(started.project.id, started.conversation.id, {
-              file: attachment.file,
-              scope: attachment.scope,
-              idempotencyKey: attachment.id,
-            })
-            uploadedAttachmentsRef.current.set(attachment.id, completed)
-          }
-          uploaded.push(completed)
-        }
-        const firstMessage = started.conversation.messages[0]
-        const firstTask = started.conversation.tasks[0]
-        if (!firstMessage || !firstTask) throw new Error('原子启动未返回首条任务')
-        setAgentMessageAttachments({
+        destination = await runAgentStartAttachmentFlow({
           ownerUserId: user.id,
-          conversationId: started.conversation.id,
-          messageId: firstMessage.id,
-          attachments: uploaded,
+          started,
+          attachments,
+          uploadedAttachments: uploadedAttachmentsRef.current,
         })
-        updateTaskProgress({
-          ownerUserId: user.id,
-          conversationId: started.conversation.id,
-          taskId: firstTask.id,
-          taskStatus: 'waiting',
-          stageId: 'plan-layout',
-          stageStatus: 'waiting',
-          detail: '等待 Agent 执行服务',
-        })
-        const attachmentSync = await syncAgentWorkspaceProject({ ownerUserId: user.id, projectId: started.project.id })
-        if (attachmentSync.status === 'local-offline') {
-          throw new Error('附件已经上传，但工作区尚未同步到服务端')
-        }
-        const resumedRun = await finalizeAgentStartAttachments(started.project.id, started.run.operationId)
-        recordAgentRun({
-          ownerUserId: user.id,
-          conversationId: started.conversation.id,
-          taskId: firstTask.id,
-          operationId: resumedRun.operationId,
-          status: resumedRun.status,
-          outcome: resumedRun.outcome,
-          receipt: resumedRun.receipt,
-          cost: resumedRun.cost,
-          trace: resumedRun.trace,
-          rollback: resumedRun.rollback,
-          rolledBackAt: resumedRun.rolledBackAt,
-          rollbackReceipt: resumedRun.rollbackReceipt,
-          usage: resumedRun.usage,
-        })
-        await syncAgentWorkspaceProject({ ownerUserId: user.id, projectId: started.project.id })
       }
       setPendingStart(null)
       startIdempotencyKeyRef.current = null
       setStartIdempotencyKey(null)
       setAttachments([])
       uploadedAttachmentsRef.current.clear()
-      navigate(`/projects/${started.project.id}/agent/${started.conversation.id}`)
+      navigate(destination)
     } catch (reason) {
       const detail = reason instanceof Error ? reason.message : 'Agent 项目创建失败，请重试'
       if (started) {
