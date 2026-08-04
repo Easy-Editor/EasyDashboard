@@ -62,4 +62,51 @@ describe('offline dashboard evaluation', () => {
     expect(() => runRecordedEvaluation([testCase], [result, result])).toThrow('must be unique')
     expect(() => dashboardDeterministicScorer.score(testCase, { ...result, caseId: 'other' })).toThrow('case mismatch')
   })
+
+  it('fails autonomous delivery recordings that only contain plausible text and operation counts', () => {
+    const autonomousCase: DashboardEvaluationCase = {
+      ...testCase,
+      expected: { ...testCase.expected, qualityProfile: 'autonomous-dashboard-v1' },
+    }
+    const superficial = dashboardDeterministicScorer.score(autonomousCase, recording('销售候选变更', 2))
+    expect(superficial.passed).toBe(false)
+    expect(superficial.criteria).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'delivery:task-completed', passed: false }),
+        expect.objectContaining({ id: 'delivery:clean-preview', passed: false }),
+        expect.objectContaining({ id: 'document:left-right-occupancy', passed: false }),
+      ]),
+    )
+
+    const complete: RecordedAgentResult = {
+      ...recording('销售候选变更', 2),
+      delivery: {
+        taskStatus: 'completed',
+        eventTypes: ['plan_created', 'change_committed', 'preview_checked', 'task_completed'],
+        semanticRevisions: 1,
+        preview: {
+          renderReady: true,
+          browserErrorCount: 0,
+          resourceErrorCount: 0,
+          materialGapCount: 0,
+          layoutStatus: 'passed',
+        },
+      },
+      document: {
+        componentsTree: [
+          {
+            componentName: 'Root',
+            $dashboard: { rect: { x: 0, y: 0, width: 1920, height: 1080 } },
+            children: [
+              { componentName: 'Div', $dashboard: { rect: { x: 20, y: 100, width: 400, height: 800 } } },
+              { componentName: 'Text', $dashboard: { rect: { x: 80, y: 140, width: 300, height: 80 } } },
+              { componentName: 'GeoMap', $dashboard: { rect: { x: 650, y: 180, width: 620, height: 620 } } },
+              { componentName: 'Div', $dashboard: { rect: { x: 1500, y: 100, width: 400, height: 800 } } },
+            ],
+          },
+        ],
+      },
+    }
+    expect(dashboardDeterministicScorer.score(autonomousCase, complete)).toMatchObject({ passed: true, score: 1 })
+  })
 })

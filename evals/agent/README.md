@@ -15,11 +15,24 @@ Each recording has this shape:
     "text": "生成销售趋势候选变更",
     "capabilities": ["screen.applyChangeSet"],
     "operations": [{ "opId": "add-sales-chart" }]
-  }
+  },
+  "delivery": {
+    "taskStatus": "completed",
+    "eventTypes": ["plan_created", "change_committed", "preview_checked", "task_completed"],
+    "semanticRevisions": 1,
+    "preview": {
+      "renderReady": true,
+      "browserErrorCount": 0,
+      "resourceErrorCount": 0,
+      "materialGapCount": 0,
+      "layoutStatus": "passed"
+    }
+  },
+  "document": { "componentsTree": ["the committed project document"] }
 }
 ```
 
-Missing cases score zero. When a baseline is supplied, the runner reports aggregate and per-case deltas.
+The `autonomous-dashboard-v1` quality profile rejects recordings that contain only plausible text and operation counts. It also requires a completed durable task, planning/commit/preview/completion events, bounded semantic revisions, clean layout evidence, at least four renderable nodes, left/right viewport occupancy, and no full-screen `DashboardScene` shortcut. Missing cases or missing delivery/document evidence score zero on those gates. When a baseline is supplied, the runner reports aggregate and per-case deltas.
 
 ## Live bank generation benchmark
 

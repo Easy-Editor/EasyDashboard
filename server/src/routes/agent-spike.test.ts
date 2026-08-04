@@ -186,7 +186,7 @@ function preparedResult(input: ExecutorPrepareInput): ExecutorPreparedResult {
       },
       materials: {
         manifestVersion: input.compatibility.materialManifestVersion,
-        loaded: [{ materialId: 'text', version: '1.0.0' }],
+        loaded: [{ materialId: 'Text', version: '1.0.0' }],
         missing: [],
       },
       request: {

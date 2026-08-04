@@ -548,6 +548,41 @@ describe('executor prepare contract', () => {
     )
   })
 
+  it('requires material gaps to match the candidate tree and loaded Host registry', () => {
+    const clean = preparedResult()
+    const candidateWithGap = {
+      ...clean,
+      candidateProject: createDocumentDescriptor({
+        componentsTree: [
+          {
+            id: 'root',
+            componentName: 'Root',
+            children: [{ id: 'unknown', componentName: 'MissingKpi', children: [] }],
+          },
+        ],
+      }),
+      evidence: {
+        ...clean.evidence,
+        materials: {
+          ...clean.evidence.materials,
+          loaded: [{ materialId: 'Root', version: '1' }],
+          missing: ['MissingKpi'],
+        },
+      },
+    }
+
+    expect(() => validatePreparedResult(prepareInput(), candidateWithGap)).not.toThrow()
+    expect(() =>
+      validatePreparedResult(prepareInput(), {
+        ...candidateWithGap,
+        evidence: {
+          ...candidateWithGap.evidence,
+          materials: { ...candidateWithGap.evidence.materials, missing: [] },
+        },
+      }),
+    ).toThrow('material')
+  })
+
   it('accepts a fully evidenced prepared result and rejects result drift', () => {
     const input = prepareInput()
     const result = preparedResult()

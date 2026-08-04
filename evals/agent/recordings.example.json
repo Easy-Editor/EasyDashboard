@@ -5,6 +5,20 @@
       "text": "已生成包含低空运行和告警模块的候选变更。",
       "capabilities": ["screen.applyChangeSet"],
       "operations": [{ "opId": "layout" }, { "opId": "flights" }, { "opId": "routes" }, { "opId": "alerts" }]
+    },
+    "delivery": {
+      "taskStatus": "completed",
+      "eventTypes": ["plan_created", "change_committed", "preview_checked", "task_completed"],
+      "semanticRevisions": 1,
+      "preview": { "renderReady": true, "browserErrorCount": 0, "resourceErrorCount": 0, "materialGapCount": 0, "layoutStatus": "passed" }
+    },
+    "document": {
+      "componentsTree": [{ "componentName": "Root", "$dashboard": { "rect": { "x": 0, "y": 0, "width": 1920, "height": 1080 } }, "children": [
+        { "componentName": "Div", "$dashboard": { "rect": { "x": 20, "y": 120, "width": 400, "height": 800 } } },
+        { "componentName": "GeoMap", "$dashboard": { "rect": { "x": 650, "y": 180, "width": 620, "height": 620 } } },
+        { "componentName": "Div", "$dashboard": { "rect": { "x": 1500, "y": 120, "width": 400, "height": 800 } } },
+        { "componentName": "Text", "$dashboard": { "rect": { "x": 700, "y": 40, "width": 520, "height": 64 } } }
+      ] }]
     }
   },
   {
@@ -13,6 +27,20 @@
       "text": "已生成销售指标和区域趋势候选变更。",
       "capabilities": ["screen.applyChangeSet"],
       "operations": [{ "opId": "layout" }, { "opId": "metrics" }, { "opId": "trend" }]
+    },
+    "delivery": {
+      "taskStatus": "completed",
+      "eventTypes": ["plan_created", "change_committed", "preview_checked", "task_completed"],
+      "semanticRevisions": 0,
+      "preview": { "renderReady": true, "browserErrorCount": 0, "resourceErrorCount": 0, "materialGapCount": 0, "layoutStatus": "passed" }
+    },
+    "document": {
+      "componentsTree": [{ "componentName": "Root", "$dashboard": { "rect": { "x": 0, "y": 0, "width": 1920, "height": 1080 } }, "children": [
+        { "componentName": "Div", "$dashboard": { "rect": { "x": 20, "y": 120, "width": 400, "height": 800 } } },
+        { "componentName": "LineChart", "$dashboard": { "rect": { "x": 650, "y": 180, "width": 620, "height": 620 } } },
+        { "componentName": "Div", "$dashboard": { "rect": { "x": 1500, "y": 120, "width": 400, "height": 800 } } },
+        { "componentName": "Text", "$dashboard": { "rect": { "x": 700, "y": 40, "width": 520, "height": 64 } } }
+      ] }]
     }
   }
 ]

@@ -18,6 +18,7 @@ describe('fixed dashboard evaluation dataset', () => {
       expect(testCase.expected.requiredCapabilities).toContain('screen.applyChangeSet')
       expect(testCase.expected.requiredKeywords.length).toBeGreaterThan(0)
       expect(testCase.expected.minOperationCount).toBeGreaterThan(0)
+      expect(testCase.expected.qualityProfile).toBe('autonomous-dashboard-v1')
     }
   })
 })

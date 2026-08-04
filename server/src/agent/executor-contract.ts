@@ -660,6 +660,35 @@ function authorityFieldsMatch(grant: ExecutorGrantPayload, input: ExecutorPrepar
   )
 }
 
+function expectedMissingMaterialIds(schema: unknown, loadedMaterialIds: readonly string[]): string[] {
+  const loaded = new Set(loadedMaterialIds)
+  const required = new Set<string>()
+  const visited = new Set<Record<string, unknown>>()
+  const visitNode = (value: unknown): void => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return
+    const node = value as Record<string, unknown>
+    if (visited.has(node)) return
+    visited.add(node)
+    if (typeof node.componentName === 'string' && node.componentName.trim()) required.add(node.componentName.trim())
+    if (Array.isArray(node.children)) node.children.forEach(visitNode)
+  }
+  const findTrees = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(findTrees)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const record = value as Record<string, unknown>
+    if (visited.has(record)) return
+    if (Array.isArray(record.componentsTree)) record.componentsTree.forEach(visitNode)
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== 'componentsTree') findTrees(child)
+    }
+  }
+  findTrees(schema)
+  return [...required].filter(componentName => !loaded.has(componentName)).sort()
+}
+
 export function authorizeExecutorPrepare(
   grantToken: string,
   value: unknown,
@@ -677,11 +706,16 @@ export function authorizeExecutorPrepare(
 export function parseExecutorPreparedResult(value: unknown): ExecutorPreparedResult {
   const result = parseStrict(executorPreparedResultSchema, value, 'Executor prepared result')
   assertDocumentDescriptor(result.candidateProject)
+  const expectedMissingMaterials = expectedMissingMaterialIds(
+    result.candidateProject.schema,
+    result.evidence.materials.loaded.map(material => material.materialId),
+  )
   const internallyConsistent =
     result.compatibilitySha256 === hashCompatibilityTuple(result.compatibility) &&
     result.preRevision !== result.postRevision &&
     result.semanticReceipt.revision === result.postRevision &&
     result.evidence.materials.manifestVersion === result.compatibility.materialManifestVersion &&
+    JSON.stringify(result.evidence.materials.missing) === JSON.stringify(expectedMissingMaterials) &&
     Date.parse(result.evidence.request.completedAt) >= Date.parse(result.evidence.request.startedAt)
   if (!internallyConsistent) {
     throw new ExecutorContractError(
