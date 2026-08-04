@@ -17,6 +17,7 @@ import type {
   AgentRunCostRecord,
   AgentRunDispatchRecord,
   AgentRunDispatchState,
+  AgentScreenshotArtifactRecord,
   AgentSpikeOperationBinding,
   AgentSpikeOperationRecord,
   AgentSpikeOperationStatus,
@@ -46,6 +47,7 @@ import {
   agentProviderAttempts,
   agentRunCosts,
   agentRunDispatches,
+  agentScreenshotArtifacts,
   agentSpikeOperations,
   agentTaskEvents,
   agentTaskOperationalEvents,
@@ -73,6 +75,25 @@ import {
 
 const THUMBNAIL_BUCKET = 'easy-dashboard-thumbnails'
 const AGENT_ASSET_BUCKET = 'easy-dashboard-agent-assets'
+const AGENT_SCREENSHOT_ARTIFACT_BUCKET = 'easy-dashboard-agent-screenshots'
+const MAX_AGENT_SCREENSHOT_ARTIFACT_BYTES = 10 * 1024 * 1024
+const AGENT_SCREENSHOT_ARTIFACT_URL_EXPIRES_IN = 60
+const agentScreenshotArtifactSelection = {
+  id: agentScreenshotArtifacts.id,
+  actorId: agentScreenshotArtifacts.actorId,
+  projectId: agentScreenshotArtifacts.projectId,
+  operationId: agentScreenshotArtifacts.operationId,
+  candidateSha256: agentScreenshotArtifacts.candidateSha256,
+  draftVersion: agentScreenshotArtifacts.draftVersion,
+  contentType: agentScreenshotArtifacts.contentType,
+  size: agentScreenshotArtifacts.size,
+  sha256: agentScreenshotArtifacts.sha256,
+  status: agentScreenshotArtifacts.status,
+  storagePath: agentScreenshotArtifacts.storagePath,
+  completedAt: agentScreenshotArtifacts.completedAt,
+  createdAt: agentScreenshotArtifacts.createdAt,
+  updatedAt: agentScreenshotArtifacts.updatedAt,
+}
 const MAX_AGENT_ASSET_BYTES = 20 * 1024 * 1024
 const MAX_AGENT_ASSET_COUNT = 200
 const AGENT_ASSET_UPLOAD_STALE_HOURS = 3
@@ -939,6 +960,11 @@ export function createPgRepository(env: AppEnv): Repository {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       global: { headers: { Authorization: `Bearer ${accessToken}` } },
     }).storage.from(AGENT_ASSET_BUCKET)
+  const agentScreenshotArtifactStorage = (accessToken: string) =>
+    createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    }).storage.from(AGENT_SCREENSHOT_ARTIFACT_BUCKET)
 
   const failAgentAssetUpload = async (actorId: string, accessToken: string, id: string) => {
     const failed = await withActor(actorId, async tx => {
@@ -1388,6 +1414,7 @@ export function createPgRepository(env: AppEnv): Repository {
           thumbnail_artifacts.path,
           thumbnail_artifacts.status,
           agent_operations.status as agent_operation_status,
+          agent_screenshot_artifacts.status as agent_screenshot_artifact_status,
           agent_costs.billing_scope as agent_cost_billing_scope,
           agent_costs.payer_id as agent_cost_payer_id,
           agent_costs.turn_id as agent_cost_turn_id,
@@ -1415,6 +1442,7 @@ export function createPgRepository(env: AppEnv): Repository {
         cross join app.project_publish_approvals as publish_approvals
         cross join app.project_thumbnail_artifacts as thumbnail_artifacts
         cross join app.agent_spike_operations as agent_operations
+        cross join app.agent_screenshot_artifacts as agent_screenshot_artifacts
         cross join app.agent_run_costs as agent_costs
         cross join app.agent_run_dispatches as agent_dispatches
         cross join app.agent_task_runs as agent_task_runs
@@ -3812,6 +3840,220 @@ export function createPgRepository(env: AppEnv): Repository {
           .limit(1)
         return (operation as AgentSpikeOperationRecord | undefined) ?? null
       })
+    },
+    async createAgentScreenshotArtifactUpload(actorId, accessToken, projectId, operationId, input) {
+      const reserved = await withActor(actorId, async tx => {
+        await lockAgentSpikeOperation(tx, actorId, operationId)
+        const operation = await selectAgentSpikeOperation(tx, actorId, operationId, true)
+        if (!operation || operation.projectId !== projectId) return null
+        if (!['prepared', 'committed'].includes(operation.status) || !operation.candidateDigest) {
+          return 'invalid_state' as const
+        }
+        const candidateDraftVersion = operation.committedDraftVersion ?? operation.baseDraftVersion + 1
+        if (operation.candidateDigest !== input.candidateSha256 || candidateDraftVersion !== input.draftVersion) {
+          return 'conflict' as const
+        }
+        const [membership] = await tx
+          .select({ role: projectMembers.role })
+          .from(projectMembers)
+          .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+          .where(
+            and(
+              eq(projectMembers.projectId, projectId),
+              eq(projectMembers.userId, actorId),
+              inArray(projectMembers.role, ['owner', 'editor']),
+              isNull(projects.deletedAt),
+            ),
+          )
+          .limit(1)
+        if (!membership) return null
+        const [existing] = await tx
+          .select(agentScreenshotArtifactSelection)
+          .from(agentScreenshotArtifacts)
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.agentOperationId, operation.id),
+            ),
+          )
+          .for('update')
+          .limit(1)
+        if (existing) {
+          const exactReplay =
+            existing.projectId === projectId &&
+            existing.operationId === operationId &&
+            existing.candidateSha256 === input.candidateSha256 &&
+            existing.draftVersion === input.draftVersion &&
+            existing.contentType === input.contentType &&
+            existing.size === input.size &&
+            existing.sha256 === input.sha256
+          if (!exactReplay || existing.status === 'failed') return 'conflict' as const
+          return existing
+        }
+        const artifactId = randomUUID()
+        const storagePath = `${actorId}/${projectId}/${artifactId}.png`
+        const [artifact] = await tx
+          .insert(agentScreenshotArtifacts)
+          .values({
+            id: artifactId,
+            actorId,
+            projectId,
+            agentOperationId: operation.id,
+            operationId,
+            candidateSha256: input.candidateSha256,
+            draftVersion: input.draftVersion,
+            contentType: input.contentType,
+            size: input.size,
+            sha256: input.sha256,
+            storagePath,
+          })
+          .returning(agentScreenshotArtifactSelection)
+        if (!artifact) throw new Error('Agent screenshot artifact reservation returned no row')
+        return artifact
+      })
+      if (!reserved || reserved === 'conflict' || reserved === 'invalid_state') return reserved
+      if (reserved.status === 'ready') return { artifact: reserved, alreadyCompleted: true as const }
+      const { data, error } = await agentScreenshotArtifactStorage(accessToken).createSignedUploadUrl(
+        reserved.storagePath,
+      )
+      if (error || !data) throw new Error(error?.message ?? 'Unable to sign Agent screenshot artifact upload')
+      return {
+        artifact: reserved,
+        bucket: AGENT_SCREENSHOT_ARTIFACT_BUCKET,
+        path: reserved.storagePath,
+        signedUrl: data.signedUrl,
+        token: data.token,
+        maxBytes: MAX_AGENT_SCREENSHOT_ARTIFACT_BYTES,
+        expiresIn: 7200,
+        alreadyCompleted: false as const,
+      }
+    },
+    async completeAgentScreenshotArtifactUpload(actorId, accessToken, projectId, operationId, input) {
+      const artifact = await withActor(actorId, async tx => {
+        const [row] = await tx
+          .select(agentScreenshotArtifactSelection)
+          .from(agentScreenshotArtifacts)
+          .innerJoin(agentSpikeOperations, eq(agentSpikeOperations.id, agentScreenshotArtifacts.agentOperationId))
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.id, input.artifactId),
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.projectId, projectId),
+              eq(agentScreenshotArtifacts.operationId, operationId),
+              eq(agentSpikeOperations.actorId, actorId),
+              eq(agentSpikeOperations.projectId, projectId),
+              eq(agentSpikeOperations.operationId, operationId),
+            ),
+          )
+          .limit(1)
+        return row ?? null
+      })
+      if (!artifact) return null
+      if (artifact.storagePath !== input.path) return 'integrity_conflict'
+      if (artifact.status === 'ready') return artifact as AgentScreenshotArtifactRecord
+      if (artifact.status !== 'uploading') return 'invalid'
+      const storage = agentScreenshotArtifactStorage(accessToken)
+      const { data: info, error: infoError } = await storage.info(input.path)
+      if (infoError) throw new Error(infoError.message || 'Unable to inspect Agent screenshot artifact')
+      let valid = Boolean(
+        info && info.size === artifact.size && info.contentType?.toLowerCase().startsWith(artifact.contentType),
+      )
+      let digest: string | null = null
+      if (valid) {
+        const { data, error } = await storage.download(input.path)
+        if (error) throw new Error(error.message || 'Unable to download Agent screenshot artifact')
+        if (data) {
+          const bytes = new Uint8Array(await data.arrayBuffer())
+          digest = createHash('sha256').update(bytes).digest('hex')
+          valid =
+            bytes.byteLength === artifact.size &&
+            bytes.length >= 8 &&
+            bytes[0] === 0x89 &&
+            bytes[1] === 0x50 &&
+            bytes[2] === 0x4e &&
+            bytes[3] === 0x47 &&
+            bytes[4] === 0x0d &&
+            bytes[5] === 0x0a &&
+            bytes[6] === 0x1a &&
+            bytes[7] === 0x0a &&
+            digest === artifact.sha256
+        } else {
+          valid = false
+        }
+      }
+      if (!valid || digest !== artifact.sha256) {
+        await withActor(actorId, async tx => {
+          await tx
+            .update(agentScreenshotArtifacts)
+            .set({ status: 'failed', updatedAt: new Date() })
+            .where(
+              and(
+                eq(agentScreenshotArtifacts.id, artifact.id),
+                eq(agentScreenshotArtifacts.actorId, actorId),
+                eq(agentScreenshotArtifacts.status, 'uploading'),
+              ),
+            )
+        })
+        await storage.remove([artifact.storagePath]).catch(() => undefined)
+        return 'invalid'
+      }
+      return withActor(actorId, async tx => {
+        const completedAt = new Date()
+        const [completed] = await tx
+          .update(agentScreenshotArtifacts)
+          .set({ status: 'ready', completedAt, updatedAt: completedAt })
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.id, artifact.id),
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.projectId, projectId),
+              eq(agentScreenshotArtifacts.status, 'uploading'),
+              eq(agentScreenshotArtifacts.sha256, digest!),
+            ),
+          )
+          .returning(agentScreenshotArtifactSelection)
+        if (completed) return completed as AgentScreenshotArtifactRecord
+        const [replayed] = await tx
+          .select(agentScreenshotArtifactSelection)
+          .from(agentScreenshotArtifacts)
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.id, artifact.id),
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.status, 'ready'),
+            ),
+          )
+          .limit(1)
+        return (replayed as AgentScreenshotArtifactRecord | undefined) ?? null
+      })
+    },
+    async getAgentScreenshotArtifactDownload(actorId, accessToken, projectId, operationId) {
+      const artifact = await withActor(actorId, async tx => {
+        const [row] = await tx
+          .select(agentScreenshotArtifactSelection)
+          .from(agentScreenshotArtifacts)
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.projectId, projectId),
+              eq(agentScreenshotArtifacts.operationId, operationId),
+              eq(agentScreenshotArtifacts.status, 'ready'),
+            ),
+          )
+          .limit(1)
+        return row ?? null
+      })
+      if (!artifact) return null
+      const { data, error } = await agentScreenshotArtifactStorage(accessToken).createSignedUrl(
+        artifact.storagePath,
+        AGENT_SCREENSHOT_ARTIFACT_URL_EXPIRES_IN,
+      )
+      if (error || !data) return null
+      return {
+        artifact: artifact as AgentScreenshotArtifactRecord,
+        signedUrl: data.signedUrl,
+        expiresIn: AGENT_SCREENSHOT_ARTIFACT_URL_EXPIRES_IN,
+      }
     },
     enqueueAgentRunDispatch(actorId, input) {
       return withActor(actorId, async tx => {

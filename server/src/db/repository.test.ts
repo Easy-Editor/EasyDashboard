@@ -103,6 +103,7 @@ describe('database readiness', () => {
     expect(query).toContain('cross join app.project_publish_approvals as publish_approvals')
     expect(query).toContain('cross join app.project_thumbnail_artifacts as thumbnail_artifacts')
     expect(query).toContain('cross join app.agent_spike_operations as agent_operations')
+    expect(query).toContain('cross join app.agent_screenshot_artifacts as agent_screenshot_artifacts')
     expect(query).toContain('cross join app.agent_run_costs as agent_costs')
     expect(query).toContain('cross join app.agent_run_dispatches as agent_dispatches')
     expect(query).toContain('agent_costs.billing_scope')

@@ -134,6 +134,22 @@ candidate. Commit accepts only the operation URL and candidate SHA-256; the
 repository performs the draft CAS and durable operation outcome in one
 transaction.
 
+Rendered PNG evidence has a separate authenticated artifact lifecycle:
+
+```text
+POST /api/projects/:projectId/agent-spike/operations/:operationId/screenshot-artifact/upload
+POST /api/projects/:projectId/agent-spike/operations/:operationId/screenshot-artifact/complete
+GET  /api/projects/:projectId/agent-spike/operations/:operationId/screenshot-artifact
+```
+
+The reservation is bound to the operation, candidate SHA-256, draft version,
+declared byte size, and screenshot SHA-256. Completion downloads the private
+object and verifies its PNG signature, size, content type, and digest before it
+becomes readable. These routes require the authenticated project session; the
+Document Executor grant is intentionally not a Supabase Storage credential.
+The runner-to-upload handoff must therefore be supplied by the authenticated
+orchestration layer before screenshot bytes are persisted end to end.
+
 The real PostgreSQL M0 integration test is opt-in. Set
 `AGENT_SPIKE_TEST_DATABASE_URL` to an isolated runtime-test database and
 `AGENT_SPIKE_TEST_ADMIN_DATABASE_URL` to its migration/admin connection before

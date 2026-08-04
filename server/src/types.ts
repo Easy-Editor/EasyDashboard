@@ -124,6 +124,44 @@ export interface CompletedAgentAssetUploadContract {
   asset: Pick<AgentAssetRecord, 'id' | 'originalName' | 'contentType' | 'size'>
 }
 export type AgentAssetUploadContract = PendingAgentAssetUploadContract | CompletedAgentAssetUploadContract
+export interface AgentScreenshotArtifactRecord {
+  id: string
+  actorId: string
+  projectId: string
+  operationId: string
+  candidateSha256: string
+  draftVersion: number
+  contentType: 'image/png'
+  size: number
+  sha256: string
+  status: 'uploading' | 'ready' | 'failed'
+  storagePath: string
+  completedAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}
+export interface PendingAgentScreenshotArtifactUploadContract {
+  artifact: AgentScreenshotArtifactRecord
+  bucket: string
+  path: string
+  signedUrl: string
+  token: string
+  maxBytes: number
+  expiresIn: number
+  alreadyCompleted: false
+}
+export interface CompletedAgentScreenshotArtifactUploadContract {
+  artifact: AgentScreenshotArtifactRecord
+  alreadyCompleted: true
+}
+export type AgentScreenshotArtifactUploadContract =
+  | PendingAgentScreenshotArtifactUploadContract
+  | CompletedAgentScreenshotArtifactUploadContract
+export interface AgentScreenshotArtifactDownloadContract {
+  artifact: AgentScreenshotArtifactRecord
+  signedUrl: string
+  expiresIn: number
+}
 export interface AgentRunCostRecord {
   id: string
   actorId: string
@@ -1368,6 +1406,32 @@ export interface Repository {
   listAgentAssets?(actorId: string, projectId: string, conversationId?: string): Promise<AgentAssetRecord[]>
   getAgentAssetDownloadUrl?(actorId: string, accessToken: string, projectId: string, id: string): Promise<string | null>
   deleteAgentAsset?(actorId: string, accessToken: string, projectId: string, id: string): Promise<boolean>
+  createAgentScreenshotArtifactUpload?(
+    actorId: string,
+    accessToken: string,
+    projectId: string,
+    operationId: string,
+    input: {
+      candidateSha256: string
+      draftVersion: number
+      contentType: 'image/png'
+      size: number
+      sha256: string
+    },
+  ): Promise<AgentScreenshotArtifactUploadContract | 'conflict' | 'invalid_state' | null>
+  completeAgentScreenshotArtifactUpload?(
+    actorId: string,
+    accessToken: string,
+    projectId: string,
+    operationId: string,
+    input: { artifactId: string; path: string },
+  ): Promise<AgentScreenshotArtifactRecord | 'invalid' | 'integrity_conflict' | null>
+  getAgentScreenshotArtifactDownload?(
+    actorId: string,
+    accessToken: string,
+    projectId: string,
+    operationId: string,
+  ): Promise<AgentScreenshotArtifactDownloadContract | null>
   reserveAgentRunCost?(
     actorId: string,
     input: {

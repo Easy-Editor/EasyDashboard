@@ -264,6 +264,35 @@ export const agentSpikeOperations = appSchema.table(
   ],
 )
 
+export const agentScreenshotArtifacts = appSchema.table(
+  'agent_screenshot_artifacts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    actorId: uuid('actor_id').notNull(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    agentOperationId: uuid('agent_operation_id')
+      .notNull()
+      .references(() => agentSpikeOperations.id, { onDelete: 'cascade' }),
+    operationId: text('operation_id').notNull(),
+    candidateSha256: text('candidate_sha256').notNull(),
+    draftVersion: integer('draft_version').notNull(),
+    contentType: text('content_type').$type<'image/png'>().notNull(),
+    size: integer('size').notNull(),
+    sha256: text('sha256').notNull(),
+    status: text('status').$type<'uploading' | 'ready' | 'failed'>().notNull().default('uploading'),
+    storagePath: text('storage_path').notNull().unique(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    uniqueIndex('agent_screenshot_artifacts_operation_uidx').on(table.actorId, table.agentOperationId),
+    index('agent_screenshot_artifacts_project_created_idx').on(table.projectId, table.createdAt),
+  ],
+)
+
 /** Durable per-user/per-project Agent workspace aggregate. The JSON payload is
  * intentionally versioned so the client domain can evolve without widening
  * this table for every conversational field. */
@@ -912,6 +941,7 @@ export const schema = {
   projectRevisions,
   agentAssets,
   agentSpikeOperations,
+  agentScreenshotArtifacts,
   agentWorkspaces,
   agentProjectContexts,
   projectPublishSnapshots,

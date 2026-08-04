@@ -9,6 +9,7 @@ import { createAgentPlanRoutes } from './routes/agent-plan.js'
 import { createAgentPreferenceRoutes } from './routes/agent-preferences.js'
 import { createAgentProjectContextRoutes } from './routes/agent-project-context.js'
 import { createAgentRunRoutes } from './routes/agent-runs.js'
+import { createAgentScreenshotArtifactRoutes } from './routes/agent-screenshot-artifacts.js'
 import { type AgentSpikeRouteOptions, createAgentSpikeExecutorRoutes } from './routes/agent-spike.js'
 import { createAgentStartRoutes } from './routes/agent-starts.js'
 import { createAgentWorkspaceRoutes } from './routes/agent-workspace.js'
@@ -95,6 +96,7 @@ export function createApp({
   )
   app.route('/projects', createProjectMemberRoutes(repository))
   app.route('/projects', createProjectRoutes(repository))
+  app.route('/projects', createAgentScreenshotArtifactRoutes(repository))
   app.route('/projects', createAgentAssetRoutes(repository))
   app.route('/projects', createAgentProjectContextRoutes(repository))
 
