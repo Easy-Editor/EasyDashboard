@@ -36,13 +36,7 @@ export function renderDashboardAgentCoreCapabilities(): string {
 }
 
 const registry = createSkillRegistry({
-  capabilityCatalog: [
-    'data-source.configure',
-    'spatial.advanced',
-    'custom-component.sandbox',
-    'project.publish',
-    'data.clean.specialized',
-  ],
+  capabilityCatalog: ['data-source.configure', 'spatial.advanced', 'project.publish', 'data.clean.specialized'],
   skills: [
     {
       id: 'data-source-design',
@@ -67,15 +61,6 @@ const registry = createSkillRegistry({
         '保持空间数据来源和坐标口径可追溯。',
       ],
       capabilities: ['spatial.advanced'],
-      source: 'platform',
-    },
-    {
-      id: 'sandbox-custom-component',
-      version: '1.0.0',
-      title: '沙箱自定义组件',
-      description: '在现有物料与局部 DashboardScene 均无法表达时实现隔离的自定义组件。',
-      instructions: ['仅处理明确的局部能力缺口。', '自定义代码必须留在受限沙箱和授权边界内。'],
-      capabilities: ['custom-component.sandbox'],
       source: 'platform',
     },
     {
@@ -126,9 +111,6 @@ export function selectDashboardAgentSkillManifest(prompt: string) {
     )
   ) {
     add('gis-3d-design', 'spatial.advanced')
-  }
-  if (/(?:沙箱.*自定义组件|自定义组件.*沙箱|编写.*自定义组件)/iu.test(prompt)) {
-    add('sandbox-custom-component', 'custom-component.sandbox')
   }
   if (/(?:发布|上线|部署到生产)/iu.test(prompt)) add('dashboard-publishing', 'project.publish')
   if (/(?:数据清洗|清洗.*(?:异常|明细|数据)|异常数据.*处理)/iu.test(prompt)) {

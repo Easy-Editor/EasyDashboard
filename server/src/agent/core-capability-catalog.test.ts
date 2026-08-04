@@ -19,9 +19,7 @@ describe('Dashboard Agent capability boundaries', () => {
     expect(selectDashboardAgentSkillManifest('制作 GIS 三维地图').skills.map(skill => skill.id)).toEqual([
       'gis-3d-design',
     ])
-    expect(selectDashboardAgentSkillManifest('用沙箱自定义组件实现特殊效果').skills.map(skill => skill.id)).toEqual([
-      'sandbox-custom-component',
-    ])
+    expect(selectDashboardAgentSkillManifest('用沙箱自定义组件实现特殊效果').skills).toEqual([])
     expect(selectDashboardAgentSkillManifest('发布这个大屏').skills.map(skill => skill.id)).toEqual([
       'dashboard-publishing',
     ])

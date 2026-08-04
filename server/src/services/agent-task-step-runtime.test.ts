@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createAgentProviderInputSnapshot } from '../agent/change-set-model.js'
 import { canonicalJsonSha256 } from '../db/agent-stage-commit.js'
 import type { ResolvedAgentModelRuntime } from '../routes/agent-config.js'
 import type { AgentSpikeOperationRecord, AgentTaskRunDetailRecord, ProjectRecord, Repository } from '../types.js'
@@ -56,6 +57,13 @@ function detail(stepStatus: 'running' | 'passed' = 'running', observation: Recor
         billingScope: runtime.billingScope,
         payerId: runtime.payerId,
       }),
+      bounds: {
+        maxProviderTurns: 12,
+        maxStepRevisions: 2,
+        maxExecutorRetries: 2,
+        tokenLimit: 100_000,
+        costLimitMicros: 1_000_000,
+      },
     },
     activePlan: {
       plan: { id: 'plan-1', taskRunId: 'run-1', version: 1, summary: 'Plan' },
@@ -97,7 +105,10 @@ function transition(input: Record<string, unknown> = {}, kind: AgentTaskTransiti
   } satisfies AgentTaskTransitionClaim
 }
 
-function operation(status: AgentSpikeOperationRecord['status'] = 'committed'): AgentSpikeOperationRecord {
+function operation(
+  status: AgentSpikeOperationRecord['status'] = 'committed',
+  layoutStatus?: 'passed' | 'failed',
+): AgentSpikeOperationRecord {
   return {
     id: 'receipt-1',
     actorId,
@@ -126,6 +137,24 @@ function operation(status: AgentSpikeOperationRecord['status'] = 'committed'): A
         rendererReady: true,
         status: 'rendered',
         screenshotSha256: 'e'.repeat(64),
+        ...(layoutStatus
+          ? {
+              layout: {
+                status: layoutStatus,
+                targetViewport: { width: 1920, height: 1080 },
+                browserViewport: { width: 1920, height: 1080 },
+                simulatorViewport: { x: 0, y: 0, width: 1920, height: 1080 },
+                viewportMatchesTarget: true,
+                componentElementCount: 8,
+                visibleElementCount: 6,
+                hiddenElementCount: 2,
+                zeroAreaElementCount: layoutStatus === 'failed' ? 1 : 0,
+                overflowingElementCount: layoutStatus === 'failed' ? 1 : 0,
+                clippedElementCount: 0,
+                documentOverflow: { horizontal: false, vertical: false },
+              },
+            }
+          : {}),
         resourceErrors: [],
       },
       materials: { missing: [] },
@@ -188,6 +217,16 @@ function harness(
     }
   },
 ) {
+  const providerInputSnapshot = createAgentProviderInputSnapshot({
+    prompt: '实现经营分析大屏',
+    conversationTurns: [{ role: 'user', content: '左右面板保持对称' }],
+    selectionContext: { pageId: 'page-home', selectedRefs: [{ id: 'title', title: '旧标题' }] },
+    project: project(),
+    conversationId: 'conversation-1',
+    taskId: 'task-1',
+    attachments: [],
+    projectContext: [{ title: '视觉方向', content: '深色克制风格', status: 'confirmed' }],
+  })
   const prepared = {
     id: 'replan-attempt-1',
     state: 'prepared' as const,
@@ -198,7 +237,13 @@ function harness(
   const repository = {
     getAgentTaskRunDetail: vi.fn(async () => detail()),
     getAgentTaskTransitionProviderResult: vi.fn(async () => null),
-    getAgentTaskPlanningInput: vi.fn(async () => ({ prompt: '实现经营分析大屏' })),
+    getAgentTaskPlanningInput: vi.fn(async () => ({
+      purpose: 'planning',
+      prompt: '实现经营分析大屏',
+      attachmentIds: [],
+      providerInputSnapshot,
+      clarificationHistory: [],
+    })),
     getProject: vi.fn(async () => project()),
     getAgentSpikeOperationOutcome: vi.fn(async () => operation()),
     prepareAgentProviderAttempt: vi.fn(async () => prepared),
@@ -265,6 +310,47 @@ describe('Agent task step runtime', () => {
         transition({ recoveryClass: 'terminal', observation: { outcome: 'indeterminate' } }, 'observation'),
       ),
     ).resolves.toEqual({ action: 'unknown', observation: { outcome: 'indeterminate' } })
+  })
+
+  it('treats failed layout evidence as a revisable visual result instead of passing the step', async () => {
+    const failedLayoutObservation = {
+      outcome: 'committed',
+      preview: {
+        browserErrorCount: 0,
+        resourceErrorCount: 0,
+        materialGapCount: 0,
+        layout: {
+          status: 'failed',
+          counts: { componentElementCount: 8, zeroAreaElementCount: 1, overflowingElementCount: 1 },
+        },
+      },
+    }
+    const { service } = harness()
+
+    await expect(
+      service.observe(transition({ recoveryClass: 'committed', observation: failedLayoutObservation }, 'observation')),
+    ).resolves.toMatchObject({ action: 'revise' })
+  })
+
+  it('uses bounded material fallback before reporting a blocking gap', async () => {
+    const { service } = harness()
+    const observation = {
+      outcome: 'committed',
+      preview: {
+        renderReady: true,
+        browserErrorCount: 0,
+        resourceErrorCount: 0,
+        materialGapCount: 1,
+        missingMaterialIds: ['MissingKpi'],
+      },
+    }
+
+    await expect(
+      service.observe(transition({ recoveryClass: 'committed', semanticRevisionCount: 0, observation }, 'observation')),
+    ).resolves.toMatchObject({ action: 'revise', observation })
+    await expect(
+      service.observe(transition({ recoveryClass: 'committed', semanticRevisionCount: 2, observation }, 'observation')),
+    ).resolves.toMatchObject({ action: 'material_gap', observation })
   })
 
   it('replays a remaining-plan checkpoint and filters already passed semantic work', async () => {
@@ -428,6 +514,30 @@ describe('Agent task step runtime', () => {
     expect(issueOperation).not.toHaveBeenCalled()
   })
 
+  it('passes executor layout status and aggregate counts into the durable observation', async () => {
+    const { service } = harness({
+      getAgentSpikeOperationOutcome: vi.fn(async () => operation('committed', 'failed')),
+    })
+
+    await expect(service.act(transition({ observation: { operationId: 'operation-1' } }))).resolves.toMatchObject({
+      observation: {
+        preview: {
+          layout: {
+            status: 'failed',
+            counts: {
+              componentElementCount: 8,
+              visibleElementCount: 6,
+              hiddenElementCount: 2,
+              zeroAreaElementCount: 1,
+              overflowingElementCount: 1,
+              clippedElementCount: 0,
+            },
+          },
+        },
+      },
+    })
+  })
+
   it('does not resend the provider request when a persisted checkpoint envelope is invalid', async () => {
     const model = vi.fn()
     const { repository, dispatcher } = harness({
@@ -454,6 +564,121 @@ describe('Agent task step runtime', () => {
       recoveryClass: 'terminal',
     })
     expect(model).not.toHaveBeenCalled()
+  })
+
+  it('carries the frozen task context into step execution and exposes only aggregate change activity', async () => {
+    const attachmentId = '33333333-3333-4333-8333-333333333333'
+    const attachment = {
+      id: attachmentId,
+      projectId,
+      conversationId: 'conversation-1',
+      originalName: '指标说明.txt',
+      contentType: 'text/plain',
+      size: 12,
+      sha256: 'f'.repeat(64),
+      status: 'ready' as const,
+      extractedText: '左侧展示收入趋势',
+      storagePath: 'agent-assets/context.txt',
+      createdAt: now,
+      updatedAt: now,
+    }
+    const providerInputSnapshot = createAgentProviderInputSnapshot({
+      prompt: '参考资料完成经营分析大屏',
+      conversationTurns: [{ role: 'user', content: '保持左右两栏布局' }],
+      selectionContext: { pageId: 'page-home', selectedRefs: [{ id: 'title', title: '旧标题' }] },
+      project: project(2),
+      conversationId: 'conversation-1',
+      taskId: 'task-1',
+      attachments: [attachment],
+      projectContext: [{ title: '视觉方向', content: '深色克制风格', status: 'confirmed' }],
+      userPreferences: [
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          category: 'visual',
+          content: '避免发光装饰',
+          source: 'explicit',
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+      ],
+    })
+    const model = vi.fn(async input => {
+      const prepared = await input.providerAttemptLifecycle?.prepare({
+        requestBodyDigest: 'c'.repeat(64),
+        idempotencyMode: 'unsupported',
+      })
+      if (!prepared) throw new Error('Expected provider attempt lifecycle')
+      await input.providerAttemptLifecycle?.markStarted(prepared)
+      return {
+        output: {
+          action: 'execute' as const,
+          summary: '补齐左侧趋势区',
+          plan: ['添加趋势组件并更新标题'],
+          operations: [
+            { type: 'insert' as const, parentId: 'page-root', componentName: 'Chart' },
+            { type: 'set' as const, nodeId: 'title', fieldId: 'props.text', value: '经营态势' },
+            { type: 'resize' as const, nodeId: 'title', rect: { x: 24, y: 24, width: 420, height: 64 } },
+          ],
+        },
+        trace: {
+          promptBundleId: 'step-action',
+          promptBundleVersion: '1',
+          promptBundleHash: 'd'.repeat(64),
+          skills: [],
+        },
+        providerAttempt: {
+          requestBodyDigest: 'c'.repeat(64),
+          idempotencyMode: 'unsupported' as const,
+          idempotencyHeaderSent: false,
+        },
+      }
+    })
+    const issueOperation = vi.fn(async (_options, _actorId, _projectId, value) => ({
+      operation: operation('issued'),
+      input: {} as never,
+      grant: 'grant',
+      recoveryGrant: 'recovery-grant',
+      value,
+    }))
+    const { repository, dispatcher } = harness({
+      getAgentTaskPlanningInput: vi.fn(async () => ({
+        purpose: 'planning',
+        prompt: '参考资料完成经营分析大屏',
+        attachmentIds: [attachmentId],
+        providerInputSnapshot,
+        clarificationHistory: [],
+      })),
+      getAgentAsset: vi.fn(async () => attachment),
+    })
+    const service = createAgentTaskStepRuntime({
+      repository,
+      dispatcher: dispatcher as never,
+      spike: { repository, grantSecret: 'secret', expectedCompatibility: {} as never },
+      env: {} as never,
+      workerId: 'worker-1',
+      resolveRuntime: vi.fn(async () => runtime),
+      model: model as never,
+      issueOperation: issueOperation as never,
+      now: () => now,
+    })
+
+    await expect(service.act(transition())).resolves.toMatchObject({
+      userSummary: '添加 1 项、修改配置 1 项、调整尺寸 1 项',
+      changeCounts: { add: 1, configure: 1, resize: 1 },
+    })
+    const modelInput = model.mock.calls[0]![0]
+    expect(modelInput.attachments).toEqual([attachment])
+    expect(modelInput.projectContext).toEqual([{ title: '视觉方向', content: '深色克制风格', status: 'confirmed' }])
+    const payload = JSON.parse(modelInput.providerInputSnapshot.userText) as Record<string, unknown>
+    expect(payload).toMatchObject({
+      originalRequirement: '参考资料完成经营分析大屏',
+      conversationTurns: [{ role: 'user', content: '保持左右两栏布局' }],
+      selectionContext: { pageId: 'page-home', selectedRefs: [{ id: 'title', title: '旧标题' }] },
+      projectContext: [{ title: '视觉方向', content: '深色克制风格', status: 'confirmed' }],
+      userPreferences: [{ category: 'visual', content: '避免发光装饰' }],
+      attachments: [{ id: attachmentId, extractedText: '左侧展示收入趋势' }],
+      project: { draftVersion: 3 },
+    })
   })
 
   it('issues deterministic ChangeSet identities and returns only durable committed evidence', async () => {
@@ -495,6 +720,7 @@ describe('Agent task step runtime', () => {
     const second = await service.act(transition())
     expect(first).toEqual(second)
     expect(first).toMatchObject({ recoveryClass: 'committed', observation: { receiptPresent: true } })
+    expect(first).toMatchObject({ userSummary: '修改配置 1 项', changeCounts: { configure: 1 } })
     const firstInvocation = issueOperation.mock.calls[0]?.[3].invocation
     const secondInvocation = issueOperation.mock.calls[1]?.[3].invocation
     expect(secondInvocation).toEqual(firstInvocation)
@@ -530,6 +756,17 @@ describe('Agent task step runtime', () => {
     await expect(service.verify(transition({}, 'final_verification'))).resolves.toMatchObject({
       action: 'terminal',
       code: 'final_operation_unknown',
+    })
+  })
+
+  it('rejects final verification when the latest executor layout evidence failed', async () => {
+    const { service } = harness({
+      getAgentTaskRunDetail: vi.fn(async () => detail('passed', { operationId: 'operation-1' })),
+      getAgentSpikeOperationOutcome: vi.fn(async () => operation('committed', 'failed')),
+    })
+    await expect(service.verify(transition({}, 'final_verification'))).resolves.toMatchObject({
+      action: 'terminal',
+      code: 'final_evidence_invalid',
     })
   })
 })

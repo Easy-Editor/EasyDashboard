@@ -21,8 +21,8 @@ const sharedWritableFields = {
 const staticDataField = (rowShape: Record<string, string>, staticData: Array<Record<string, unknown>>) => ({
   type: 'object',
   description:
-    'Remote material data source configuration. For demo data use sourceType=static and put rows in staticData. fieldMappings is optional when source keys already match component fields.',
-  required: ['sourceType', 'staticData'],
+    'Material data binding. Use sourceType=static for inline rows, or bind an existing allowlisted datasource/global reference from project dataSourceRefs. Never invent or modify a data source definition. fieldMappings is optional when source keys already match component fields.',
+  required: ['sourceType'],
   rowShape,
   example: { sourceType: 'static', staticData },
 })
@@ -42,6 +42,7 @@ export const DASHBOARD_AGENT_MATERIAL_CATALOG = {
       '所有节点的 shared.rect.x/y 始终是相对 1920×1080 画布原点的全局绝对坐标；即使 parentId 指向 Div，也绝不转换为父容器局部坐标。',
       '组件树按装饰、头部、左侧、中部、右侧和底部分组，禁止平铺。',
       'DashboardScene 仅作局部兜底，禁止承载整屏或替代普通物料。',
+      '当前执行链不能创建在线组件或修改物料源码；缺少物料时按已注册同类物料、纯结构 Div、局部 DashboardScene 的顺序有界兜底，仍无法表达则报告具体能力缺口。',
       'GlobeScene 是可编辑的一等中央地球舞台物料，不是截图背景或整屏容器；标题、时间、左右 HUD、图表和列表仍须使用 Div 与普通物料。',
       '有参考图时匹配其形状、密度与明暗；禁止把科技大屏默认做成高亮描边、通体发光和圆角卡片。',
       '业务图标用 DashboardIcon，禁止文字字符或 emoji 冒充。',
@@ -621,7 +622,7 @@ export function renderDashboardAgentMaterialCatalog(options: DashboardAgentMater
       const rows = Object.entries(rowShape)
         .map(([name, type]) => `${name}:${type.replace(' (required)', '!').replace(' (optional)', '?')}`)
         .join(',')
-      return `object{sourceType:"static",staticData:Array<{${rows}}>,fieldMappings?:Array<{componentField:string,sourceField:string}>}`
+      return `dataBinding<row={${rows}}>`
     }
     const parts = [String(field.type ?? 'unknown')]
     if (Array.isArray(field.enum)) parts.push(`enum=${field.enum.map(scalar).join('|')}`)
@@ -637,6 +638,7 @@ export function renderDashboardAgentMaterialCatalog(options: DashboardAgentMater
   const lines = [
     `version=${dashboardAgentMaterialCatalogVersion(options)};canvas=${DASHBOARD_AGENT_MATERIAL_CATALOG.canvas.width}x${DASHBOARD_AGENT_MATERIAL_CATALOG.canvas.height}`,
     `rules=${DASHBOARD_AGENT_MATERIAL_CATALOG.canvas.guidance.join(' ')}`,
+    'dataBinding=strict union {sourceType:"static",staticData:Array<row>,fieldMappings?:Array<{componentField:safePath,sourceField:safePath}>} | {sourceType:"global"|"datasource",datasourceId:existing-id,dataPath?:safePath,fieldMappings?:Array<{componentField:safePath,sourceField:safePath}>}; IDs must exist in project dataSourceRefs; datasource scope must belong to target node; never invent or modify source definitions',
   ]
   for (const material of DASHBOARD_AGENT_MATERIAL_CATALOG.materials) {
     const linkedPieChart = options.linkedPieChartStyles && material.componentName === 'EasyEditorMaterialsPieChart'

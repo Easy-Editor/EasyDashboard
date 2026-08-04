@@ -81,5 +81,5 @@ export function parseEnv(input: NodeJS.ProcessEnv = process.env): AppEnv {
     const details = result.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ')
     throw new Error(`Invalid server environment: ${details}`)
   }
-  return result.data
+  return { ...result.data, AGENT_TASK_LOOP_V1: result.data.AGENT_TASK_LOOP_V1 ?? true }
 }

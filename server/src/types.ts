@@ -589,6 +589,7 @@ export interface AgentTaskFinalVerificationEvidence {
   renderReady: true
   browserErrors: []
   resourceErrors: []
+  layoutPassed?: true
   freshContextVerified: true
   receiptConsistent: true
 }

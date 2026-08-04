@@ -451,6 +451,63 @@ function compactNodeIndex(value: unknown): Array<Record<string, unknown>> {
   return nodes
 }
 
+function projectDataSourceProjection(document: unknown): {
+  document: unknown
+  dataSourceRefs: Array<Record<string, string>>
+} {
+  const rootIds = new Set<string>()
+  if (document && typeof document === 'object' && !Array.isArray(document)) {
+    const trees = (document as Record<string, unknown>).componentsTree
+    if (Array.isArray(trees)) {
+      for (const tree of trees) {
+        if (tree && typeof tree === 'object' && !Array.isArray(tree) && typeof tree.id === 'string')
+          rootIds.add(tree.id)
+      }
+    }
+  }
+  const defaultOwnerNodeId = [...rootIds][0]
+  const dataSourceRefs: Array<Record<string, string>> = []
+  const seen = new Set<string>()
+  const visit = (value: unknown, ownerNodeId?: string): unknown => {
+    if (Array.isArray(value)) return value.map(item => visit(item, ownerNodeId))
+    if (!value || typeof value !== 'object') return value
+    const source = value as Record<string, unknown>
+    const currentOwnerNodeId = typeof source.id === 'string' && source.id.trim() ? source.id.trim() : ownerNodeId
+    const dataSource = source.dataSource
+    if (dataSource && typeof dataSource === 'object' && !Array.isArray(dataSource)) {
+      const list = (dataSource as Record<string, unknown>).list
+      if (Array.isArray(list)) {
+        for (const candidate of list) {
+          if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+          const item = candidate as Record<string, unknown>
+          const id = typeof item.id === 'string' ? safeModelText(item.id.trim()).slice(0, 160) : ''
+          const resolvedOwnerNodeId = currentOwnerNodeId ?? defaultOwnerNodeId
+          if (!id || !resolvedOwnerNodeId) continue
+          const scope = rootIds.has(resolvedOwnerNodeId) || !currentOwnerNodeId ? 'global' : 'component'
+          const key = `${scope}:${resolvedOwnerNodeId}:${id}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          const rawLabel = [item.label, item.name, item.title].find(value => typeof value === 'string')
+          const rawType = typeof item.type === 'string' ? item.type : 'unknown'
+          dataSourceRefs.push({
+            scope,
+            ownerNodeId: safeModelText(resolvedOwnerNodeId).slice(0, 160),
+            id,
+            label: safeModelText(typeof rawLabel === 'string' && rawLabel.trim() ? rawLabel.trim() : id).slice(0, 160),
+            type: safeModelText(rawType.trim() || 'unknown').slice(0, 120),
+          })
+        }
+      }
+    }
+    return Object.fromEntries(
+      Object.entries(source)
+        .filter(([key]) => key !== 'dataSource')
+        .map(([key, child]) => [key, visit(child, currentOwnerNodeId)]),
+    )
+  }
+  return { document: visit(document), dataSourceRefs: dataSourceRefs.slice(0, 200) }
+}
+
 function summarizeLargeDashboardSceneSpecs(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(summarizeLargeDashboardSceneSpecs)
   if (!value || typeof value !== 'object') return value
@@ -499,7 +556,8 @@ function summarizeLargeDashboardSceneSpecs(value: unknown): unknown {
 }
 
 function projectProjection(project: ProjectRecord) {
-  const schema = safeProjection(summarizeLargeDashboardSceneSpecs(project.draftSchema))
+  const projectedSources = projectDataSourceProjection(project.draftSchema)
+  const schema = safeProjection(summarizeLargeDashboardSceneSpecs(projectedSources.document))
   const serialized = JSON.stringify(schema)
   return {
     id: project.id,
@@ -508,6 +566,7 @@ function projectProjection(project: ProjectRecord) {
     draftVersion: project.draftVersion,
     canvas: { width: project.canvasWidth, height: project.canvasHeight },
     pageCount: project.pageCount,
+    dataSourceRefs: projectedSources.dataSourceRefs,
     document:
       Buffer.byteLength(serialized, 'utf8') <= MAX_PROJECT_PROMPT_BYTES
         ? schema
@@ -840,6 +899,54 @@ export function createAgentProviderInputSnapshot(input: {
       skills: skillManifest.skills.map(skill => `${skill.id}@${skill.version}`),
     },
     images: input.images?.map(image => ({ ...image })) ?? [],
+  }
+}
+
+/**
+ * Carries the immutable task context into a later semantic step while replacing
+ * only the step requirement and the current editable document projection.
+ */
+export function createAgentContinuationProviderInputSnapshot(
+  source: AgentProviderInputSnapshot,
+  input: { prompt: string; project: ProjectRecord },
+): AgentProviderInputSnapshot {
+  let payload: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(source.userText) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid provider input')
+    payload = parsed as Record<string, unknown>
+  } catch {
+    throw new ApiError(409, 'AGENT_TASK_SNAPSHOT_INVALID', 'Frozen Agent task context is unavailable')
+  }
+  const originalRequirement =
+    typeof payload.originalRequirement === 'string' && payload.originalRequirement.trim()
+      ? payload.originalRequirement
+      : typeof payload.requirement === 'string' && payload.requirement.trim()
+        ? payload.requirement
+        : null
+  if (!originalRequirement) {
+    throw new ApiError(409, 'AGENT_TASK_SNAPSHOT_INVALID', 'Frozen Agent task requirement is unavailable')
+  }
+  const prompt = safeModelText(input.prompt)
+  const skillManifest = selectDashboardAgentSkillManifest(`${originalRequirement}\n${prompt}`)
+  const bundle = systemPrompt(skillManifest, {
+    linkedPieChartStyles: source.systemPrompt.includes(DASHBOARD_AGENT_LINKED_PIE_CHART_CATALOG_VERSION),
+  })
+  return {
+    systemPrompt: renderPromptBundle(bundle),
+    userText: JSON.stringify({
+      ...payload,
+      originalRequirement: safeModelText(originalRequirement),
+      requirement: prompt,
+      project: projectProjection(input.project),
+    }),
+    trace: {
+      promptBundleId: bundle.id,
+      promptBundleVersion: bundle.version,
+      promptBundleHash: bundle.hash,
+      skills: skillManifest.skills.map(skill => `${skill.id}@${skill.version}`),
+    },
+    images: source.images.map(image => ({ ...image })),
   }
 }
 

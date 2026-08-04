@@ -83,8 +83,137 @@ export interface AgentChangeSetPlanningOptions {
 
 type PlannedOperation = z.infer<typeof opIdLessOperationSchema>
 
+const safeDataPathSegmentSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(160)
+  .refine(value => !['__proto__', 'prototype', 'constructor'].includes(value), 'Unsafe data path segment')
+const safeDataPathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .refine(
+    value => value.split('.').every(segment => safeDataPathSegmentSchema.safeParse(segment).success),
+    'Unsafe data path',
+  )
+const fieldMappingSchema = z
+  .object({
+    componentField: safeDataPathSchema,
+    sourceField: safeDataPathSchema,
+  })
+  .strict()
+const sharedDataConfigFields = {
+  dataPath: safeDataPathSchema.optional(),
+  fieldMappings: z.array(fieldMappingSchema).max(128).optional(),
+}
+const dataConfigSchema = z.discriminatedUnion('sourceType', [
+  z
+    .object({
+      sourceType: z.literal('static'),
+      staticData: z.array(z.json()).max(10_000),
+      fieldMappings: sharedDataConfigFields.fieldMappings,
+    })
+    .strict(),
+  z
+    .object({
+      sourceType: z.literal('global'),
+      datasourceId: z.string().trim().min(1).max(160),
+      ...sharedDataConfigFields,
+    })
+    .strict(),
+  z
+    .object({
+      sourceType: z.literal('datasource'),
+      datasourceId: z.string().trim().min(1).max(160),
+      ...sharedDataConfigFields,
+    })
+    .strict(),
+])
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
+
+function dataSourceIds(value: unknown): Set<string> {
+  const source = record(value)
+  const list = Array.isArray(source?.list) ? source.list : []
+  return new Set(
+    list.flatMap(item => {
+      const id = record(item)?.id
+      return typeof id === 'string' && id.trim() ? [id] : []
+    }),
+  )
+}
+
+function documentDataSourceScopes(document: unknown): {
+  global: Set<string>
+  component: Map<string, Set<string>>
+} {
+  const global = new Set<string>()
+  const component = new Map<string, Set<string>>()
+  const visited = new Set<Record<string, unknown>>()
+
+  const visitNode = (value: unknown, isRoot = false): void => {
+    const node = record(value)
+    if (!node || visited.has(node)) return
+    visited.add(node)
+    const id = typeof node.id === 'string' && node.id.trim() ? node.id : null
+    const ids = dataSourceIds(node.dataSource)
+    if (isRoot || node.isRoot === true || node.componentName === 'Root') ids.forEach(sourceId => global.add(sourceId))
+    else if (id && ids.size > 0) component.set(id, ids)
+    if (Array.isArray(node.children)) node.children.forEach(child => visitNode(child, false))
+  }
+
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    const candidate = record(value)
+    if (!candidate || visited.has(candidate)) return
+    dataSourceIds(candidate.dataSource).forEach(sourceId => global.add(sourceId))
+    if (Array.isArray(candidate.componentsTree)) {
+      candidate.componentsTree.forEach(node => visitNode(node, true))
+    }
+    for (const [key, child] of Object.entries(candidate)) {
+      if (key !== 'componentsTree' && key !== 'dataSource') visit(child)
+    }
+  }
+
+  visit(document)
+  return { global, component }
+}
+
+function validateExistingDataSourceBindings(operations: PlannedOperation[], document: unknown): void {
+  const scopes = documentDataSourceScopes(document)
+  for (const operation of operations) {
+    if ((operation.type === 'set' || operation.type === 'unset') && operation.fieldId === 'dataSource') {
+      throw new Error('Agent cannot create or modify data source definitions; it may only bind existing sources')
+    }
+    const rawConfig =
+      operation.type === 'set' && operation.fieldId === 'data.config'
+        ? operation.value
+        : operation.type === 'insert'
+          ? operation.fields?.['data.config']
+          : undefined
+    if (rawConfig === undefined) continue
+    const config = dataConfigSchema.parse(rawConfig)
+    if (config.sourceType === 'static') continue
+    if (config.sourceType === 'global') {
+      if (!scopes.global.has(config.datasourceId)) {
+        throw new Error(`Agent cannot bind unknown global data source ${config.datasourceId}`)
+      }
+      continue
+    }
+    if (operation.type === 'insert') {
+      throw new Error('Agent cannot bind a component-scoped data source while inserting a new node')
+    }
+    if (!scopes.component.get(operation.nodeId)?.has(config.datasourceId)) {
+      throw new Error(`Agent cannot bind data source ${config.datasourceId} outside node ${operation.nodeId}`)
+    }
+  }
 }
 
 function documentSubtrees(document: unknown): Map<string, Set<string>> {
@@ -185,6 +314,7 @@ export function planStrictChangeSet(
   const operations = options.document
     ? withoutContradictoryRemovals(parsed.operations, options.document)
     : parsed.operations
+  if (options.document) validateExistingDataSourceBindings(operations, options.document)
   if (options.requireRemove && !operations.some(operation => operation.type === 'remove')) {
     throw new Error('Agent output must include a remove operation for an explicit delete request')
   }

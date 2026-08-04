@@ -216,18 +216,46 @@ const resourceErrorSchema = z
   })
   .strict()
 
+const renderViewportSchema = z
+  .object({
+    width: z.number().int().positive().max(8_192),
+    height: z.number().int().positive().max(8_192),
+  })
+  .strict()
+  .refine(viewport => viewport.width * viewport.height <= 33_554_432, 'Render viewport exceeds pixel budget')
+
+const renderLayoutEvidenceSchema = z
+  .object({
+    status: z.enum(['passed', 'failed']),
+    targetViewport: renderViewportSchema,
+    browserViewport: renderViewportSchema,
+    simulatorViewport: z
+      .object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+        width: z.number().positive().max(8_192),
+        height: z.number().positive().max(8_192),
+      })
+      .strict(),
+    viewportMatchesTarget: z.boolean(),
+    componentElementCount: z.number().int().nonnegative().max(100_000),
+    visibleElementCount: z.number().int().nonnegative().max(100_000),
+    hiddenElementCount: z.number().int().nonnegative().max(100_000),
+    zeroAreaElementCount: z.number().int().nonnegative().max(100_000),
+    overflowingElementCount: z.number().int().nonnegative().max(100_000),
+    clippedElementCount: z.number().int().nonnegative().max(100_000),
+    documentOverflow: z.object({ horizontal: z.boolean(), vertical: z.boolean() }).strict(),
+  })
+  .strict()
+
 const renderEvidenceSchema = z
   .object({
     status: z.enum(['rendered', 'rendered_with_errors']),
     rendererReady: z.literal(true),
-    viewport: z
-      .object({
-        width: z.number().int().positive().max(16_384),
-        height: z.number().int().positive().max(16_384),
-      })
-      .strict(),
+    viewport: renderViewportSchema,
     durationMs: z.number().nonnegative(),
     screenshotSha256: sha256Schema.optional(),
+    layout: renderLayoutEvidenceSchema.optional(),
     resourceErrors: z.array(resourceErrorSchema).max(1_000),
   })
   .strict()

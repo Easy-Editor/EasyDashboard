@@ -364,6 +364,88 @@ describe('Agent ChangeSet decision contract', () => {
     ).toThrow()
   })
 
+  it('binds only existing data sources in the correct scope', () => {
+    const document = {
+      dataSource: { list: [{ id: 'global-traffic', type: 'fetch', options: { uri: 'https://secret.invalid' } }] },
+      componentsTree: [
+        {
+          id: 'page-home',
+          componentName: 'Root',
+          children: [
+            {
+              id: 'traffic-chart',
+              componentName: 'EasyEditorMaterialsLineChart',
+              dataSource: { list: [{ id: 'local-traffic', type: 'fetch' }] },
+              children: [],
+            },
+            { id: 'other-chart', componentName: 'EasyEditorMaterialsLineChart', children: [] },
+          ],
+        },
+      ],
+    }
+    const decision = (nodeId: string, sourceType: 'global' | 'datasource', datasourceId: string) => ({
+      action: 'execute' as const,
+      summary: '绑定已有数据源',
+      plan: ['绑定已有数据源'],
+      operations: [
+        {
+          type: 'set' as const,
+          nodeId,
+          fieldId: 'data.config',
+          value: { sourceType, datasourceId, dataPath: 'payload.rows' },
+        },
+      ],
+    })
+
+    expect(() =>
+      planStrictChangeSet(decision('traffic-chart', 'global', 'global-traffic'), 'page-home', { document }),
+    ).not.toThrow()
+    expect(() =>
+      planStrictChangeSet(decision('traffic-chart', 'datasource', 'local-traffic'), 'page-home', { document }),
+    ).not.toThrow()
+    expect(() =>
+      planStrictChangeSet(decision('other-chart', 'datasource', 'local-traffic'), 'page-home', { document }),
+    ).toThrow('outside node other-chart')
+    expect(() =>
+      planStrictChangeSet(decision('traffic-chart', 'global', 'invented-source'), 'page-home', { document }),
+    ).toThrow('unknown global data source invented-source')
+  })
+
+  it('rejects unsafe, inserted, or definition-mutating data source operations', () => {
+    const document = {
+      dataSource: { list: [{ id: 'global-traffic' }] },
+      componentsTree: [{ id: 'page-home', componentName: 'Root', children: [] }],
+    }
+    const execute = (operations: Array<Record<string, unknown>>) =>
+      planStrictChangeSet({ action: 'execute', summary: '配置数据', plan: ['配置数据'], operations }, 'page-home', {
+        document,
+      })
+
+    expect(() =>
+      execute([
+        {
+          type: 'insert',
+          parentId: 'page-home',
+          componentName: 'EasyEditorMaterialsLineChart',
+          fields: { 'data.config': { sourceType: 'datasource', datasourceId: 'local-traffic' } },
+        },
+      ]),
+    ).toThrow('component-scoped data source')
+    expect(() =>
+      execute([
+        {
+          type: 'set',
+          nodeId: 'page-home',
+          fieldId: 'data.config',
+          value: { sourceType: 'global', datasourceId: 'global-traffic', dataPath: '__proto__.rows' },
+        },
+      ]),
+    ).toThrow()
+    expect(() =>
+      execute([{ type: 'set', nodeId: 'page-home', fieldId: 'dataSource', value: { list: [{ id: 'new-source' }] } }]),
+    ).toThrow('cannot create or modify data source definitions')
+  })
+
   it('keeps one model decision to a bounded complete stage', () => {
     const operation = { type: 'remove', nodeId: 'obsolete-node' } as const
     const decision = {

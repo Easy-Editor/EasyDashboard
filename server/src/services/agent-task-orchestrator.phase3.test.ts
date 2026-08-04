@@ -175,6 +175,8 @@ describe('Agent task orchestrator Phase 3', () => {
       decisionKind: 'execute_existing_material',
       providerCallReference: 'provider-call-1',
       operationId: 'operation-1',
+      userSummary: '添加 1 项、修改配置 2 项、移动 1 项',
+      changeCounts: { add: 1, configure: 2, move: 1 },
       observation: { preview: 'ready' },
       recoveryClass: 'committed',
     })
@@ -200,8 +202,16 @@ describe('Agent task orchestrator Phase 3', () => {
           terminalClassification: 'committed',
         },
         events: [
-          expect.objectContaining({ type: 'step_started', summary: '开始执行当前步骤' }),
-          expect.objectContaining({ type: 'change_committed', summary: '当前步骤的修改已提交' }),
+          expect.objectContaining({
+            type: 'step_started',
+            summary: '正在执行：添加 1 项、修改配置 2 项、移动 1 项',
+            publicPayload: { changeCounts: { add: 1, configure: 2, move: 1 } },
+          }),
+          expect.objectContaining({
+            type: 'change_committed',
+            summary: '已完成：添加 1 项、修改配置 2 项、移动 1 项',
+            publicPayload: { changeCounts: { add: 1, configure: 2, move: 1 } },
+          }),
         ],
         nextTransition: {
           kind: 'observation',

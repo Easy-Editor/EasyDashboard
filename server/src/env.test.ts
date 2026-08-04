@@ -26,8 +26,8 @@ const compatibility = {
 }
 
 describe('Agent executor environment', () => {
-  it('keeps the durable Agent task loop off unless explicitly enabled', () => {
-    expect(parseEnv(baseEnv).AGENT_TASK_LOOP_V1 ?? false).toBe(false)
+  it('enables the durable Agent task loop by default while allowing an explicit legacy fallback', () => {
+    expect(parseEnv(baseEnv).AGENT_TASK_LOOP_V1).toBe(true)
     expect(parseEnv({ ...baseEnv, AGENT_TASK_LOOP_V1: 'true' })).toMatchObject({ AGENT_TASK_LOOP_V1: true })
     expect(parseEnv({ ...baseEnv, AGENT_TASK_LOOP_V1: 'false' })).toMatchObject({ AGENT_TASK_LOOP_V1: false })
     expect(() => parseEnv({ ...baseEnv, AGENT_TASK_LOOP_V1: '1' })).toThrow('AGENT_TASK_LOOP_V1')

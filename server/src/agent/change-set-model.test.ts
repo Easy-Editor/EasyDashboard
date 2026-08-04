@@ -142,6 +142,83 @@ function clarificationResponse() {
 }
 
 describe('Agent ChangeSet model boundary', () => {
+  it('projects only allowlisted data source references and removes transport details from the model document', () => {
+    const dataProject = {
+      ...project,
+      draftSchema: {
+        dataSource: {
+          list: [
+            {
+              id: 'global-orders',
+              label: '订单接口',
+              type: 'fetch',
+              options: {
+                uri: 'https://private-api.example.com/orders',
+                headers: { authorization: 'Bearer top-secret-token' },
+                body: { password: 'never-send-this' },
+              },
+            },
+          ],
+        },
+        componentsTree: [
+          {
+            id: 'page-root',
+            componentName: 'Page',
+            dataSource: {
+              list: [
+                {
+                  id: 'root-summary',
+                  name: '全局汇总',
+                  type: 'graphql',
+                  options: { uri: 'https://root-secret.example.com/graphql' },
+                },
+              ],
+            },
+            children: [
+              {
+                id: 'orders-chart',
+                componentName: 'Chart',
+                dataSource: {
+                  list: [
+                    {
+                      id: 'local-orders',
+                      title: '组件订单',
+                      type: 'fetch',
+                      options: { uri: 'https://component-secret.example.com/orders', apiKey: 'local-secret' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    } as unknown as ProjectRecord
+
+    const snapshot = createAgentProviderInputSnapshot({
+      prompt: '绑定已有订单数据',
+      project: dataProject,
+      conversationId: 'conversation-data-source-projection',
+      taskId: 'task-data-source-projection',
+      attachments: [],
+      projectContext: [],
+    })
+    const serialized = snapshot.userText
+    const payload = JSON.parse(serialized) as {
+      project: { document: Record<string, unknown>; dataSourceRefs: Array<Record<string, string>> }
+    }
+
+    expect(payload.project.dataSourceRefs).toEqual([
+      { scope: 'global', ownerNodeId: 'page-root', id: 'global-orders', label: '订单接口', type: 'fetch' },
+      { scope: 'global', ownerNodeId: 'page-root', id: 'root-summary', label: '全局汇总', type: 'graphql' },
+      { scope: 'component', ownerNodeId: 'orders-chart', id: 'local-orders', label: '组件订单', type: 'fetch' },
+    ])
+    expect(JSON.stringify(payload.project.document)).not.toContain('dataSource')
+    expect(serialized).not.toMatch(
+      /private-api|root-secret|component-secret|top-secret-token|never-send-this|local-secret/u,
+    )
+  })
+
   it('creates a strict response schema containing only the requested operation types', () => {
     const responseFormat = createAgentChangeSetResponseFormat(['insert', 'set'])
 
@@ -1857,7 +1934,8 @@ describe('Agent ChangeSet model boundary', () => {
     expect(system).toContain('dateTime.timeFormat<string,enum="localized"|"hm"|"hms">')
     expect(system).toContain('dateTime.timeZone<string,enum="local"|"Asia/Shanghai"|"UTC">')
     expect(system).toContain('data.config')
-    expect(system).toContain('fieldMappings?:Array<{componentField:string,sourceField:string}>')
+    expect(system).toContain('fieldMappings?:Array<{componentField:safePath,sourceField:safePath}>')
+    expect(system).toContain('datasourceId:existing-id')
     expect(system).toContain('Always map rank, name and value')
     expect(system).toContain('shared.rect')
     expect(system).toContain('coordinateSpace=canvas-global-absolute')

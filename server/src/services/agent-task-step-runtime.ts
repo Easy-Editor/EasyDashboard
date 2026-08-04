@@ -7,6 +7,8 @@ import {
   AgentChangeSetProviderError,
   AgentChangeSetProviderResponseError,
   agentAllowedOperationTypesForRequest,
+  createAgentClarificationHistoryProviderInputSnapshot,
+  createAgentContinuationProviderInputSnapshot,
   createAgentProviderInputSnapshot,
   estimateAgentProviderInputTokens,
   requestAgentChangeSet,
@@ -22,7 +24,12 @@ import { canonicalJsonSha256 } from '../db/agent-stage-commit.js'
 import type { AppEnv } from '../env.js'
 import { ApiError } from '../http.js'
 import { type ResolvedAgentModelRuntime, resolveAgentModelRuntime } from '../routes/agent-config.js'
-import { providerSettlementEstimateMicros } from '../routes/agent-runs.js'
+import {
+  persistedPlanningInputSchema,
+  providerSettlementEstimateMicros,
+  resolveAttachments,
+  resolveModelImages,
+} from '../routes/agent-runs.js'
 import {
   type AgentSpikeRouteOptions,
   type IssuedAgentSpikeOperation,
@@ -33,6 +40,7 @@ import type {
   AgentSpikeOperationRecord,
   AgentTaskRunDetailRecord,
   DurableProviderAttemptRecord,
+  ProjectRecord,
   Repository,
 } from '../types.js'
 import type { AgentRunDispatcher } from './agent-run-dispatcher.js'
@@ -175,6 +183,10 @@ function operationObservation(operation: AgentSpikeOperationRecord): Readonly<Re
       browserErrorCount: cleanEvidence.browserErrors.length,
       resourceErrorCount: cleanEvidence.resourceErrors.length,
       materialGapCount: cleanEvidence.materialGapCount,
+      ...(cleanEvidence.missingMaterialIds.length ? { missingMaterialIds: cleanEvidence.missingMaterialIds } : {}),
+      ...(cleanEvidence.layoutStatus
+        ? { layout: { status: cleanEvidence.layoutStatus, counts: cleanEvidence.layoutCounts } }
+        : {}),
     },
   }
 }
@@ -184,13 +196,21 @@ function previewEvidence(evidence: Record<string, unknown> | null): {
   browserErrors: unknown[]
   resourceErrors: unknown[]
   materialGapCount: number
+  missingMaterialIds: string[]
+  layoutStatus: 'passed' | 'failed' | null
+  layoutCounts: Record<string, number>
 } {
   const render = record(evidence?.render)
+  const layout = record(render?.layout)
   const materials = record(evidence?.materials)
   const browserErrors = Array.isArray(evidence?.consoleErrors) ? evidence.consoleErrors : []
   const requestFailures = Array.isArray(evidence?.requestFailures) ? evidence.requestFailures : []
   const resourceErrors = Array.isArray(render?.resourceErrors) ? render.resourceErrors : []
   const missing = Array.isArray(materials?.missing) ? materials.missing : []
+  const missingMaterialIds = missing.slice(0, 24).flatMap(value => {
+    const id = stringValue(value)
+    return id && id.length <= 160 && /^[A-Za-z0-9@._:/-]+$/u.test(id) ? [id] : []
+  })
   return {
     renderReady:
       render?.rendererReady === true &&
@@ -200,6 +220,22 @@ function previewEvidence(evidence: Record<string, unknown> | null): {
     browserErrors: [...browserErrors, ...requestFailures],
     resourceErrors,
     materialGapCount: missing.length,
+    missingMaterialIds,
+    layoutStatus: layout?.status === 'passed' || layout?.status === 'failed' ? layout.status : null,
+    layoutCounts: Object.fromEntries(
+      [
+        'componentElementCount',
+        'visibleElementCount',
+        'hiddenElementCount',
+        'zeroAreaElementCount',
+        'overflowingElementCount',
+        'clippedElementCount',
+      ].flatMap(key =>
+        typeof layout?.[key] === 'number' && Number.isSafeInteger(layout[key]) && layout[key] >= 0
+          ? [[key, layout[key]]]
+          : [],
+      ),
+    ),
   }
 }
 
@@ -209,6 +245,32 @@ function recoveryClass(operation: AgentSpikeOperationRecord): AgentTaskActionRes
   if (operation.status === 'indeterminate') return 'terminal'
   if (operation.status === 'failed_not_applied') return 'revise_step'
   return 'recover_operation'
+}
+
+function publicChangeActivity(operations: readonly { type: string }[]) {
+  const counts: NonNullable<AgentTaskActionResult['changeCounts']> = {}
+  const publicKind = (type: string): keyof NonNullable<AgentTaskActionResult['changeCounts']> | null => {
+    if (type === 'insert') return 'add'
+    if (type === 'set' || type === 'unset') return 'configure'
+    if (type === 'move' || type === 'resize' || type === 'reorder' || type === 'remove') return type
+    return null
+  }
+  for (const operation of operations) {
+    const kind = publicKind(operation.type)
+    if (kind) counts[kind] = (counts[kind] ?? 0) + 1
+  }
+  const labels: Record<keyof NonNullable<AgentTaskActionResult['changeCounts']>, string> = {
+    add: '添加',
+    configure: '修改配置',
+    move: '移动',
+    resize: '调整尺寸',
+    reorder: '调整顺序',
+    remove: '移除',
+  }
+  const summary = Object.entries(counts)
+    .map(([kind, count]) => `${labels[kind as keyof typeof labels]} ${count} 项`)
+    .join('、')
+  return { userSummary: summary || '应用当前步骤修改', changeCounts: counts }
 }
 
 function operationIdFromTransition(transition: AgentTaskTransitionClaim): string | null {
@@ -234,6 +296,91 @@ function observationFromTransition(transition: AgentTaskTransitionClaim): Readon
     record(record(transition.input.action)?.observation) ??
     ({ outcome: 'unavailable' } as const)
   )
+}
+
+function projectedTaskContext(snapshot: { userText: string }) {
+  let payload: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(snapshot.userText) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid task context')
+    payload = parsed as Record<string, unknown>
+  } catch {
+    throw new ApiError(409, 'AGENT_TASK_SNAPSHOT_INVALID', 'Frozen Agent task context is unavailable')
+  }
+  const projectContext = Array.isArray(payload.projectContext)
+    ? payload.projectContext.flatMap(value => {
+        const item = record(value)
+        const title = stringValue(item?.title)
+        const content = stringValue(item?.content)
+        const status = item?.status
+        return title && content && (status === 'pending' || status === 'confirmed')
+          ? [{ title, content, status: status as 'pending' | 'confirmed' }]
+          : []
+      })
+    : []
+  return { projectContext }
+}
+
+async function frozenTaskContext(
+  options: AgentTaskStepRuntimeOptions,
+  transition: AgentTaskTransitionClaim,
+  detail: AgentTaskRunDetailRecord,
+  planningInput: Record<string, unknown>,
+  runtime: ResolvedAgentModelRuntime,
+  prompt: string,
+  project: ProjectRecord,
+) {
+  const frozen = persistedPlanningInputSchema.parse(planningInput)
+  const attachmentIds = [
+    ...new Set([
+      ...frozen.attachmentIds,
+      ...frozen.clarificationHistory.flatMap(clarification => clarification.attachmentIds),
+    ]),
+  ]
+  const attachments = await resolveAttachments(
+    options.repository,
+    transition.actorId,
+    transition.projectId,
+    detail.run.conversationId,
+    attachmentIds,
+  )
+  const images = await resolveModelImages(
+    options.repository,
+    transition.actorId,
+    transition.projectId,
+    attachments,
+    runtime.capabilities.vision,
+  )
+  const expectedImages = [
+    ...new Map(
+      [...frozen.providerInputSnapshot.images, ...frozen.clarificationHistory.flatMap(item => item.images)].map(
+        image => [image.assetId, image],
+      ),
+    ).values(),
+  ]
+  if (
+    expectedImages.length !== images.length ||
+    expectedImages.some(
+      (image, index) => image.assetId !== images[index]?.assetId || image.sha256 !== images[index]?.sha256,
+    )
+  ) {
+    throw new ApiError(409, 'AGENT_TASK_SNAPSHOT_INVALID', 'Frozen Agent image inputs changed after enqueue')
+  }
+  const sourceSnapshot = frozen.clarificationHistory.length
+    ? createAgentClarificationHistoryProviderInputSnapshot(
+        frozen.providerInputSnapshot,
+        frozen.clarificationHistory,
+        attachments,
+        images.map(image => ({ assetId: image.assetId, sha256: image.sha256 })),
+      )
+    : frozen.providerInputSnapshot
+  const projected = projectedTaskContext(sourceSnapshot)
+  return {
+    attachments,
+    images,
+    projectContext: projected.projectContext,
+    providerInputSnapshot: createAgentContinuationProviderInputSnapshot(sourceSnapshot, { prompt, project }),
+  }
 }
 
 async function waitForOperation(
@@ -346,14 +493,8 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         `失败观察：${JSON.stringify(failedObservation)}`,
         '请基于当前最新文档，仅规划尚未完成的剩余工作。',
       ].join('\n')
-      const providerInputSnapshot = createAgentProviderInputSnapshot({
-        prompt,
-        project,
-        conversationId: detail.run.conversationId,
-        taskId: detail.run.taskId,
-        attachments: [],
-        projectContext: [],
-      })
+      const taskContext = await frozenTaskContext(options, transition, detail, planningInput, runtime, prompt, project)
+      const providerInputSnapshot = taskContext.providerInputSnapshot
       const maximumRate = options.env.AGENT_BILLING_MAX_USD_PER_1M_TOKENS ?? 100
       const estimatedMicros = Math.min(
         MAX_RESERVED_MICROS,
@@ -365,6 +506,7 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         const result = await planningModel({
           runtime,
           providerInputSnapshot,
+          images: taskContext.images.map(image => ({ assetId: image.assetId, url: image.url })),
           providerAttemptLifecycle: {
             async prepare(metadata) {
               const prepare = requireRepositoryMethod(
@@ -553,11 +695,49 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
     }
   }
 
+  const recoverMaterialGap = async (transition: AgentTaskTransitionClaim): Promise<AgentTaskObservationResult> => {
+    const observation = observationFromTransition(transition)
+    const getDetail = requireRepositoryMethod(options.repository.getAgentTaskRunDetail, 'getAgentTaskRunDetail')
+    const detail = await getDetail(transition.actorId, transition.projectId, transition.taskRunId)
+    const revisionCount = nonnegativeInteger(transition.input.semanticRevisionCount) ?? 0
+    if (!detail) {
+      return {
+        action: 'material_gap',
+        summary: '当前步骤缺少可用物料，且无法恢复任务上下文。',
+        observation,
+      }
+    }
+    if (revisionCount >= detail.run.bounds.maxStepRevisions) {
+      return {
+        action: 'material_gap',
+        summary: '已尝试现有物料、结构化 Div 与局部场景兜底，仍无法表达当前内容。',
+        observation,
+      }
+    }
+    if (revisionCount === 0) {
+      return {
+        action: 'revise',
+        summary: '缺少目标物料，正在优先改用已注册同类物料或结构化 Div。',
+        observation,
+      }
+    }
+    return replanRemaining(transition)
+  }
+
   return {
     async act(transition) {
       const getDetail = requireRepositoryMethod(options.repository.getAgentTaskRunDetail, 'getAgentTaskRunDetail')
-      const detail = await getDetail(transition.actorId, transition.projectId, transition.taskRunId)
+      const getPlanningInput = requireRepositoryMethod(
+        options.repository.getAgentTaskPlanningInput,
+        'getAgentTaskPlanningInput',
+      )
+      const [detail, planningInput] = await Promise.all([
+        getDetail(transition.actorId, transition.projectId, transition.taskRunId),
+        getPlanningInput(transition.actorId, transition.projectId, transition.taskRunId),
+      ])
       if (!detail) throw new ApiError(404, 'AGENT_TASK_NOT_FOUND', 'Agent task run not found')
+      if (!planningInput)
+        throw new ApiError(409, 'AGENT_TASK_SNAPSHOT_INVALID', 'Frozen Agent task context is unavailable')
       const step = currentStep(detail, transition)
       const project = await options.repository.getProject(transition.actorId, transition.projectId)
       if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
@@ -626,15 +806,35 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
       }
 
       if (!output) {
-        const prompt = `仅执行当前步骤：${step.title}\n语义意图：${JSON.stringify(step.intent)}`
-        const snapshot = createAgentProviderInputSnapshot({
+        const recoveryObservation = observationFromTransition(transition)
+        const missingMaterialIds = Array.isArray(record(recoveryObservation.preview)?.missingMaterialIds)
+          ? (record(recoveryObservation.preview)?.missingMaterialIds as unknown[]).filter(
+              value => typeof value === 'string',
+            )
+          : []
+        const prompt = [
+          `仅执行当前步骤：${step.title}`,
+          `语义意图：${JSON.stringify(step.intent)}`,
+          ...(Object.keys(recoveryObservation).length
+            ? [`上一次执行观察：${JSON.stringify(recoveryObservation)}`]
+            : []),
+          ...(missingMaterialIds.length
+            ? [
+                `缺失物料：${JSON.stringify(missingMaterialIds)}`,
+                '兜底顺序：优先选择目录中同语义的已注册物料；仅结构或装饰可使用 Div；普通物料无法表达的局部视觉才使用 DashboardScene。禁止用 Div 伪造业务数据组件，禁止整屏 DashboardScene。当前运行时不能创建在线组件或修改物料源码。',
+              ]
+            : []),
+        ].join('\n')
+        const taskContext = await frozenTaskContext(
+          options,
+          transition,
+          detail,
+          planningInput,
+          runtime,
           prompt,
           project,
-          conversationId: detail.run.conversationId,
-          taskId: detail.run.taskId,
-          attachments: [],
-          projectContext: [],
-        })
+        )
+        const snapshot = taskContext.providerInputSnapshot
         const maximumRate = options.env.AGENT_BILLING_MAX_USD_PER_1M_TOKENS ?? 100
         const estimatedMicros = Math.min(
           MAX_RESERVED_MICROS,
@@ -649,8 +849,9 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
             project,
             conversationId: detail.run.conversationId,
             taskId: detail.run.taskId,
-            attachments: [],
-            projectContext: [],
+            attachments: taskContext.attachments,
+            projectContext: taskContext.projectContext,
+            images: taskContext.images.map(image => ({ assetId: image.assetId, url: image.url })),
             providerInputSnapshot: snapshot,
             providerAttemptLifecycle: {
               async prepare(metadata) {
@@ -804,6 +1005,7 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         document: project.draftSchema,
         allowedOperationTypes: agentAllowedOperationTypesForRequest(project.draftSchema, JSON.stringify(step.intent)),
       })
+      const publicActivity = publicChangeActivity(invocation.arguments.operations)
       const issued = await issueOperation(options.spike, transition.actorId, transition.projectId, {
         executorId: 'easy-dashboard-document-executor',
         operationId,
@@ -829,6 +1031,7 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         operationId,
         observation: operationObservation(operation),
         recoveryClass: recoveryClass(operation),
+        ...publicActivity,
         ...attemptCounters(detail, transition, dispatch?.attemptCount),
       }
     },
@@ -838,8 +1041,12 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
       const classification = recoveryFromTransition(transition)
       if (classification === 'committed' || classification === 'passed') {
         const preview = record(observation.preview)
+        const layout = record(preview?.layout)
         if ((preview?.materialGapCount ?? 0) !== 0) {
-          return { action: 'material_gap', summary: '当前步骤缺少可用物料。', observation }
+          return recoverMaterialGap(transition)
+        }
+        if (layout?.status === 'failed') {
+          return { action: 'revise', summary: '布局检查发现遮挡、溢出或不可见内容，正在修订当前步骤。', observation }
         }
         if ((preview?.browserErrorCount ?? 0) !== 0 || (preview?.resourceErrorCount ?? 0) !== 0) {
           return { action: 'revise', summary: '预览检查发现可恢复问题，正在修订当前步骤。', observation }
@@ -856,7 +1063,7 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         return replanRemaining(transition)
       }
       if (classification === 'material_gap') {
-        return { action: 'material_gap', summary: '当前步骤缺少可用物料。', observation }
+        return recoverMaterialGap(transition)
       }
       if (classification === 'user_action') {
         return {
@@ -921,7 +1128,8 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         !evidence.renderReady ||
         evidence.browserErrors.length ||
         evidence.resourceErrors.length ||
-        evidence.materialGapCount
+        evidence.materialGapCount ||
+        evidence.layoutStatus === 'failed'
       ) {
         return { action: 'terminal', summary: '最终执行证据未通过一致性校验。', code: 'final_evidence_invalid' }
       }
@@ -936,6 +1144,7 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
           renderReady: true,
           browserErrors: [],
           resourceErrors: [],
+          ...(evidence.layoutStatus === 'passed' ? { layoutPassed: true as const } : {}),
           freshContextVerified: true,
           receiptConsistent: true,
         },

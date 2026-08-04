@@ -68,6 +68,10 @@ export type AgentTaskRecoveryClass =
 
 export interface AgentTaskActionResult {
   decisionKind: string
+  /** Natural-language activity summary safe for the project activity stream. */
+  userSummary?: string
+  /** Aggregated public counts; never contains node ids, field paths, values, or coordinates. */
+  changeCounts?: Partial<Record<'add' | 'configure' | 'move' | 'resize' | 'reorder' | 'remove', number>>
   providerCallReference?: string | null
   operationId?: string | null
   observation: Readonly<Record<string, unknown>>
@@ -388,6 +392,16 @@ export function createAgentTaskOrchestrator(options: {
     const decisionKind = safeReference(result.decisionKind, 'Agent task action decision')!
     const providerCallReference = safeReference(result.providerCallReference, 'Agent provider call reference')
     const operationId = safeReference(result.operationId, 'Agent operation id')
+    const userSummary = result.userSummary?.trim() || null
+    if (userSummary) assertAgentDecisionUserTextSafe({ summary: userSummary })
+    const changeCounts = Object.fromEntries(
+      (['add', 'configure', 'move', 'resize', 'reorder', 'remove'] as const).flatMap(kind => {
+        const count = result.changeCounts?.[kind]
+        return typeof count === 'number' && Number.isSafeInteger(count) && count > 0 && count <= 1_000
+          ? [[kind, count]]
+          : []
+      }),
+    )
     const previousExecutorRetryCount = boundedCounter(transition.input.executorRetryCount)
     const previousSemanticRevisionCount = boundedCounter(transition.input.semanticRevisionCount)
     const executorRetryCount =
@@ -406,8 +420,8 @@ export function createAgentTaskOrchestrator(options: {
         eventKey: `agent-task-event:${transition.id}:step-started`,
         stepId: transition.stepId,
         type: 'step_started',
-        summary: '开始执行当前步骤',
-        publicPayload: {},
+        summary: userSummary ? `正在执行：${userSummary}` : '开始执行当前步骤',
+        publicPayload: Object.keys(changeCounts).length ? { changeCounts } : {},
         technicalPayload: {},
         redactionVersion: 1,
       },
@@ -417,8 +431,8 @@ export function createAgentTaskOrchestrator(options: {
         eventKey: `agent-task-event:${transition.id}:change-committed`,
         stepId: transition.stepId,
         type: 'change_committed',
-        summary: '当前步骤的修改已提交',
-        publicPayload: {},
+        summary: userSummary ? `已完成：${userSummary}` : '当前步骤的修改已提交',
+        publicPayload: Object.keys(changeCounts).length ? { changeCounts } : {},
         technicalPayload: operationId ? { operationId } : {},
         redactionVersion: 1,
       })
@@ -624,6 +638,13 @@ export function createAgentTaskOrchestrator(options: {
 
     if (result.action === 'revise') {
       assertAgentDecisionUserTextSafe({ summary: result.summary })
+      const preview =
+        observation.preview && typeof observation.preview === 'object'
+          ? (observation.preview as Record<string, unknown>)
+          : null
+      const missingMaterials = Array.isArray(preview?.missingMaterialIds)
+        ? preview.missingMaterialIds.filter(value => typeof value === 'string').slice(0, 20)
+        : []
       const nextTransitionKey = `step-action:${transition.taskRunId}:${transition.generation}:revise-${nextRevisionCount}`
       await completePhase3(transition, {
         status: 'completed',
@@ -638,6 +659,19 @@ export function createAgentTaskOrchestrator(options: {
           terminalClassification: 'revise_step',
         },
         events: [
+          ...(missingMaterials.length
+            ? [
+                {
+                  eventKey: `agent-task-event:${transition.id}:fallback-selected`,
+                  stepId: transition.stepId,
+                  type: 'fallback_selected' as const,
+                  summary: '目标物料不可用，正在选择已注册物料或结构化局部兜底',
+                  publicPayload: { missingMaterials },
+                  technicalPayload: {},
+                  redactionVersion: 1,
+                },
+              ]
+            : []),
           {
             eventKey: `agent-task-event:${transition.id}:step-revising`,
             stepId: transition.stepId,

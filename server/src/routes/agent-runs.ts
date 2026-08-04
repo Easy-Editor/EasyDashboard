@@ -398,7 +398,7 @@ function planningResultFromOutput(
   }
 }
 
-const persistedPlanningInputSchema = z
+export const persistedPlanningInputSchema = z
   .object({
     purpose: z.literal('planning'),
     prompt: z.string().trim().min(1).max(4_000),
@@ -950,7 +950,7 @@ export function providerSettlementEstimateMicros(
   return totalTokens === undefined ? reservedMicros : Math.ceil(totalTokens * maximumRateMicrosPerToken)
 }
 
-async function resolveAttachments(
+export async function resolveAttachments(
   repository: Repository,
   actorId: string,
   projectId: string,
@@ -977,7 +977,7 @@ async function resolveAttachments(
   })
 }
 
-async function resolveModelImages(
+export async function resolveModelImages(
   repository: Repository,
   actorId: string,
   projectId: string,
