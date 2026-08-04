@@ -3,7 +3,7 @@ import { setterManager } from '@/editor/remote'
 import { customFieldItem } from '@/editor/setters'
 import { project } from '@easy-editor/core'
 import { SettingRenderer } from '@easy-editor/react-renderer'
-import { EyeOff, Lock } from 'lucide-react'
+import { EyeOff, Lock, SlidersHorizontal } from 'lucide-react'
 import { observer } from 'mobx-react'
 import { useEffect } from 'react'
 import { ConfigureSkeleton } from './ConfigureSkeleton'
@@ -108,7 +108,7 @@ export const ConfigureSidebar = observer(({ ...props }: React.ComponentProps<typ
       <SidebarHeader className='flex h-[var(--ed-panel-header-height)] shrink-0 items-center border-b border-[var(--ed-line)] bg-[var(--ed-panel)] px-3 py-0'>
         <div className='flex w-full items-center justify-between'>
           <div className='flex min-w-0 items-center gap-2'>
-            <div className='h-3.5 w-0.5 shrink-0 rounded-full bg-[var(--ed-cyan)]' />
+            <SlidersHorizontal className='size-3.5 shrink-0 text-[var(--ed-ink-muted)]' aria-hidden='true' />
             <span className='truncate text-[12px] font-medium tracking-wide text-[var(--ed-ink-soft)]'>属性配置</span>
           </div>
           {(isLocked || isHidden) && (

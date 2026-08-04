@@ -6,7 +6,38 @@ import type { AppVariables } from '../middleware/auth.js'
 import type { PublicProject, Repository } from '../types.js'
 import { slugSchema } from '../validation.js'
 
-const settingsSchema = z.record(z.string(), z.unknown())
+const agentPreferencesSchema = z
+  .object({
+    defaultAttachmentScope: z.enum(['conversation', 'project']),
+    rememberProjectContext: z.boolean(),
+    showTaskProgress: z.boolean(),
+  })
+  .strict()
+const settingsSchema = z
+  .object({
+    displayName: z.string().trim().max(120).optional(),
+    autosave: z.boolean().optional(),
+    workspaceRailPreference: z.enum(['docked', 'collapsed']).optional(),
+    agentPreferences: agentPreferencesSchema.optional(),
+  })
+  .strict()
+
+function publicSettings(settings: Record<string, unknown>): z.infer<typeof settingsSchema> {
+  const result: z.infer<typeof settingsSchema> = {}
+  const displayName = settingsSchema.shape.displayName.safeParse(settings.displayName)
+  if (displayName.success && displayName.data !== undefined) result.displayName = displayName.data
+  const autosave = settingsSchema.shape.autosave.safeParse(settings.autosave)
+  if (autosave.success && autosave.data !== undefined) result.autosave = autosave.data
+  const workspaceRailPreference = settingsSchema.shape.workspaceRailPreference.safeParse(
+    settings.workspaceRailPreference,
+  )
+  if (workspaceRailPreference.success && workspaceRailPreference.data !== undefined) {
+    result.workspaceRailPreference = workspaceRailPreference.data
+  }
+  const agentPreferences = agentPreferencesSchema.safeParse(settings.agentPreferences)
+  if (agentPreferences.success) result.agentPreferences = agentPreferences.data
+  return result
+}
 const LOCAL_VIEWER_ORIGINS = new Set(['http://localhost:5174', 'http://view.localhost:5174'])
 
 function isAllowedViewerOrigin(origin: string | undefined, env: AppEnv): boolean {
@@ -38,10 +69,13 @@ function publicProjectResponse(c: {
 export function createPrivateMiscRoutes(repository: Repository) {
   const routes = new Hono<{ Variables: AppVariables }>()
   routes.get('/templates', async c => c.json({ templates: await repository.listTemplates() }))
-  routes.get('/settings', async c => c.json({ settings: await repository.getSettings(c.get('actorId')) }))
+  routes.get('/settings', async c =>
+    c.json({ settings: publicSettings(await repository.getSettings(c.get('actorId'))) }),
+  )
   routes.patch('/settings', async c => {
-    const settings = await readJson(c, settingsSchema)
-    return c.json({ settings: await repository.updateSettings(c.get('actorId'), settings) })
+    const patch = await readJson(c, settingsSchema)
+    const settings = await repository.updateSettings(c.get('actorId'), patch)
+    return c.json({ settings: publicSettings(settings) })
   })
   return routes
 }

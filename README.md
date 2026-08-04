@@ -33,9 +33,17 @@ public viewer.
   by an immutable release snapshot.
 - Sign in with email and password, GitHub, or Google. The Hono API keeps
   Supabase sessions in secure host-only cookies.
+- Start private, multi-conversation Agent tasks from the home page or editor;
+  attach project or conversation files, watch task stages, and keep confirmed
+  project context plus private cross-project preferences.
+- Execute model-produced ChangeSets through an isolated EasyEditor Host and
+  headless Chromium, commit with draft-version CAS, retain receipts, and undo a
+  committed Agent operation.
+- Configure the platform relay or a verified OpenAI-compatible model with
+  task/month budgets, versioned built-in Skills, and fail-closed MCP policy.
 
-Agent execution, templates as a product workflow, team collaboration, and 3D
-editing are not part of the current application.
+Templates as a product workflow, team collaboration, and 3D editing are not
+part of the current application.
 
 ## Workspace
 
@@ -101,7 +109,18 @@ EasyDashboard/
    The browser calls the API through the app's same-origin `/api` path. Vite
    proxies that path to the Hono development server on port `8787`.
 
-4. Start all three development processes:
+4. When the sibling `EasyEditor` checkout is present, build and lock the local
+   isolated Document Executor once (and repeat this after changing its runtime
+   or Host artifacts):
+
+   ```bash
+   pnpm setup:agent-executor
+   ```
+
+   This creates the ignored `.env.agent.local`; it never modifies `.env.local`
+   or exposes the model key to Chromium.
+
+5. Start the four development processes:
 
    ```bash
    pnpm dev
@@ -126,22 +145,28 @@ deletes the project, and does not reset developer data.
 
 | Command | Purpose |
 | --- | --- |
-| `pnpm dev` | Start the app, viewer, and API |
+| `pnpm dev` | Start the app, viewer, API, and isolated Agent executor artifact server |
 | `pnpm dev:web` | Start only the authenticated app |
 | `pnpm dev:viewer` | Start only the public viewer |
 | `pnpm dev:server` | Start only the Hono API |
+| `pnpm dev:executor` | Serve the immutable local Agent executor browser artifact |
+| `pnpm setup:agent-executor` | Build the sibling Host artifact and generate its local compatibility lock |
 | `pnpm build` | Build the app, viewer, and server |
 | `pnpm typecheck` | Type-check all three workspace applications |
 | `pnpm test` | Run the web, public Viewer, and server test suites |
 | `pnpm test:e2e` | Run the Chromium product-lifecycle test |
 | `pnpm test:e2e:ui` | Open the Playwright test UI |
+| `pnpm eval:agent <recording.json> [baseline.json]` | Score recorded Agent output against the fixed dashboard evaluation set |
 | `pnpm lint` | Run Biome checks |
 | `pnpm format` | Format the workspace with Biome |
 
 ## Architecture and deployment
 
 - [Architecture](./docs/ARCHITECTURE.md)
+- [Design contract](./DESIGN.md)
 - [Product design](./docs/PRODUCT-DESIGN.md)
+- [Agent V1 product and system plan](./docs/AI-AGENT-PLAN.md)
+- [Agent V1 implementation plan](./.omx/plans/easy-dashboard-agent-v1.md)
 - [Supabase and Vercel deployment](./docs/DEPLOYMENT.md)
 - [Remote materials](./docs/remote-materials.md)
 

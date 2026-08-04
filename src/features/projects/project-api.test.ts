@@ -4,6 +4,7 @@ import {
   createProjectRestorePoint,
   deleteProjectPermanently,
   duplicateProject,
+  getProject,
   listProjectRestorePoints,
   listProjects,
   publishProject,
@@ -29,6 +30,60 @@ afterEach(() => {
 })
 
 describe('project product API', () => {
+  it('unwraps the canonical Agent document before handing it to the editor', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        project: {
+          id: projectId,
+          name: 'Agent dashboard',
+          description: null,
+          draftVersion: 2,
+          draftSchema: {
+            formatVersion: 1,
+            editorSchema: {
+              version: '1.0.0',
+              componentsMap: [
+                {
+                  devMode: 'proCode',
+                  componentName: 'Text',
+                  package: '@easy-editor/materials-dashboard-text',
+                  version: '0.0.22',
+                  globalName: 'EasyEditorMaterialsText',
+                },
+              ],
+              componentsTree: [
+                {
+                  id: 'page-home-root',
+                  componentName: 'Root',
+                  fileName: 'home',
+                  children: [{ id: 'agent-title', componentName: 'Text', props: { text: 'Agent dashboard' } }],
+                },
+              ],
+            },
+            presentation: { startPageId: 'page-home-root', theme: { mode: 'dark', tokens: {} } },
+          },
+          updatedAt: '2026-07-30T04:05:06.000Z',
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    const detail = await getProject(projectId)
+
+    expect(detail.schema.componentsTree[0]).toMatchObject({
+      id: 'page-home-root',
+      children: [
+        {
+          id: 'agent-title',
+          npm: {
+            package: '@easy-editor/materials-dashboard-text',
+            version: '0.0.22',
+          },
+        },
+      ],
+    })
+  })
+
   it('loads lightweight active or trash summaries without deriving metadata from a schema', async () => {
     const fetch = vi.fn().mockResolvedValue(
       jsonResponse({
@@ -186,23 +241,38 @@ describe('project product API', () => {
   })
 
   it('returns both stable and immutable viewer URLs after publishing', async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      jsonResponse(
-        {
-          publication: {
-            projectId,
-            slug: 'operations-stable',
-            revisionId,
-            revisionNumber: 5,
-            releaseNumber: 2,
-            publishedAt: '2026-07-30T04:05:06.000Z',
-            stableUrl: '/api/public/projects/operations-stable',
-            versionUrl: '/api/public/projects/operations-stable/versions/2',
+    const snapshotId = '55555555-5555-4555-8555-555555555555'
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            snapshot: { id: snapshotId, documentSha256: 'a'.repeat(64) },
+            previewRun: { id: 'preview', source: 'editor_renderer_artifact' },
           },
-        },
-        201,
-      ),
-    )
+          201,
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ approval: { id: 'approval' } }, 201))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            publication: {
+              projectId,
+              slug: 'operations-stable',
+              revisionId,
+              revisionNumber: 5,
+              releaseNumber: 2,
+              publishedAt: '2026-07-30T04:05:06.000Z',
+              stableUrl: '/api/public/projects/operations-stable',
+              versionUrl: '/api/public/projects/operations-stable/versions/2',
+              isCurrent: true,
+              isPublished: true,
+            },
+          },
+          201,
+        ),
+      )
     vi.stubGlobal('fetch', fetch)
 
     await expect(publishProject(projectId, 7)).resolves.toMatchObject({
@@ -211,5 +281,10 @@ describe('project product API', () => {
       stablePath: '/view/operations-stable',
       versionPath: '/view/operations-stable/versions/2',
     })
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `/api/projects/${projectId}/agent/publish-snapshots`,
+      expect.objectContaining({ body: JSON.stringify({ draftVersion: 7 }) }),
+    )
   })
 })

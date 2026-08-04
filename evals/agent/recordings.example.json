@@ -1,0 +1,18 @@
+[
+  {
+    "caseId": "low-altitude-operations",
+    "response": {
+      "text": "已生成包含低空运行和告警模块的候选变更。",
+      "capabilities": ["screen.applyChangeSet"],
+      "operations": [{ "opId": "layout" }, { "opId": "flights" }, { "opId": "routes" }, { "opId": "alerts" }]
+    }
+  },
+  {
+    "caseId": "sales-overview",
+    "response": {
+      "text": "已生成销售指标和区域趋势候选变更。",
+      "capabilities": ["screen.applyChangeSet"],
+      "operations": [{ "opId": "layout" }, { "opId": "metrics" }, { "opId": "trend" }]
+    }
+  }
+]

@@ -3,6 +3,8 @@
  * CDN 提供商管理器（浏览器特定实现）
  */
 
+import { isLinkedMaterialsRuntimeEnabled, resolveLinkedMaterialUrl } from '../linked-materials'
+
 /** CDN 提供商配置 */
 export interface CdnProvider {
   /** 提供商名称 */
@@ -27,8 +29,11 @@ export const DEFAULT_CDN_PROVIDERS: CdnProvider[] = [
 export class CdnProviderManager {
   private providers: CdnProvider[]
 
-  constructor(providers?: CdnProvider[]) {
+  private readonly useLinkedMaterials: boolean
+
+  constructor(providers?: CdnProvider[], useLinkedMaterials = isLinkedMaterialsRuntimeEnabled(import.meta.env)) {
     this.providers = providers ? [...providers] : [...DEFAULT_CDN_PROVIDERS]
+    this.useLinkedMaterials = useLinkedMaterials
     this.sortByPriority()
   }
 
@@ -87,6 +92,9 @@ export class CdnProviderManager {
    * @param providerIndex 提供商索引
    */
   buildUrl(pkg: string, version: string, file: string, providerIndex = 0): string {
+    const linkedMaterialUrl = resolveLinkedMaterialUrl(pkg, file, this.useLinkedMaterials)
+    if (linkedMaterialUrl) return linkedMaterialUrl
+
     const provider = this.providers[providerIndex] || this.providers[0]
     if (!provider) {
       throw new Error('No CDN provider available')

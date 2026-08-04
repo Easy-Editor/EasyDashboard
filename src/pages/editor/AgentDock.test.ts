@@ -1,0 +1,91 @@
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
+
+describe('editor Agent dock source contract', () => {
+  it('uses the shared project, auth, URL conversation, and Agent store boundaries', async () => {
+    const source = await readFile(path.join(currentDirectory, 'AgentDock.tsx'), 'utf8')
+
+    expect(source).toContain('export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps)')
+    expect(source).toContain('const { projectId, projectName, flush, reloadServerDraft } = useEditorSession()')
+    expect(source).toContain('const { user } = useAuth()')
+    expect(source).toContain("searchParams.get('conversation')")
+    expect(source).toContain('getProjectConversations(user.id, projectId)')
+    expect(source).toContain('appendAgentTurn({')
+    expect(source).toContain('createAgentConversation({')
+    expect(source).toContain('run = await startAgentRun({')
+    expect(source).toContain('selectionContext: buildEditorAgentSelectionContext(project)')
+    expect(source).toContain('await respondAgentTask({')
+    expect(source).toContain('questionId: pendingQuestion.id, turnId: userTurn.id')
+    expect(source).toContain('recordAgentRunPendingQuestion({')
+    expect(source).toContain('attachmentIds: requestAttachments.flatMap')
+    expect(source).toContain('run = await pollAgentRun(projectId, run)')
+    expect(source).toContain('const resumeAgentRun = useCallback(')
+    expect(source).toContain("['planning', 'running', 'prepared'].includes(task.run.status)")
+    expect(source).toContain('void resumeAgentRun(resumable.conversation, resumable.task)')
+    expect(source).toContain('recordAgentRun({')
+    expect(source).toContain('await reloadServerDraft()')
+    expect(source).toContain("createContextProposal(prompt, run.message ?? '', taskId)")
+    expect(source).toContain('buildProjectMemoryProposal({ sourceTaskId: taskId')
+    expect(source).not.toContain('真实执行 ${run.operationId} 已提交')
+    expect(source).toContain('await undoAgentRun(projectId, operationId)')
+    expect(source).toContain("taskStatus: 'running'")
+    expect(source).toContain('规划请求失败：${detail}')
+    expect(source).toContain('重试当前阶段')
+    expect(source).toContain('const retryConversation = appendAgentTurn({')
+    expect(source).toContain('const retryTask = retryConversation.tasks.at(-1)')
+    expect(source).toContain('retryTask.id,')
+    expect(source).not.toContain('userMessage.attachments,\n      task.id,')
+    expect(source).toContain('重试保存上下文')
+    expect(source).toContain('projectName,')
+    expect(source).toContain('scope: agentPreferences.defaultAttachmentScope')
+    expect(source).toContain('getProjectAttachmentManifest(user.id, projectId)')
+    expect(source).toContain('getProjectContexts(user.id, projectId)')
+    expect(source).toContain('const confirmedContextsPromise = listSharedProjectContexts(projectId)')
+    expect(source).toContain('const confirmedContexts = await confirmedContextsPromise')
+    expect(source).toContain('currentConversation?.tasks.at(-1)')
+    expect(source).toContain('to={`/projects/${projectId}/agent/${currentConversation.id}`}')
+  })
+
+  it('stays a closeable editor-token dock without chatbot styling', async () => {
+    const source = await readFile(path.join(currentDirectory, 'AgentDock.tsx'), 'utf8')
+
+    expect(source).toContain('data-editor-agent-dock')
+    expect(source).toContain("id='editor-agent-dock'")
+    expect(source).toContain('fixed top-[var(--ed-header-height)] right-0 bottom-0')
+    expect(source).toContain('w-[390px]')
+    expect(source).toContain('onClick={() => onOpenChange(false)}')
+    expect(source).toContain('bg-[var(--ed-panel)]')
+    expect(source).toContain('text-[var(--ed-cyan)]')
+    expect(source).toContain('继续编辑当前大屏')
+    expect(source).toContain('Agent 会结合当前画布继续处理')
+    expect(source).not.toContain('border-dashed')
+    expect(source).not.toMatch(/\b(Bot|Wand|Sparkles|MagicWand)\b/)
+    expect(source).not.toMatch(/purple|violet|fuchsia/)
+    expect(source).toContain('{projectName} · 项目助手')
+    expect(source).toContain('当前执行')
+    expect(source).toContain('taskStatusLabels[latestTask.status]')
+    expect(source).not.toContain('私有项目对话')
+    expect(source).not.toContain('latestTask.stages.map')
+    expect(source).not.toContain('uppercase tracking-')
+  })
+
+  it('persists and displays the run Skill trace when skills were used', async () => {
+    const source = await readFile(path.join(currentDirectory, 'AgentDock.tsx'), 'utf8')
+
+    expect(source).toContain('trace: run.trace')
+    expect(source).toContain('latestTask.run.trace?.skills.length')
+    expect(source).toContain('使用技能')
+  })
+
+  it('uses the shared cost formatter so uncertain billing is never presented as exact', async () => {
+    const source = await readFile(path.join(currentDirectory, 'AgentDock.tsx'), 'utf8')
+
+    expect(source).toContain('formatAgentRunCost(latestTask?.run?.cost)')
+    expect(source).toContain('费用 {latestTaskCost}')
+    expect(source).not.toContain('latestTask.run.cost.amount')
+  })
+})

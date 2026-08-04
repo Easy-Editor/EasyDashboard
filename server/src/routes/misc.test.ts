@@ -2,8 +2,9 @@ import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppEnv } from '../env.js'
 import { ApiError } from '../http.js'
+import type { AppVariables } from '../middleware/auth.js'
 import type { Repository } from '../types.js'
-import { createPublicRoutes } from './misc.js'
+import { createPrivateMiscRoutes, createPublicRoutes } from './misc.js'
 
 const env = {
   NODE_ENV: 'test',
@@ -31,6 +32,108 @@ function createTestApp(overrides: Partial<Repository> = {}, routeEnv: AppEnv = e
   })
   return app
 }
+
+function createPrivateTestApp(overrides: Partial<Repository>) {
+  const repository = {
+    listTemplates: async () => [],
+    getSettings: async () => ({}),
+    updateSettings: async (_actorId: string, settings: Record<string, unknown>) => settings,
+    ...overrides,
+  } as unknown as Repository
+  const app = new Hono<{ Variables: AppVariables }>()
+  app.use('*', async (c, next) => {
+    c.set('actorId', '11111111-1111-4111-8111-111111111111')
+    c.set('accessToken', 'test-access-token')
+    await next()
+  })
+  app.route('/', createPrivateMiscRoutes(repository))
+  app.onError((error, c) => {
+    if (error instanceof ApiError) return c.json({ error: { code: error.code, message: error.message } }, error.status)
+    throw error
+  })
+  return app
+}
+
+describe('private settings routes', () => {
+  it('sends an atomic public settings patch without copying internal configuration', async () => {
+    const updateSettings = vi.fn(async (_actorId: string, settings: Record<string, unknown>) => settings)
+    const app = createPrivateTestApp({
+      getSettings: async () => ({
+        displayName: 'Owner',
+        agentModelConfig: { encryptedApiKey: 'server-only-ciphertext' },
+      }),
+      updateSettings,
+    })
+
+    const response = await app.request('/settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: '',
+        workspaceRailPreference: 'collapsed',
+        agentPreferences: {
+          defaultAttachmentScope: 'project',
+          rememberProjectContext: true,
+          showTaskProgress: false,
+        },
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(updateSettings).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', {
+      displayName: '',
+      workspaceRailPreference: 'collapsed',
+      agentPreferences: { defaultAttachmentScope: 'project', rememberProjectContext: true, showTaskProgress: false },
+    })
+  })
+
+  it('never returns internal preference memory or encrypted model configuration', async () => {
+    const app = createPrivateTestApp({
+      getSettings: async () => ({
+        displayName: 'Owner',
+        autosave: true,
+        workspaceRailPreference: 'collapsed',
+        agentPreferenceMemory: { revision: 7, preferences: [{ content: 'private' }] },
+        agentModelConfiguration: { user: { encryptedSecret: { ciphertext: 'server-only' } } },
+      }),
+    })
+
+    const response = await app.request('/settings')
+    const payload = (await response.json()) as { settings: Record<string, unknown> }
+
+    expect(response.status).toBe(200)
+    expect(payload.settings).toEqual({ displayName: 'Owner', autosave: true, workspaceRailPreference: 'collapsed' })
+    expect(JSON.stringify(payload)).not.toMatch(/agentPreferenceMemory|agentModelConfiguration|ciphertext/u)
+  })
+
+  it.each(['agentPreferenceMemory', 'agentModelConfiguration'])('rejects the reserved settings key %s', async key => {
+    const updateSettings = vi.fn()
+    const app = createPrivateTestApp({ updateSettings })
+
+    const response = await app.request('/settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ [key]: { value: 'must-not-write' } }),
+    })
+
+    expect(response.status).toBe(422)
+    expect(updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('rejects the transient overlay state as a persisted workspace preference', async () => {
+    const updateSettings = vi.fn()
+    const app = createPrivateTestApp({ updateSettings })
+
+    const response = await app.request('/settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workspaceRailPreference: 'overlay' }),
+    })
+
+    expect(response.status).toBe(422)
+    expect(updateSettings).not.toHaveBeenCalled()
+  })
+})
 
 describe('public project routes', () => {
   it('adds viewer CORS headers to not-found responses', async () => {

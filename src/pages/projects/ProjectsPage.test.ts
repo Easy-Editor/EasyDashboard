@@ -73,11 +73,21 @@ describe('ProjectsPage filtering', () => {
     expect(source).toContain('{loadError ? null : projects ? (')
   })
 
-  it('describes creation resolution as a per-page starting value with bounded custom dimensions', async () => {
+  it('uses the available workspace width and keeps empty states centered in the viewport', async () => {
     const source = await readFile(path.join(currentDirectory, 'ProjectsPage.tsx'), 'utf8')
 
-    expect(source).toContain('初始页面分辨率')
-    expect(source).toContain('创建后可在编辑器底部为每个页面独立调整。')
-    expect(source.match(/max=\{16384\}/g)).toHaveLength(2)
+    expect(source).toContain('grid-cols-[repeat(auto-fill,minmax(250px,1fr))]')
+    expect(source).toContain('min-h-[calc(100vh-240px)]')
+    expect(source).toContain("size='standard'")
+    expect(source).not.toContain("eyebrow='Workspace / Projects'")
+  })
+
+  it('creates a simple empty project without asking for canvas resolution up front', async () => {
+    const source = await readFile(path.join(currentDirectory, 'ProjectsPage.tsx'), 'utf8')
+
+    expect(source).toContain('schema: structuredClone(defaultProjectSchema)')
+    expect(source).toContain('进入后可以继续告诉 Agent 你的需求。')
+    expect(source).not.toContain('初始页面分辨率')
+    expect(source).not.toContain("name='resolution'")
   })
 })

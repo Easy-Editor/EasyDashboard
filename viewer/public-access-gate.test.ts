@@ -1,5 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { probePublicViewerAccess, publicViewerProbePath } from './public-access-gate'
+import { probePublicViewerAccess, publicViewerErrorResponse, publicViewerProbePath } from './public-access-gate'
+
+describe('publicViewerErrorResponse', () => {
+  it('renders a human-readable Chinese error without release diagnostics', async () => {
+    const response = publicViewerErrorResponse(404)
+    const html = await response.text()
+
+    expect(response.status).toBe(404)
+    expect(html).toContain('<title>发布地址不存在 · EasyDashboard</title>')
+    expect(html).toContain('请检查链接，或联系发布者确认该大屏仍在公开。')
+    expect(html).toContain('>重新检查</button>')
+    expect(html).not.toMatch(/404 \/ RELEASE|class="code"|class="head"/)
+  })
+
+  it('keeps HEAD responses empty while preserving retry metadata', async () => {
+    const response = publicViewerErrorResponse(503, true)
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Retry-After')).toBe('30')
+    expect(await response.text()).toBe('')
+  })
+})
 
 describe('publicViewerProbePath', () => {
   it('maps stable and immutable viewer routes to the public API probe', () => {

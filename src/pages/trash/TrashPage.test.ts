@@ -35,4 +35,12 @@ describe('TrashPage permanent deletion', () => {
     expect(source).toContain("role='alert'")
     expect(source.indexOf('{loadError ? (')).toBeLessThan(source.indexOf(': projects === null ? ('))
   })
+
+  it('fills the workspace grid and centers the empty state without an eyebrow label', async () => {
+    const source = await readFile(path.join(currentDirectory, 'TrashPage.tsx'), 'utf8')
+
+    expect(source).toContain('grid-cols-[repeat(auto-fill,minmax(260px,1fr))]')
+    expect(source).toContain('min-h-[calc(100vh-220px)]')
+    expect(source).not.toContain("eyebrow='Workspace / Trash'")
+  })
 })

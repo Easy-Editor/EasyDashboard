@@ -20,7 +20,7 @@ function PreviewArtwork({ preview }: { preview: PreviewKind }) {
       <div className='grid h-full place-items-center'>
         <div className='flex flex-col items-center gap-2 text-[#65717D]'>
           <span className='size-8 border border-dashed border-[#3A4652]' />
-          <span className='font-mono text-[9px] uppercase tracking-[0.16em]'>Layout pending</span>
+          <span className='text-[11px]'>等待添加内容</span>
         </div>
       </div>
     )
@@ -79,12 +79,13 @@ function PreviewArtwork({ preview }: { preview: PreviewKind }) {
 export function CalibrationViewport({
   width = 1920,
   height = 1080,
-  state = 'DRAFT',
+  state = '草稿',
   scale = '100%',
   preview = 'commerce',
   className,
-  compact = false,
 }: CalibrationViewportProps) {
+  const stateLabel = state.trim().toUpperCase() === 'DRAFT' ? '草稿' : state
+
   return (
     <div
       className={cn(
@@ -93,13 +94,12 @@ export function CalibrationViewport({
         className,
       )}
     >
-      <div className='absolute inset-x-0 top-0 z-10 flex h-7 items-center justify-between border-b border-[#202932] bg-[#0F1318]/95 px-3 font-mono text-[9px] tracking-[0.08em] text-[#82909B]'>
+      <div className='absolute inset-x-0 top-0 z-10 flex h-7 items-center border-b border-[#202932] bg-[#0F1318]/95 px-3 font-mono text-[11px] tracking-[0.04em] text-[#82909B]'>
         <span>
-          {width} × {height} · {state}
+          {width} × {height} · {stateLabel}
         </span>
-        {!compact && <span>VIEWPORT</span>}
       </div>
-      <div className='absolute inset-x-0 bottom-0 z-10 flex h-6 items-center justify-between border-t border-[#202932] bg-[#0F1318]/95 px-3 font-mono text-[9px] text-[#65717D]'>
+      <div className='absolute inset-x-0 bottom-0 z-10 flex h-6 items-center justify-between border-t border-[#202932] bg-[#0F1318]/95 px-3 font-mono text-[11px] text-[#65717D]'>
         <span>0,0</span>
         <span>{scale}</span>
       </div>

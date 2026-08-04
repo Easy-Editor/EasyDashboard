@@ -69,8 +69,9 @@
  * disappear when a 1920×1080 page is fitted into the workbench.
  */
 .lc-simulator .lc-simulator-canvas-viewport {
-  box-shadow: 0 0 0 calc(1px / var(--scale, 1)) var(--ed-line-strong), 0 calc(12px / var(--scale, 1))
-    calc(32px / var(--scale, 1)) rgb(0 0 0 / 0.28) !important;
+  background: var(--ed-artboard) !important;
+  box-shadow: 0 0 0 calc(1px / var(--scale, 1)) color-mix(in srgb, var(--ed-line-strong) 82%, transparent), 0
+    calc(10px / var(--scale, 1)) calc(28px / var(--scale, 1)) rgb(0 0 0 / 0.22) !important;
 }
 
 .lc-simulator .lc-simulator-content {

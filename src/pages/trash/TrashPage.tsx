@@ -92,7 +92,6 @@ export function TrashPage() {
   return (
     <>
       <PageFrame
-        eyebrow='Workspace / Trash'
         title='回收站'
         description='恢复已移除的项目，或永久清理不再需要的内容。'
         action={
@@ -126,7 +125,7 @@ export function TrashPage() {
             </Button>
           </div>
         ) : projects === null ? (
-          <div className='mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,304px))] gap-5'>
+          <div className='mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5'>
             {Array.from({ length: 3 }, (_, index) => (
               <div
                 key={index}
@@ -135,7 +134,7 @@ export function TrashPage() {
             ))}
           </div>
         ) : projects.length > 0 ? (
-          <div className='mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,304px))] gap-5'>
+          <div className='mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5'>
             {projects.map(project => (
               <ProjectCard
                 key={project.id}
@@ -146,21 +145,25 @@ export function TrashPage() {
             ))}
           </div>
         ) : (
-          <div className='mx-auto mt-20 max-w-[390px] text-center'>
-            <div className='ed-trash-empty mx-auto grid aspect-video w-[320px] place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[#080d15]'>
-              <Trash2 className='size-6 text-[#5f7487]' />
+          <div className='grid min-h-[calc(100vh-220px)] place-items-center py-12 text-center'>
+            <div className='w-full max-w-[390px]'>
+              <div className='ed-trash-empty mx-auto grid aspect-video w-full max-w-[320px] place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[#080d15]'>
+                <Trash2 className='size-6 text-[#5f7487]' />
+              </div>
+              <h2 className='mt-6 font-[var(--font-display)] text-lg font-medium text-[var(--ed-ink)]'>回收站是空的</h2>
+              <p className='mt-2 text-xs leading-5 text-[var(--ed-ink-muted)]'>
+                移除的项目会暂时保留在这里，便于恢复。
+              </p>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => void load()}
+                className='mt-5 h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-transparent text-xs'
+              >
+                <RotateCcw />
+                刷新
+              </Button>
             </div>
-            <h2 className='mt-6 font-[var(--font-display)] text-lg font-medium text-[var(--ed-ink)]'>回收站是空的</h2>
-            <p className='mt-2 text-xs leading-5 text-[var(--ed-ink-muted)]'>移除的项目会暂时保留在这里，便于恢复。</p>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => void load()}
-              className='mt-5 h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-transparent text-xs'
-            >
-              <RotateCcw />
-              刷新
-            </Button>
           </div>
         )}
       </PageFrame>

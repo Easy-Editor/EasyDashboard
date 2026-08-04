@@ -1,0 +1,264 @@
+import { type AgentTask, type AgentTaskStage, formatAgentRunCost } from '@/features/agent'
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Circle, CircleDashed, LoaderCircle } from 'lucide-react'
+import { motion, useReducedMotion } from 'motion/react'
+import { useState } from 'react'
+
+type TodoTone = 'waiting' | 'running' | 'complete' | 'failed'
+
+export function resolveTodoSummary(task: AgentTask): { label: string; detail: string; tone: TodoTone } {
+  if (task.status === 'failed') {
+    return { label: '执行失败', detail: '任务未完成，请查看失败阶段', tone: 'failed' }
+  }
+  if (task.status === 'canceled') {
+    return { label: '已取消', detail: '任务已取消，未完成阶段仍保留', tone: 'waiting' }
+  }
+  if (task.status === 'paused') {
+    return { label: '已暂停', detail: '任务已暂停，可继续执行', tone: 'waiting' }
+  }
+  if (task.status === 'waiting_user') {
+    return { label: '等待回复', detail: 'Agent 需要你的回复才能继续', tone: 'waiting' }
+  }
+  if (task.status === 'complete') {
+    return { label: '已完成', detail: '全部阶段已完成', tone: 'complete' }
+  }
+  const statuses = task.stages.map(stage => stage.status)
+  if (statuses.includes('failed')) {
+    return { label: '执行失败', detail: '任务未完成，请查看失败阶段', tone: 'failed' }
+  }
+  if (statuses.includes('running')) {
+    return { label: '运行中', detail: 'Agent 正在处理当前阶段', tone: 'running' }
+  }
+  if (statuses.includes('waiting') || ['waiting', 'waiting_user', 'paused'].includes(task.status)) {
+    return { label: '等待中', detail: '当前阶段正在等待继续执行', tone: 'waiting' }
+  }
+  if (statuses.length > 0 && statuses.every(status => status === 'complete')) {
+    return { label: '已完成', detail: '全部阶段已完成', tone: 'complete' }
+  }
+  return { label: '待处理', detail: '任务尚未开始执行', tone: 'waiting' }
+}
+
+function resolveStageStatusLabel(stage: AgentTaskStage): string {
+  if (stage.status === 'complete') return '已完成'
+  if (stage.status === 'failed') return '失败'
+  if (stage.status === 'running') return '运行中'
+  if (stage.status === 'waiting') return '等待中'
+  return '待处理'
+}
+
+function StageIcon({ stage }: { stage: AgentTaskStage }) {
+  if (stage.status === 'complete') {
+    return <CheckCircle2 className='size-4 text-[var(--ed-success)]' strokeWidth={1.8} aria-hidden='true' />
+  }
+  if (stage.status === 'failed') {
+    return <AlertCircle className='size-4 text-[var(--ed-error)]' strokeWidth={1.8} aria-hidden='true' />
+  }
+  if (stage.status === 'running') {
+    return (
+      <LoaderCircle
+        className='size-4 animate-spin text-[var(--ed-cyan)] motion-reduce:animate-none'
+        strokeWidth={1.8}
+        aria-hidden='true'
+      />
+    )
+  }
+  if (stage.status === 'waiting') {
+    return <CircleDashed className='size-4 text-[var(--ed-cyan)]' strokeWidth={1.8} aria-hidden='true' />
+  }
+  return <Circle className='size-4 text-[var(--ed-ink-faint)]' strokeWidth={1.6} aria-hidden='true' />
+}
+
+export function TaskThread({
+  task,
+  rollbackPending = false,
+  rolledBack = false,
+  defaultExpanded = true,
+  onRollback,
+}: {
+  task: AgentTask
+  rollbackPending?: boolean
+  rolledBack?: boolean
+  defaultExpanded?: boolean
+  onRollback?: (operationId: string) => void
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [technicalOpen, setTechnicalOpen] = useState(false)
+  const reduceMotion = useReducedMotion()
+  const summary = resolveTodoSummary(task)
+  const costDescription = formatAgentRunCost(task.run?.cost)
+  const completedCount = task.stages.filter(stage => stage.status === 'complete').length
+  const activeStageIndex = task.stages.findIndex(stage => stage.status === 'running' || stage.status === 'waiting')
+  const currentStageIndex =
+    activeStageIndex >= 0 ? activeStageIndex : Math.max(0, Math.min(completedCount, task.stages.length) - 1)
+  const currentStage = task.stages[currentStageIndex]
+  const currentStep = task.stages.length === 0 ? 0 : currentStageIndex + 1
+
+  return (
+    <motion.section
+      aria-label={`任务：${task.title}`}
+      aria-live='polite'
+      data-task-thread='current'
+      className='shrink-0'
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <motion.div
+        aria-hidden={!expanded}
+        inert={!expanded}
+        className='grid origin-bottom'
+        initial={false}
+        animate={{ gridTemplateRows: expanded ? '1fr' : '0fr', opacity: expanded ? 1 : 0 }}
+        transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className='min-h-0 overflow-hidden'>
+          <div className='mx-auto max-h-44 w-[calc(100%-28px)] max-w-[380px] overflow-y-auto rounded-[14px] border border-[var(--ed-line)] bg-[var(--ed-panel)] p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.16)]'>
+            <ol className='space-y-0.5'>
+              {task.stages.map((stage, stageIndex) => {
+                const isComplete = stage.status === 'complete'
+                const isActive = stage.status === 'waiting' || stage.status === 'running'
+                const isFailed = stage.status === 'failed'
+                const isLast = stageIndex === task.stages.length - 1
+                return (
+                  <li
+                    key={stage.id}
+                    aria-label={`${stage.title}，${resolveStageStatusLabel(stage)}`}
+                    className={`relative flex min-h-8 min-w-0 items-start gap-2.5 rounded-[9px] px-2.5 py-2 ${
+                      isActive
+                        ? 'bg-[var(--ed-panel-raised)] shadow-[inset_2px_0_0_var(--ed-cyan)]'
+                        : isFailed
+                          ? 'bg-[color-mix(in_srgb,var(--ed-error)_6%,transparent)]'
+                          : ''
+                    }`}
+                  >
+                    {isLast ? null : (
+                      <span
+                        className='absolute left-[18px] top-[23px] h-[calc(100%-13px)] w-px bg-[var(--ed-line-strong)]'
+                        aria-hidden='true'
+                      />
+                    )}
+                    <span className='relative z-[1] mt-px grid size-4 shrink-0 place-items-center bg-[var(--ed-panel)]'>
+                      <StageIcon stage={stage} />
+                    </span>
+                    <span className='min-w-0 flex-1'>
+                      <span
+                        className={`block text-[12px] leading-4 ${isActive ? 'font-medium' : 'font-normal'} ${
+                          isComplete
+                            ? 'text-[var(--ed-ink-muted)]'
+                            : isActive
+                              ? 'text-[var(--ed-ink)]'
+                              : 'text-[var(--ed-ink-muted)]'
+                        }`}
+                      >
+                        {stage.title}
+                      </span>
+                      {stage.detail && isFailed ? (
+                        <span className='mt-0.5 block text-[10px] leading-4 text-[var(--ed-ink-faint)]'>
+                          {stage.detail}
+                        </span>
+                      ) : null}
+                    </span>
+                  </li>
+                )
+              })}
+            </ol>
+
+            {task.run ? (
+              <div className='mx-2 mt-1 border-t border-[var(--ed-line)] px-0.5 pt-2 pb-0.5'>
+                <button
+                  type='button'
+                  aria-expanded={technicalOpen}
+                  onClick={() => setTechnicalOpen(current => !current)}
+                  className='flex w-full items-center justify-between text-[10px] text-[var(--ed-ink-faint)] hover:text-[var(--ed-ink-muted)]'
+                >
+                  执行详情
+                  {technicalOpen ? (
+                    <ChevronUp className='size-3' aria-hidden='true' />
+                  ) : (
+                    <ChevronDown className='size-3' aria-hidden='true' />
+                  )}
+                </button>
+                {technicalOpen ? (
+                  <div className='pt-2'>
+                    {task.run.trace?.skills.length ? (
+                      <div className='mb-2 flex flex-wrap items-center gap-1.5 text-[10px]'>
+                        <span className='text-[var(--ed-ink-faint)]'>使用技能</span>
+                        {task.run.trace.skills.map(skill => (
+                          <span
+                            key={skill}
+                            className='rounded-full border border-[var(--ed-line-strong)] px-1.5 py-0.5 font-mono text-[var(--ed-cyan)]'
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <dl className='grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px] text-[var(--ed-ink-faint)]'>
+                      <dt>执行状态</dt>
+                      <dd className='text-right text-[var(--ed-ink-muted)]'>{task.run.status}</dd>
+                      <dt>执行标识</dt>
+                      <dd className='truncate text-right'>{task.run.operationId}</dd>
+                      {costDescription ? (
+                        <>
+                          <dt>费用</dt>
+                          <dd className='text-right'>{costDescription}</dd>
+                        </>
+                      ) : null}
+                      {task.run.receipt ? (
+                        <>
+                          <dt>执行凭据</dt>
+                          <dd className='text-right text-[var(--ed-success)]'>已记录</dd>
+                        </>
+                      ) : null}
+                      {task.run.rollback ? (
+                        <>
+                          <dt>回滚</dt>
+                          <dd className='text-right text-[var(--ed-cyan)]'>
+                            {onRollback ? (
+                              <button
+                                type='button'
+                                disabled={rollbackPending || rolledBack}
+                                onClick={() => onRollback(task.run!.operationId)}
+                                className='hover:text-[var(--ed-ink)] disabled:opacity-50'
+                              >
+                                {rolledBack ? '已回滚' : rollbackPending ? '回滚中…' : '回滚本次执行'}
+                              </button>
+                            ) : (
+                              '可用'
+                            )}
+                          </dd>
+                        </>
+                      ) : null}
+                    </dl>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </motion.div>
+      <button
+        type='button'
+        aria-expanded={expanded}
+        onClick={() => setExpanded(current => !current)}
+        className='mx-auto mt-2 flex h-8 max-w-full items-center gap-2 rounded-full border border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] px-3 text-left text-[11px] text-[var(--ed-ink-muted)] outline-none transition-colors hover:border-[var(--ed-cyan)]/35 hover:text-[var(--ed-ink)] focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)] active:scale-[0.98] motion-reduce:transition-none'
+      >
+        {currentStage ? <StageIcon stage={currentStage} /> : null}
+        <span className='truncate'>
+          第 {currentStep} / {task.stages.length} 步<span className='mx-1.5 text-[var(--ed-ink-faint)]'>·</span>
+          {currentStage?.title ?? summary.label}
+        </span>
+        <motion.span
+          className='ml-auto shrink-0'
+          aria-hidden='true'
+          animate={{ rotate: expanded ? 180 : 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
+        >
+          <ChevronDown className='size-3.5 text-[var(--ed-ink-faint)]' aria-hidden='true' />
+        </motion.span>
+      </button>
+      <p className='sr-only'>
+        {summary.label}：{summary.detail}
+      </p>
+    </motion.section>
+  )
+}

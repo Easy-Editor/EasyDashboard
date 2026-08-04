@@ -5,6 +5,7 @@ const revisionKindLabels: Record<ProjectRevision['kind'], string> = {
   manual: '手动备份',
   pre_restore: '恢复前备份',
   publish: '发布版本',
+  agent: 'Agent 执行前',
 }
 
 const defaultDateFormatter = (date: Date) =>

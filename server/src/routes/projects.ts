@@ -9,7 +9,6 @@ import {
   assertSchemaBudget,
   projectIdSchema,
   projectSchemaSchema,
-  slugSchema,
 } from '../validation.js'
 
 const createProjectSchema = z.object({
@@ -32,10 +31,9 @@ const draftSchema = z.object({
   schema: projectSchemaSchema,
 })
 
-const publishSchema = z.object({
-  expectedVersion: z.number().int().positive(),
-  slug: slugSchema.optional(),
-})
+const publishSchema = z.object({ snapshotId: z.uuid() }).strict()
+const createPublishSnapshotSchema = z.object({ draftVersion: z.number().int().positive() }).strict()
+const emptyMutationSchema = z.object({}).strict()
 
 const revisionIdSchema = z.object({ revisionId: z.uuid() })
 const restoreSchema = z.object({ expectedVersion: z.number().int().positive() })
@@ -80,6 +78,12 @@ const thumbnailFailureSchema = z.object({
 function idFrom(c: { req: { param(name: string): string } }): string {
   const result = projectIdSchema.safeParse(c.req.param('projectId'))
   if (!result.success) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+  return result.data
+}
+
+function snapshotIdFrom(c: { req: { param(name: string): string } }): string {
+  const result = z.uuid().safeParse(c.req.param('snapshotId'))
+  if (!result.success) throw new ApiError(404, 'PUBLISH_SNAPSHOT_NOT_FOUND', 'Publish snapshot not found')
   return result.data
 }
 
@@ -162,6 +166,13 @@ export function createProjectRoutes(repository: Repository) {
 
   routes.post('/:projectId/restore', async c => {
     const project = await repository.restoreProject(c.get('actorId'), idFrom(c))
+    if (project === 'deletion_in_progress') {
+      throw new ApiError(
+        409,
+        'PROJECT_PERMANENT_DELETE_IN_PROGRESS',
+        'Project permanent deletion is already in progress',
+      )
+    }
     if (!project) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
     return c.json({ project })
   })
@@ -285,27 +296,52 @@ export function createProjectRoutes(repository: Repository) {
     return c.json({ project, savedAt: project.updatedAt })
   })
 
-  routes.post('/:projectId/publish', async c => {
-    const input = await readJson(c, publishSchema)
-    const result = await repository.publish(c.get('actorId'), idFrom(c), input)
-    if (result === 'conflict') throw new ApiError(409, 'DRAFT_CONFLICT', 'Publish requires the current saved draft')
+  routes.post('/:projectId/agent/publish-snapshots', async c => {
+    const input = await readJson(c, createPublishSnapshotSchema)
+    const result = await repository.createPublishSnapshot(c.get('actorId'), idFrom(c), input.draftVersion)
+    if (result === 'conflict') {
+      throw new ApiError(409, 'PUBLISH_SNAPSHOT_DRAFT_CONFLICT', 'Snapshot requires the current saved draft')
+    }
     if (!result) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Project not found')
+    return c.json(result, 201)
+  })
+
+  routes.post('/:projectId/agent/publish-snapshots/:snapshotId/approve', async c => {
+    await readJson(c, emptyMutationSchema)
+    const result = await repository.approvePublishSnapshot(c.get('actorId'), idFrom(c), snapshotIdFrom(c))
+    if (result === 'forbidden') throw new ApiError(403, 'PROJECT_OWNER_REQUIRED', 'Project Owner role is required')
+    if (result === 'preview_required') {
+      throw new ApiError(409, 'PUBLISH_PREVIEW_REQUIRED', 'Verified snapshot preview evidence is required')
+    }
+    if (!result) throw new ApiError(404, 'PUBLISH_SNAPSHOT_NOT_FOUND', 'Publish snapshot not found')
+    return c.json({ approval: result }, 201)
+  })
+
+  const publishSnapshot = async (c: Context<{ Variables: AppVariables }>, snapshotId: string) => {
+    const result = await repository.publish(c.get('actorId'), idFrom(c), { snapshotId })
+    if (result === 'forbidden') throw new ApiError(403, 'PROJECT_OWNER_REQUIRED', 'Project Owner role is required')
+    if (result === 'approval_required') {
+      throw new ApiError(409, 'PUBLISH_APPROVAL_REQUIRED', 'An unused Owner approval is required')
+    }
+    if (!result) throw new ApiError(404, 'PUBLISH_SNAPSHOT_NOT_FOUND', 'Publish snapshot not found')
     const stableUrl = `/api/public/projects/${result.slug}`
     const versionUrl = `${stableUrl}/versions/${result.releaseNumber}`
-    return c.json(
-      {
-        publication: {
-          ...result,
-          stableUrl,
-          versionUrl,
-        },
-      },
-      201,
-    )
+    return c.json({ publication: { ...result, stableUrl, versionUrl } }, 201)
+  }
+
+  routes.post('/:projectId/agent/publish-snapshots/:snapshotId/publish', async c => {
+    await readJson(c, emptyMutationSchema)
+    return publishSnapshot(c, snapshotIdFrom(c))
+  })
+
+  routes.post('/:projectId/publish', async c => {
+    const input = await readJson(c, publishSchema)
+    return publishSnapshot(c, input.snapshotId)
   })
 
   routes.post('/:projectId/unpublish', async c => {
     const removed = await repository.unpublish(c.get('actorId'), idFrom(c))
+    if (removed === 'forbidden') throw new ApiError(403, 'PROJECT_OWNER_REQUIRED', 'Project Owner role is required')
     if (!removed) throw new ApiError(404, 'PUBLICATION_NOT_FOUND', 'Publication not found')
     return c.body(null, 204)
   })

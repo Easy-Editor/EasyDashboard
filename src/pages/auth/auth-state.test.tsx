@@ -62,6 +62,8 @@ describe('authentication status accessibility', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('aria-live="assertive"')
     expect(html).toContain('请重新选择登录方式')
+    expect(html).toContain('border-[#ff7f8a]/30')
+    expect(html).not.toContain('border-l-2')
   })
 
   it('keeps password reset success visible until the user enters their projects', () => {

@@ -1,0 +1,24 @@
+{
+  "id": "bank-financial-report-v1",
+  "title": "银行2022年度可视化财报",
+  "inputMode": "text-only",
+  "canvas": { "width": 1920, "height": 1080 },
+  "prompt": "创建一张1920×1080的银行2022年度可视化财报大屏。整体使用浅灰蓝财报底色、白色圆角内容卡片、深色顶部和底部压边，品牌金作为辅助色，营业风险或重要趋势使用红色。所有组件必须位于安全内容区x=48至1872、y=126至1004。左上显示3个带迷你趋势动效的指标：营业总收入3023.34亿元、净利润1023.43亿元、贷款1124.65亿元，并显示同比；其中必须恰好只有1个KPI使用emphasis=true。右侧八大股东进度排行必须是贯穿KPI行和中间行的高竖栏，位置尺寸约为x=1368、y=126、width=504、height=600。中间左侧是宽卡片的各省分行营收概况，约为x=48、y=314、width=864、height=410，包含中国省级地图和净利润柱状图加营业收入折线图；中间右侧是会自动纵向轮播的交易商户表，约为x=936、y=314、width=420、height=410。底部在y约734处从左到右把利息支出双折线图、会自动轮播的明星理财产品、各渠道交易数环形占比、核心竞争力4个模块排成同一行，并全部结束在y=1004的底部压边上方；核心竞争力至少展示7项。顶部显示标题和真实日期时间。所有图表进入时要有动效，列表持续平滑轮播。必须完全由组件和数据生成，不使用参考截图、图片URL或base64。",
+  "qualityBar": {
+    "ordinaryMaterialCount": 12,
+    "distinctOrdinaryMaterialTypeCount": 7,
+    "componentCounts": {
+      "Text": 2,
+      "NumberFlip": 3,
+      "GeoMap": 1,
+      "ScrollList": 1,
+      "Progress": 1
+    },
+    "chartCount": 3,
+    "distinctChartTypeCount": 2,
+    "fullCanvasCustomMaterialCount": 0,
+    "dominantCustomMaterialCount": 0,
+    "outOfBoundsMaterialCount": 0,
+    "externalAssetReferenceCount": 0
+  }
+}

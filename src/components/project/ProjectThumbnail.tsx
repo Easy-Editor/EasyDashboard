@@ -11,15 +11,18 @@ type ProjectWithArtwork = ProjectSummary & {
 type ProjectThumbnailProps = {
   project: ProjectWithArtwork
   className?: string
+  onArtworkLoadStateChange?: (state: 'loaded' | 'failed') => void
 }
 
 function projectSignal(projectId: string): number {
   return Array.from(projectId).reduce((total, character) => total + character.charCodeAt(0), 0) % 3
 }
 
-export function ProjectThumbnail({ project, className }: ProjectThumbnailProps) {
-  const [imageFailed, setImageFailed] = useState(false)
+export function ProjectThumbnail({ project, className, onArtworkLoadStateChange }: ProjectThumbnailProps) {
+  const [failedArtworkKey, setFailedArtworkKey] = useState<string | null>(null)
   const artworkUrl = project.thumbnail?.url ?? project.coverUrl ?? project.thumbnailUrl
+  const artworkKey = artworkUrl ? `${project.id}:${artworkUrl}` : null
+  const imageFailed = Boolean(artworkKey && failedArtworkKey === artworkKey)
   const signal = projectSignal(project.id)
 
   return (
@@ -29,14 +32,18 @@ export function ProjectThumbnail({ project, className }: ProjectThumbnailProps) 
           src={artworkUrl}
           alt=''
           className='absolute inset-0 size-full object-cover transition-transform duration-500 ease-out group-hover/card:scale-[1.018] motion-reduce:transition-none'
-          onError={() => setImageFailed(true)}
+          onLoad={() => onArtworkLoadStateChange?.('loaded')}
+          onError={() => {
+            setFailedArtworkKey(artworkKey)
+            onArtworkLoadStateChange?.('failed')
+          }}
         />
       ) : (
         <div className='absolute inset-0 overflow-hidden bg-[#080d16]'>
           <div className='ed-thumbnail-grid absolute inset-0 opacity-60' />
           <div
             className={cn(
-              'absolute h-px bg-gradient-to-r from-transparent via-[var(--ed-cyan)] to-transparent opacity-80',
+              'absolute h-px bg-gradient-to-r from-transparent via-[var(--ed-cyan)] to-transparent opacity-55',
               signal === 0 && 'left-[12%] right-[8%] top-[34%]',
               signal === 1 && 'left-[8%] right-[18%] top-[58%]',
               signal === 2 && 'left-[18%] right-[10%] top-[43%]',
@@ -52,16 +59,9 @@ export function ProjectThumbnail({ project, className }: ProjectThumbnailProps) 
               />
             ))}
           </div>
-          <div className='absolute left-[10%] top-[14%] flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-[#668099]'>
-            <span className='size-1 bg-[var(--ed-cyan)] shadow-[0_0_8px_var(--ed-cyan)]' />
-            Live canvas
-          </div>
         </div>
       )}
-      <div className='absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-[#05080d]/92 via-[#05080d]/45 to-transparent px-3 pb-2.5 pt-8'>
-        <span className='font-mono text-[11px] tracking-[0.08em] text-[#a0afbd]'>
-          {project.resolution.width} × {project.resolution.height}
-        </span>
+      <div className='absolute inset-x-0 bottom-0 flex items-end justify-end bg-gradient-to-t from-[#05080d]/92 via-[#05080d]/45 to-transparent px-3 pb-2.5 pt-8'>
         {artworkUrl && imageFailed ? <ImageOff className='size-3 text-[#687989]' aria-label='缩略图加载失败' /> : null}
       </div>
     </div>

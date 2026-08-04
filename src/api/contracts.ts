@@ -57,7 +57,7 @@ export type ProjectDetail<TSchema = unknown> = ProjectSummary & {
 export type ProjectRevision<TSchema = unknown> = {
   id: string
   revision: number
-  kind: 'auto' | 'manual' | 'pre_restore' | 'publish'
+  kind: 'auto' | 'manual' | 'pre_restore' | 'publish' | 'agent'
   schema: TSchema
   createdAt: string
 }

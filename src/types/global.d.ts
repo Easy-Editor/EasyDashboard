@@ -5,9 +5,9 @@ declare global {
     ReactDOM?: typeof import('react-dom')
 
     jsxRuntime?: {
-      jsx: typeof import('react').createElement
-      jsxs: typeof import('react').createElement
-      Fragment: typeof import('react').Fragment
+      jsx: typeof import('react/jsx-runtime').jsx
+      jsxs: typeof import('react/jsx-runtime').jsxs
+      Fragment: typeof import('react/jsx-runtime').Fragment
     }
 
     echarts?: typeof import('echarts/core') &

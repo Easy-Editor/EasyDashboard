@@ -10,7 +10,9 @@ This file applies to the entire `EasyDashboard` repository.
   navigation or visual hierarchy.
 - The current product is desktop-first and personal-first.
 - Templates, Agent workflows, team workspaces, 3D editing, and mobile authoring
-  remain reserved until their own contracts are approved.
+  are not supported product workflows yet, even where schema, routes, or dormant
+  components reserve future integration points. Do not expose them in product
+  navigation until their contracts are approved.
 
 ## Sources of truth
 
@@ -18,10 +20,12 @@ Use these authorities in order:
 
 1. Existing runtime behavior and tests describe what is implemented now.
 2. `docs/PRODUCT-DESIGN.md` defines approved product and visual decisions.
-3. `docs/design/SCREEN-MATRIX.md` defines required desktop routes, states, and
+3. `docs/ARCHITECTURE.md` defines runtime, data, and security boundaries.
+4. `docs/DEPLOYMENT.md` defines hosted-environment and release requirements.
+5. `docs/design/SCREEN-MATRIX.md` defines required desktop routes, states, and
    known implementation gaps.
-4. `docs/design/foundations.html` is the visual calibration target.
-5. Figma is reference-only and non-authoritative for the current design work.
+6. `docs/design/foundations.html` is the visual calibration target.
+7. Figma is reference-only and non-authoritative for the current design work.
 
 When implementation and design disagree, classify the difference explicitly as
 an implementation gap, a contract change, or a design correction. Do not
@@ -29,11 +33,16 @@ silently treat a target state as an existing capability.
 
 ## Repository architecture
 
-This is a pnpm workspace with three runtime surfaces:
+This is a pnpm workspace with three application surfaces:
 
 - `src/`: authenticated React application and EasyEditor-based editor;
-- `server/`: portable Hono API and local Node adapter;
+- `server/`: portable Hono API;
 - `viewer/`: separate cookie-less public viewer.
+
+Keep environment entry points thin: `server/src/node.ts` runs the local Node
+server, while `server/src/vercel.ts` and `api/index.ts` adapt the same Hono
+runtime to a Vercel Function. API behavior and route logic belong in the
+portable `server/src/` modules, not in the adapters.
 
 Supabase provides PostgreSQL, Auth, and Storage. Ordered migrations live under
 `supabase/migrations/`. Project documents are server-persisted; do not
@@ -69,11 +78,17 @@ For affected behavior, verify the real route and data state:
 Run targeted tests first, then the relevant combination of:
 
 ```bash
+pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm lint
 ```
+
+For authenticated-app, editor, publishing, or public-viewer lifecycle changes,
+also run `pnpm test:e2e`. Follow the local Supabase and environment setup in
+`README.md` and install Playwright Chromium once; the Playwright configuration
+starts or reuses `pnpm dev`. Do not reset existing developer data merely to run
+the browser suite.
 
 If the pnpm launcher cannot switch versions because the registry is
 unavailable, use checked-in local binaries for scoped checks rather than

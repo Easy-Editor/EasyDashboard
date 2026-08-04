@@ -1,4 +1,4 @@
-import { apiRequest, jsonBody } from '@/api/client'
+import { ApiError, apiRequest, jsonBody } from '@/api/client'
 import type { ProjectSchema } from '@easy-editor/core'
 
 export type ProjectRelease = {
@@ -18,8 +18,6 @@ export type PublishedProjectRelease = ProjectRelease & {
   slug: string
   stablePath: string
   versionPath: string
-  isCurrent: true
-  isPublished: true
 }
 
 export type RestoredProjectReleaseDraft = {
@@ -90,18 +88,35 @@ export async function publishProjectRelease(
   projectId: string,
   expectedVersion: number,
 ): Promise<PublishedProjectRelease> {
-  const response = await apiRequest<{ publication: RawRelease }>(
-    `/api/projects/${encodeURIComponent(projectId)}/publish`,
+  const projectPath = `/api/projects/${encodeURIComponent(projectId)}`
+  const snapshotResponse = await apiRequest<{
+    snapshot: { id: string; documentSha256: string }
+    previewRun: unknown | null
+  }>(`${projectPath}/agent/publish-snapshots`, {
+    method: 'POST',
+    body: jsonBody({ draftVersion: expectedVersion }),
+  })
+  if (!snapshotResponse.previewRun) {
+    throw new ApiError(409, {
+      code: 'PUBLISH_PREVIEW_REQUIRED',
+      message: '发布前需要等待当前草稿生成真实渲染预览',
+    })
+  }
+  await apiRequest(
+    `${projectPath}/agent/publish-snapshots/${encodeURIComponent(snapshotResponse.snapshot.id)}/approve`,
     {
       method: 'POST',
-      body: jsonBody({ expectedVersion }),
+      body: jsonBody({}),
     },
   )
-  const release = toRelease({
-    ...response.publication,
-    isCurrent: true,
-    isPublished: true,
-  })
+  const response = await apiRequest<{ publication: RawRelease }>(
+    `${projectPath}/agent/publish-snapshots/${encodeURIComponent(snapshotResponse.snapshot.id)}/publish`,
+    {
+      method: 'POST',
+      body: jsonBody({}),
+    },
+  )
+  const release = toRelease(response.publication)
   if (!release.slug || !release.stablePath || !release.versionPath) {
     throw new Error('发布响应缺少公开访问地址')
   }
@@ -110,8 +125,6 @@ export async function publishProjectRelease(
     slug: release.slug,
     stablePath: release.stablePath,
     versionPath: release.versionPath,
-    isCurrent: true,
-    isPublished: true,
   }
 }
 

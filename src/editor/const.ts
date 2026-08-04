@@ -1,5 +1,8 @@
+import { defaultAgentComponentsMap } from '@/editor/agent-materials'
 import { DEFAULT_DASHBOARD_THEME } from '@/features/projects/project-document'
 import type { ProjectSchema, RootSchema } from '@easy-editor/core'
+
+export { defaultAgentComponentsMap } from '@/editor/agent-materials'
 
 export const defaultRootSchema: RootSchema = {
   id: 'page-home-root',
@@ -30,6 +33,7 @@ export const defaultRootSchema: RootSchema = {
 
 export const defaultProjectSchema: ProjectSchema = {
   version: '1.0.0',
+  componentsMap: defaultAgentComponentsMap,
   meta: {
     easyDashboard: {
       documentVersion: 1,

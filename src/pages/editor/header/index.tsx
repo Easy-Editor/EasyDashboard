@@ -2,7 +2,9 @@ import { Button } from '@/components/ui/button'
 import { useEditorSession } from '@/contexts/editor-session-context'
 import { getDraftPreviewHref } from '@/features/projects/project-navigation'
 import { cn } from '@/lib/utils'
+import { MessageSquareText, PanelRightClose, PanelRightOpen, PencilRuler } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { ConflictResolutionDialog } from './ConflictResolutionDialog'
 import { EditorModeTabs } from './EditorModeTabs'
@@ -11,7 +13,15 @@ import { MainNav } from './Nav'
 import { PUBLISH_SHARE_LABEL, PublishShareDialog } from './PublishShareDialog'
 import { formatEditorSaveStatus } from './save-status'
 
-export function AppHeader({ className }: { className?: string }) {
+export function AppHeader({
+  className,
+  agentOpen = false,
+  onAgentToggle,
+}: {
+  className?: string
+  agentOpen?: boolean
+  onAgentToggle?: () => void
+}) {
   const {
     closeConflictResolution,
     conflictResolutionOpen,
@@ -70,6 +80,10 @@ export function AppHeader({ className }: { className?: string }) {
   }
 
   const saveLabel = formatEditorSaveStatus(saveState)
+  const conversationId = new URLSearchParams(window.location.search).get('conversation')
+  const agentHref = conversationId
+    ? `/projects/${projectId}/agent/${encodeURIComponent(conversationId)}`
+    : `/projects/${projectId}/agent`
 
   return (
     <header
@@ -84,7 +98,30 @@ export function AppHeader({ className }: { className?: string }) {
     >
       <div className='grid h-full w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 sm:gap-3 sm:px-3'>
         <MainNav projectName={projectName} saveStatus={saveLabel} />
-        <div className='min-w-0'>
+        <div className='flex min-w-0 items-center gap-1.5'>
+          <nav
+            aria-label='工作模式'
+            className='flex items-center rounded-[7px] border border-[var(--ed-line)] bg-[var(--ed-panel)] p-0.5'
+          >
+            <Button
+              asChild
+              variant='ghost'
+              size='sm'
+              className='h-7 gap-1.5 rounded-[5px] px-2.5 text-[11px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+            >
+              <Link to={agentHref}>
+                <MessageSquareText className='size-3' />
+                Agent 创作
+              </Link>
+            </Button>
+            <span
+              aria-current='page'
+              className='inline-flex h-7 items-center gap-1.5 rounded-[5px] bg-[var(--ed-panel-raised)] px-2.5 text-[11px] font-medium text-[var(--ed-ink)] shadow-[inset_0_0_0_1px_var(--ed-line)]'
+            >
+              <PencilRuler className='size-3' />
+              手动编辑
+            </span>
+          </nav>
           <EditorModeTabs />
         </div>
         <div className='flex min-w-0 items-center justify-end gap-1.5'>
@@ -92,13 +129,27 @@ export function AppHeader({ className }: { className?: string }) {
             <HistoryButtons />
           </div>
           <div className='hidden h-4 w-px bg-[var(--ed-line)] xl:block' />
+          {onAgentToggle ? (
+            <Button
+              type='button'
+              variant={agentOpen ? 'secondary' : 'ghost'}
+              size='sm'
+              className='h-7 gap-1.5 px-2 text-[11px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+              aria-expanded={agentOpen}
+              aria-controls='editor-agent-dock'
+              onClick={onAgentToggle}
+            >
+              {agentOpen ? <PanelRightClose className='size-3.5' /> : <PanelRightOpen className='size-3.5' />}
+              <span className='hidden xl:inline'>Agent 面板</span>
+            </Button>
+          ) : null}
           <Button
             variant='ghost'
             size='sm'
             className='hidden h-7 gap-2 text-[12px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] lg:inline-flex'
             onClick={() => void preview()}
           >
-            预览草稿
+            预览
           </Button>
           <Button
             size='sm'
@@ -121,7 +172,7 @@ export function AppHeader({ className }: { className?: string }) {
           ) : null}
           <Button
             size='sm'
-            className='h-7 gap-2 bg-[var(--ed-ink)] px-3 text-[12px] text-[var(--ed-canvas)] hover:bg-white'
+            className='h-7 gap-2 bg-[var(--ed-ink-soft)] px-3 text-[12px] text-[var(--ed-canvas)] hover:bg-[var(--ed-ink)]'
             disabled={saveState.status === 'saving' || saveState.status === 'conflict'}
             onClick={() => setPublishDialogOpen(true)}
           >

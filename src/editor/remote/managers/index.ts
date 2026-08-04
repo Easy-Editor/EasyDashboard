@@ -3,6 +3,11 @@
  * 远程资源管理器导出
  */
 
-export { MaterialManagerClass, materialManager, type RemoteMaterialConfig } from './material-manager'
+export {
+  MaterialManagerClass,
+  StaleMaterialLoadError,
+  materialManager,
+  type RemoteMaterialConfig,
+} from './material-manager'
 export { SetterManagerClass, setterManager, type RemoteSetterConfig } from './setter-manager'
 export { VersionManagerClass, versionManager, type VersionCheckResult } from './version-manager'

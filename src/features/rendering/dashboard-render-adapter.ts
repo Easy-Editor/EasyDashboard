@@ -10,11 +10,8 @@ import type { CSSProperties } from 'react'
 
 type ProjectRootStyle = CSSProperties & Record<`--${string}`, string>
 
-export function createDashboardPreviewAriaLabel(
-  projectName: string,
-  viewport: { width: number; height: number },
-): string {
-  return `${projectName} 预览，${viewport.width} × ${viewport.height}`
+export function createDashboardPreviewAriaLabel(projectName: string): string {
+  return `${projectName} 预览`
 }
 
 const semanticThemeTokens = {
@@ -56,7 +53,7 @@ const semanticThemeTokens = {
     '--border': '#374151',
     '--input': '#374151',
     '--ring': '#ffffff',
-    '--dashboard-default-bg': '#262626',
+    '--dashboard-default-bg': '#0A1017',
   },
 } as const
 

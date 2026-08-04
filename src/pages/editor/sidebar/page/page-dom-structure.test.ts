@@ -52,11 +52,12 @@ describe('page sidebar DOM structure', () => {
     expect(pageRow).not.toMatch(/<div[^>]*onClick=\{\(\) => handleSelect\(page\)\}/)
   })
 
-  it('keeps the page name readable while moving its route identifier to a compact second line', async () => {
+  it('keeps the page name readable without exposing route internals as decorative metadata', async () => {
     const source = await readSource('index.tsx')
 
     expect(source).toContain('{page.fileDesc}</span>')
-    expect(source).toContain("PAGE {String(pageIndex + 1).padStart(2, '0')} · {page.fileName}")
+    expect(source).toContain('第 {pageIndex + 1} 页')
+    expect(source).not.toContain('PAGE {String(pageIndex + 1)')
     expect(source).not.toContain('({page.fileName})')
   })
 

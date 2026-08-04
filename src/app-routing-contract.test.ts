@@ -27,4 +27,15 @@ describe('application routing contracts', () => {
     expect(notFoundPage).toContain("to='/'")
     expect(notFoundPage).toContain('返回工作台')
   })
+
+  it('makes the project-scoped Agent workspace a first-class authenticated route', async () => {
+    const app = await readSource('App.tsx')
+    const projectCard = await readSource('components/project/ProjectCard.tsx')
+    const projectsPage = await readSource('pages/projects/ProjectsPage.tsx')
+
+    expect(app).toContain("path: '/projects/:projectId/agent/:conversationId?'")
+    expect(app).toContain('<ProjectAgent />')
+    expect(projectCard).toContain('to={`/projects/${project.id}/agent`}')
+    expect(projectsPage).toContain('navigate(`/projects/${project.id}/agent`)')
+  })
 })

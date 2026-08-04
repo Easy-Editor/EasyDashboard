@@ -59,7 +59,7 @@ export const CodeView = observer(() => {
       <div className='flex items-center justify-between px-4 py-3 border-b border-border/60 bg-background'>
         <div className='flex items-center gap-2'>
           <Code className='h-4 w-4 text-muted-foreground' />
-          <span className='text-sm font-medium'>Schema Editor</span>
+          <span className='text-sm font-medium'>页面结构代码</span>
           {hasError && (
             <span className='text-xs text-destructive bg-destructive/10 px-2 py-0.5 rounded'>JSON 格式错误</span>
           )}

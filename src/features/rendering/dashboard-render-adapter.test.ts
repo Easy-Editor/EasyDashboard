@@ -80,7 +80,7 @@ describe('createDashboardRenderModel', () => {
       '--dashboard-default-bg': '#e5e5e5',
       '--dashboard-accent': '#ff6600',
     })
-    expect(createDashboardPreviewAriaLabel('内部导航回归', detailsModel.viewport)).toBe('内部导航回归 预览，1280 × 720')
+    expect(createDashboardPreviewAriaLabel('内部导航回归')).toBe('内部导航回归 预览')
 
     const overviewModel = createDashboardRenderModel(document, 'page-overview', 'overview')
 
@@ -89,12 +89,10 @@ describe('createDashboardRenderModel', () => {
     expect(overviewModel.rootAttributes['data-project-theme']).toBe('dark')
     expect(overviewModel.rootStyle).toMatchObject({
       colorScheme: 'dark',
-      '--dashboard-default-bg': '#262626',
+      '--dashboard-default-bg': '#0A1017',
       '--dashboard-accent': '#67C6D9',
     })
-    expect(createDashboardPreviewAriaLabel('内部导航回归', overviewModel.viewport)).toBe(
-      '内部导航回归 预览，1600 × 900',
-    )
+    expect(createDashboardPreviewAriaLabel('内部导航回归')).toBe('内部导航回归 预览')
   })
 
   it('accepts a legacy raw ProjectSchema', () => {

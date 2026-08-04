@@ -2,16 +2,19 @@ import styles from './index.module.css'
 
 export const LogoLoading = () => {
   return (
-    <div className='w-full h-screen flex flex-col items-center justify-center gap-4'>
+    <output
+      className='flex h-screen w-full flex-col items-center justify-center gap-4 text-[#8B9CA9]'
+      aria-live='polite'
+    >
       <svg
         className={styles.breathingLogo}
-        aria-label='loading'
+        aria-hidden='true'
         viewBox='0 0 140 120'
         width='140'
         height='120'
         xmlns='http://www.w3.org/2000/svg'
       >
-        <title>Logo</title>
+        <title>EasyDashboard</title>
         <defs id='SvgjsDefs1001' />
         <g
           transform='matrix(1.2096093585255304,0,0,1.2096093585255304,-0.000036806200595336152,-0.0009896217617464918)'
@@ -64,7 +67,7 @@ export const LogoLoading = () => {
           />
         </g>
       </svg>
-      <div className={styles.loadingText}>LOADING</div>
-    </div>
+      <div className={styles.loadingText}>正在加载…</div>
+    </output>
   )
 }

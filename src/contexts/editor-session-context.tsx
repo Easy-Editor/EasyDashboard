@@ -1,5 +1,5 @@
 import type { ProjectRevision } from '@/api/contracts'
-import { initializeEditorProject, teardownEditorProject } from '@/editor'
+import { StaleEditorProjectLoadError, initializeEditorProject, teardownEditorProject } from '@/editor'
 import { buildLocalDraftExport, getBlockedNavigationAction } from '@/editor/persistence/conflict-resolution'
 import type { DraftSyncSnapshot } from '@/editor/persistence/draft-sync'
 import { DraftSync } from '@/editor/persistence/draft-sync'
@@ -355,20 +355,18 @@ export function EditorSessionProvider({
         ])
         if (cancelled) return
         await initializeEditorProject(detail.schema)
-        if (!cancelled) {
-          setSession({
-            projectName: detail.name,
-            projectSlug: detail.slug,
-            isPublished: detail.state === 'published',
-            draftVersion: detail.draftVersion,
-            draftSavedAt: detail.savedAt,
-            autoSave: settings.autosave !== false,
-          })
-        }
+        if (cancelled) return
+        setSession({
+          projectName: detail.name,
+          projectSlug: detail.slug,
+          isPublished: detail.state === 'published',
+          draftVersion: detail.draftVersion,
+          draftSavedAt: detail.savedAt,
+          autoSave: settings.autosave !== false,
+        })
       } catch (reason) {
-        if (!cancelled) {
-          setError(reason instanceof Error ? reason : new Error('项目加载失败'))
-        }
+        if (cancelled || reason instanceof StaleEditorProjectLoadError) return
+        setError(reason instanceof Error ? reason : new Error('项目加载失败'))
       }
     }
 

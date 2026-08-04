@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getProject } from '@/features/projects/project-api'
+import { subscribeProjectDraftUpdates } from '@/features/projects/project-draft-channel'
 import { createDataSourceEngine } from '@easy-editor/plugin-datasource'
 import { ArrowLeft, RotateCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -104,7 +105,7 @@ function DraftPreviewShell({
             返回编辑器
           </Link>
         </Button>
-        <span className='rounded-[7px] border border-[var(--ed-line)] bg-[var(--ed-panel)] px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--ed-ink-faint)] shadow-lg'>
+        <span className='rounded-[7px] border border-[var(--ed-line)] bg-[var(--ed-panel)] px-2.5 py-1.5 text-xs text-[var(--ed-ink-muted)] shadow-lg'>
           草稿预览
         </span>
       </div>
@@ -154,6 +155,8 @@ function DraftProjectPreview({ projectId }: { projectId: string }) {
     }
   }, [loadAttempt, projectId])
 
+  useEffect(() => subscribeProjectDraftUpdates(projectId, () => setLoadAttempt(attempt => attempt + 1)), [projectId])
+
   const loadState = resolvePreviewLoadState(projectDetail, error)
   const pages = projectDetail ? getPreviewPages(projectDetail.schema) : []
   const pageSelection = projectDetail ? resolvePreviewPageSelection(projectDetail.schema, requestedPageId) : null
@@ -185,7 +188,6 @@ function DraftProjectPreview({ projectId }: { projectId: string }) {
       <DraftPreviewShell projectId={projectId}>
         <PreviewState
           tone='error'
-          eyebrow='DRAFT UNAVAILABLE'
           title='无法加载预览'
           detail={loadState.error.message}
           action={<PreviewRetryButton onRetry={retryLoad} />}
@@ -224,7 +226,6 @@ function DraftProjectPreview({ projectId }: { projectId: string }) {
       >
         <PreviewState
           tone='error'
-          eyebrow='PAGE NOT FOUND'
           title={`页面「${pageSelection.requestedPageId}」不存在`}
           detail='地址中的 page 参数已保留，没有自动跳转。你可以打开项目起始页，或选择一个现有页面。'
           action={
@@ -307,7 +308,6 @@ export default function Preview() {
     return (
       <PreviewState
         tone='error'
-        eyebrow='INVALID ROUTE'
         title='项目地址无效'
         action={
           <Button asChild size='sm'>

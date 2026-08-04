@@ -20,6 +20,9 @@ import { TrashPage } from './pages/trash/TrashPage'
 
 const Preview = lazy(() => import('./pages/preview'))
 const Editor = lazy(() => import('./pages/editor'))
+const ProjectAgent = lazy(() =>
+  import('./pages/agent/ProjectAgentPage').then(module => ({ default: module.ProjectAgentPage })),
+)
 
 function PublicViewerRoute() {
   const { slug } = useParams<{ slug: string }>()
@@ -115,6 +118,14 @@ const router = createBrowserRouter([
       { path: '/trash', element: <TrashPage /> },
       { path: '/settings', element: <SettingsPage /> },
     ],
+  },
+  {
+    path: '/projects/:projectId/agent/:conversationId?',
+    element: (
+      <RequireSession>
+        <ProjectAgent />
+      </RequireSession>
+    ),
   },
   {
     path: '/projects/:projectId/editor',

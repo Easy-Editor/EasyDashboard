@@ -82,7 +82,7 @@ export function ProjectCard({
             project.name
           ) : (
             <Link
-              to={`/projects/${project.id}/editor`}
+              to={`/projects/${project.id}/agent`}
               className='rounded-[4px] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
             >
               {project.name}
@@ -90,17 +90,17 @@ export function ProjectCard({
           )}
         </h2>
       </div>
-      <p className='mt-1 truncate text-[11px] text-[var(--ed-ink-muted)]'>{project.description || '暂无项目说明'}</p>
-      <div className='mt-2 flex min-w-0 items-center gap-2 font-mono text-[11px] tracking-[0.01em] text-[var(--ed-ink-faint)]'>
+      {view === 'list' && project.description ? (
+        <p className='mt-1 truncate text-[11px] text-[var(--ed-ink-muted)]'>{project.description}</p>
+      ) : null}
+      <div className='mt-2.5 flex min-w-0 items-center gap-3 text-[11px] text-[var(--ed-ink-faint)]'>
         <p className='min-w-0 flex-1 truncate'>{formatProjectActivity(project)}</p>
         {trashed ? null : (
-          <span className='inline-flex shrink-0 items-center gap-1.5 uppercase tracking-[0.1em]'>
+          <span className='inline-flex shrink-0 items-center gap-1.5'>
             <span
               className={cn(
                 'size-1.5',
-                project.state === 'published'
-                  ? 'rounded-full bg-[var(--ed-cyan)] shadow-[0_0_7px_var(--ed-cyan)]'
-                  : 'border border-[#748695]',
+                project.state === 'published' ? 'rounded-full bg-[var(--ed-cyan)]' : 'border border-[#748695]',
               )}
             />
             {project.state === 'published' ? '已发布' : '草稿'}
@@ -221,7 +221,7 @@ export function ProjectCard({
           <ProjectThumbnail project={project} className='rounded-[6px] border border-[var(--ed-line)] opacity-75' />
         ) : (
           <Link
-            to={`/projects/${project.id}/editor`}
+            to={`/projects/${project.id}/agent`}
             className='rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
             aria-label={`打开项目：${project.name}`}
           >
@@ -235,19 +235,19 @@ export function ProjectCard({
   }
 
   return (
-    <article className='group/card overflow-hidden rounded-[8px] border border-[var(--ed-line)] bg-[var(--ed-panel)] transition-[border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-[#39536b] hover:shadow-[0_16px_40px_rgba(0,0,0,.24)] motion-reduce:transition-none'>
+    <article className='group/card overflow-hidden rounded-[8px] border border-[var(--ed-line)] bg-[var(--ed-panel)] transition-[border-color,transform] duration-200 hover:-translate-y-px hover:border-[#39536b] motion-reduce:transition-none'>
       {trashed ? (
         <ProjectThumbnail project={project} className='opacity-75' />
       ) : (
         <Link
-          to={`/projects/${project.id}/editor`}
+          to={`/projects/${project.id}/agent`}
           className='block outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ed-cyan)]'
           aria-label={`打开项目：${project.name}`}
         >
           <ProjectThumbnail project={project} />
         </Link>
       )}
-      <div className='flex items-start gap-2 border-t border-[var(--ed-line)] px-3.5 py-3'>
+      <div className='flex items-start gap-2 border-t border-[var(--ed-line)] px-3.5 py-3.5'>
         {projectMeta}
         {actions}
       </div>

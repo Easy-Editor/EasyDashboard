@@ -25,6 +25,13 @@ export function buildVersionedName(componentName: string, version: string): stri
   return `${componentName}@${version}`
 }
 
+/** Register both the pinned runtime name and the plain name stored in schemas. */
+export function addComponentNameAliases<T>(target: Record<string, T>, componentName: string, component: T): void {
+  target[componentName] = component
+  const versionedName = parseVersionedName(componentName)
+  if (versionedName) target[versionedName.name] = component
+}
+
 /**
  * 从缓存键提取包名（去掉最后的 @version）
  * @param cacheKey 缓存键 (如 "@easy-materials/dashboard@1.0.0")

@@ -1,7 +1,8 @@
 import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar'
 import { Toaster } from '@/components/ui/sonner'
 import { EditorModeProvider, useEditorMode } from '@/contexts/editor-mode-context'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { EditorAgentDock } from './AgentDock'
 import { CodeView } from './canvas/CodeView'
 import { ConfigureSidebar } from './configure'
 import { getSidebarOpenForModeTransition } from './editor-sidebar-mode'
@@ -62,6 +63,8 @@ function EditorContent({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const [agentOpen, setAgentOpen] = useState(false)
+
   return (
     <EditorModeProvider>
       <div
@@ -70,7 +73,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         className='relative flex h-full flex-col bg-[var(--ed-canvas)] text-[var(--ed-ink)]'
       >
         <div className='h-full border-grid flex flex-1 flex-col'>
-          <AppHeader className='flex h-12' />
+          <AppHeader className='flex h-12' agentOpen={agentOpen} onAgentToggle={() => setAgentOpen(open => !open)} />
           <main className='flex flex-1 flex-col'>
             <SidebarProvider
               defaultOpen
@@ -87,6 +90,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarProvider>
           </main>
           <Toaster position='top-center' />
+          <EditorAgentDock open={agentOpen} onOpenChange={setAgentOpen} />
         </div>
       </div>
     </EditorModeProvider>

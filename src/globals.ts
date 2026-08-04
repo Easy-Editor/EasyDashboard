@@ -9,6 +9,7 @@ import * as echarts from 'echarts/core'
 import * as echartsRenderers from 'echarts/renderers'
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
+import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
 
 /**
  * 初始化全局变量
@@ -32,9 +33,9 @@ export function initGlobals() {
     // jsx-runtime（用于 runtime: 'automatic' 模式）
     if (!window.jsxRuntime && window.React) {
       window.jsxRuntime = {
-        jsx: React.createElement,
-        jsxs: React.createElement,
-        Fragment: React.Fragment,
+        jsx,
+        jsxs,
+        Fragment,
       }
       console.log('[Globals] ✅ window.jsxRuntime exposed')
     }

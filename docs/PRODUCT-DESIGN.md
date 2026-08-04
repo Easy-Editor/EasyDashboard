@@ -1,26 +1,36 @@
 # EasyDashboard Product Design
 
-Status: Phase 0 visual foundation implemented
+Status: current visual foundation and Agent V1 core authoring loop implemented
 
-Scope: desktop product shell, editor workspace, preview, and publishing
+Scope: desktop product shell, Agent workspace, editor, preview, and publishing
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31
 
 ## Product definition
 
 EasyDashboard is a workspace for building and publishing multi-page big-screen
 projects.
 
-The big screen is the product core. Project management, account access,
-recovery, preview, publishing, sharing, templates, and future Agent features
-exist to help users create and maintain that big screen. They must not compete
-with the editor for attention.
+The editable big-screen project is the product core. Project management,
+account access, Agent creation, manual editing, recovery, preview, publishing,
+sharing, and future extensions exist to help users create and maintain that
+project.
+
+Agent V1 changes the default creation path, not the content model. A user starts
+from a goal, optional reference image, file, or data sample; the first submitted
+message now creates a project, a private conversation, and a task as one server
+operation. The Agent and manual editor then modify the same draft and recovery
+history. Publishing remains an explicit existing product action rather than an
+Agent-controlled side effect.
 
 A project is not a single canvas:
 
 ```text
 User
 └── Project
+    ├── Private conversations owned by this user
+    ├── Shared Project Context
+    ├── Project assets and data connections
     ├── Page 01 · Overview
     ├── Page 02 · Regional detail
     ├── Page 03 · Device status
@@ -32,26 +42,31 @@ User
 The end-to-end lifecycle is:
 
 ```text
-Project space
-  -> Multi-page editor
-  -> Save / restore point
-     [authoring core]
+Goal / files / existing project
+  -> Agent plan and staged project changes
+  <-> Manual multi-page editor
+  -> Real preview verification
+  -> Save / restore point / undo this task
+     [authoring and verification core]
   -> Preview in a new tab
-  -> Publish / share
+  -> Owner-authorized publish / share
      [delivery extensions]
 ```
 
-The authoring core ends with a saved, recoverable multi-page project. Preview,
-publishing, and sharing complete delivery, but remain visually subordinate to
-page navigation, the canvas, and editing feedback.
+The authoring core ends with a saved, recoverable, editable, and verified
+multi-page project. Conversation is an input and control surface, not the
+deliverable. Preview, publishing, and sharing complete delivery, but remain
+grounded in the exact project revision the user inspected.
 
 ## Experience principles
 
-### 1. The editor is the center
+### 1. The deliverable artifact is the center
 
-The editor gets the strongest visual hierarchy, the most screen space, and the
-most deliberate interaction design. Entry and account pages inherit its
-language; they do not define a separate marketing identity.
+The live project preview and editor get the strongest visual hierarchy and the
+most deliberate interaction design. Agent mode may be the default entry, but it
+must keep the affected project, revision, preview, verification, and recovery
+visible. Entry and account pages inherit the editor's language; they do not
+define a separate marketing or chatbot identity.
 
 ### 2. One project, multiple pages
 
@@ -82,6 +97,20 @@ generic neon, and colorful icon tiles are not.
 EasyDashboard controls the editor and application shell. The user controls the
 theme of the big screen. Product colors must not be injected into a published
 screen unless the user explicitly chooses them.
+
+### 6. Agent and manual editing are one workflow
+
+Agent mode and the manual editor are peer modes over one project. Switching
+between them preserves the current private conversation, task state, draft
+revision, cost, and authorization state. A lightweight Agent dock in the editor
+must not create a shadow session.
+
+### 7. Privacy, cost, and recovery are visible state
+
+Private conversations remain private to their creator. Shared project facts
+enter the visible, editable, versioned `项目上下文`. Model destination, actual or
+estimated cost, waiting authorization, verification, and `撤销本次修改` appear
+where the work happens rather than in hidden administrative logs.
 
 ## Visual direction: Calibration Viewport
 
@@ -252,13 +281,15 @@ Rules:
 
 ### Workspace navigation
 
-The signed-in shell uses a stable left sidebar for:
+Workspace index routes use a stable left sidebar for:
 
-- home;
+- Agent-first home;
 - all projects;
 - recycle bin;
 - settings;
 - account actions.
+
+Project Agent and editor routes leave that shell and open as immersive workbenches. They show one compact return control instead of carrying the global sidebar into the artifact workspace.
 
 Templates may be added later, but an unreachable template page is not exposed as
 active navigation.
@@ -269,8 +300,13 @@ The active row uses:
 - brighter icon and label;
 - a two-pixel ice-signal marker.
 
-The project space is a compact workspace, not a gallery of oversized cards.
-Project previews should preserve a believable screen aspect ratio and show:
+The home page uses the existing shell but makes the start composer its primary
+content. Recent private conversations and recent projects help users resume
+work. `创建空白项目` remains a visible secondary action.
+
+The project manager remains a compact workspace, not a gallery of oversized
+cards. Project previews should preserve a believable screen aspect ratio and
+show:
 
 - project name;
 - number of pages;
@@ -278,9 +314,38 @@ Project previews should preserve a believable screen aspect ratio and show:
 - last saved time;
 - primary overflow actions.
 
+### Agent project route
+
+Agent V1 provides a full project route at
+`/projects/:projectId/agent/:conversationId?`. It is the default project entry
+for an authenticated user and uses an immersive header plus two bounded areas:
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│ Back · Project · revision · context · manual edit · full preview      │
+├───────────────────────┬──────────────────────────────────────────────┤
+│ conversation dock     │ live project preview                         │
+│ 360-430 px            │ flexible and dominant                        │
+└───────────────────────┴──────────────────────────────────────────────┘
+```
+
+The route does not render the global workspace rail. The preview receives the
+flexible space, while one compact dropdown in the dock header switches private
+conversations. Exactly one current Todo sits above the composer; historical
+messages stay as transcript messages and never repeat Todo panels. Tool Calls,
+Token details, diagnostics, and receipts are expandable details. Hidden reasoning
+is never displayed. The embedded preview is loaded
+from a credentialless isolated Origin or process so dashboard lifecycle code and
+remote materials do not inherit the authenticated product shell's Cookie or
+storage access.
+
+`项目上下文` opens as a reviewable surface with structured facts, confirmation
+state, version diff, editing, deletion, and rollback. Members never receive a
+link into another user's private source conversation.
+
 ### Editor focus route
 
-The editor does not nest inside the workspace sidebar.
+The editor, like Project Agent, does not nest inside the workspace sidebar.
 
 The desktop structure is:
 
@@ -394,11 +459,11 @@ The following concepts remain reserved and must not shape current primary
 navigation:
 
 - templates and a template marketplace;
-- Agent-assisted generation and editing;
 - 2D map enhancements;
 - Three.js and Cesium 3D content;
-- organization and team workspaces;
-- permissions beyond the current personal-first model;
+- organization workspaces and real-time team collaboration;
+- open Skill marketplaces and arbitrary third-party MCP;
+- AI image generation as a core workflow;
 - mobile authoring.
 
 Reserved does not mean hidden implementation commitments. Each extension needs
@@ -406,7 +471,10 @@ its own product contract before appearing in the main UI.
 
 ## Non-goals
 
-- a prompt-first AI homepage;
+- a generic AI chat that is not bound to a dashboard project;
+- an Agent-only workflow that removes manual editing;
+- hidden sharing of private conversations or user preferences;
+- default multi-Agent execution or hidden model routing;
 - a generic SaaS card dashboard;
 - a content community or template marketplace in the current core;
 - one universal theme shared by product shell and user screens;
@@ -417,9 +485,11 @@ its own product contract before appearing in the main UI.
 
 ## Design artifacts
 
+- [Repository design entry point](../DESIGN.md)
 - [Desktop screen and state matrix](./design/SCREEN-MATRIX.md)
 - [Code-native visual foundations](./design/foundations.html)
 - [Design workspace guide](./design/README.md)
+- [Agent V1 product and system contract](./AI-AGENT-PLAN.md)
 - [Architecture](./ARCHITECTURE.md)
 
 ## Acceptance gate
@@ -435,3 +505,7 @@ Before a product UI change is considered complete:
 7. Capture and inspect a desktop screenshot at the intended viewport.
 8. Re-run the critical project -> edit -> preview -> publish path when the
    change touches that loop.
+9. For Agent changes, verify private conversation isolation, shared Project
+   Context boundaries, task persistence, cost labels, and role limits.
+10. For Agent writes, verify stale-revision rejection, `撤销本次修改`, and a real
+    read-only preview at the project's primary target resolution.

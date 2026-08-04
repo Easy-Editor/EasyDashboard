@@ -1,6 +1,7 @@
-import { createRuntimeApp } from './runtime.js'
+import { createRuntime } from './runtime.js'
 
-const app = createRuntimeApp()
+// Serverless instances enqueue durable work but never start an in-process poller.
+const { app } = createRuntime()
 
 export default {
   fetch(request: Request): Response | Promise<Response> {

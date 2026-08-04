@@ -16,10 +16,9 @@ export function NotFoundPage() {
       </div>
 
       <section className='relative w-full max-w-[720px] border-y border-[var(--ed-line)] py-14 text-center'>
-        <p className='font-mono text-[11px] uppercase tracking-[0.28em] text-[var(--ed-cyan)]'>Route not found</p>
         <h1
           id='not-found-title'
-          className='mt-5 font-[var(--font-display)] text-[clamp(76px,10vw,132px)] font-medium leading-[0.8] tracking-[-0.07em] text-[var(--ed-ink)]'
+          className='font-[var(--font-display)] text-[clamp(76px,10vw,132px)] font-medium leading-[0.8] tracking-[-0.04em] text-[var(--ed-ink)]'
         >
           404
         </h1>
@@ -50,10 +49,6 @@ export function NotFoundPage() {
           </Button>
         </div>
       </section>
-
-      <p className='pointer-events-none absolute bottom-8 font-mono text-[9px] uppercase tracking-[0.24em] text-[var(--ed-ink-faint)]'>
-        EasyDashboard / Calibration Workspace
-      </p>
     </main>
   )
 }

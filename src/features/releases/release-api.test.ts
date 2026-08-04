@@ -59,23 +59,39 @@ describe('release API', () => {
   })
 
   it('publishes the saved draft and returns both viewer paths', async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      jsonResponse(
-        {
-          publication: {
-            projectId,
-            releaseNumber: 4,
-            revisionId: '44444444-4444-4444-8444-444444444444',
-            revisionNumber: 9,
-            publishedAt: '2026-07-30T05:05:06.000Z',
-            slug: 'operations-stable',
-            stableUrl: '/api/public/projects/operations-stable',
-            versionUrl: '/api/public/projects/operations-stable/versions/4',
+    const snapshotId = '55555555-5555-4555-8555-555555555555'
+    const documentSha256 = 'a'.repeat(64)
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            snapshot: { id: snapshotId, documentSha256 },
+            previewRun: { id: 'preview', source: 'editor_renderer_artifact' },
           },
-        },
-        201,
-      ),
-    )
+          201,
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ approval: { id: 'approval' } }, 201))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            publication: {
+              projectId,
+              releaseNumber: 4,
+              revisionId: '44444444-4444-4444-8444-444444444444',
+              revisionNumber: 9,
+              publishedAt: '2026-07-30T05:05:06.000Z',
+              slug: 'operations-stable',
+              stableUrl: '/api/public/projects/operations-stable',
+              versionUrl: '/api/public/projects/operations-stable/versions/4',
+              isCurrent: false,
+              isPublished: false,
+            },
+          },
+          201,
+        ),
+      )
     vi.stubGlobal('fetch', fetch)
 
     await expect(publishProjectRelease(projectId, 8)).resolves.toMatchObject({
@@ -83,16 +99,38 @@ describe('release API', () => {
       releaseNumber: 4,
       stablePath: '/view/operations-stable',
       versionPath: '/view/operations-stable/versions/4',
-      isCurrent: true,
-      isPublished: true,
+      isCurrent: false,
+      isPublished: false,
     })
-    expect(fetch).toHaveBeenCalledWith(
-      `/api/projects/${projectId}/publish`,
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `/api/projects/${projectId}/agent/publish-snapshots`,
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ expectedVersion: 8 }),
+        body: JSON.stringify({ draftVersion: 8 }),
       }),
     )
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      `/api/projects/${projectId}/agent/publish-snapshots/${snapshotId}/publish`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({}) }),
+    )
+  })
+
+  it('stops before approval when the current snapshot has no real preview evidence', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ snapshot: { id: 'snapshot', documentSha256: 'a'.repeat(64) }, previewRun: null }, 201),
+      )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(publishProjectRelease(projectId, 8)).rejects.toMatchObject({
+      status: 409,
+      code: 'PUBLISH_PREVIEW_REQUIRED',
+    })
+    expect(fetch).toHaveBeenCalledOnce()
   })
 
   it('unpublishes without creating or restoring another release', async () => {

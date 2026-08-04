@@ -12,6 +12,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { Code, Component, Database, File, History, Image, ListTree, Palette, Wand, X } from 'lucide-react'
 import type * as React from 'react'
 import { useState } from 'react'
@@ -50,6 +51,7 @@ const data = {
       title: '方法状态',
       icon: Code,
       component: <MethodStateSidebar />,
+      groupStart: true,
     },
     {
       key: 'data-source',
@@ -68,6 +70,7 @@ const data = {
       title: '外观',
       icon: Palette,
       component: <ThemeSidebar />,
+      groupStart: true,
     },
     {
       key: 'thumbnail',
@@ -113,7 +116,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarGroupContent className='h-full'>
               <SidebarMenu className='gap-1.5'>
                 {data.navTop.map(item => (
-                  <SidebarMenuItem key={item.title}>
+                  <SidebarMenuItem
+                    key={item.title}
+                    className={cn(item.groupStart && 'mt-1.5 border-t border-[var(--ed-line)] pt-2.5')}
+                  >
                     <SidebarMenuButton
                       id={`editor-tool-${item.key}`}
                       aria-label={item.title}
@@ -154,7 +160,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         >
           <SidebarHeader className='flex h-[var(--ed-panel-header-height)] shrink-0 items-center justify-between border-b border-[var(--ed-line)] px-3'>
             <div className='flex items-center gap-2'>
-              <div className='h-3.5 w-0.5 rounded-full bg-[var(--ed-cyan)]' />
+              <activeItem.icon className='size-3.5 text-[var(--ed-ink-muted)]' aria-hidden='true' />
               <h2 className='text-[12px] font-medium tracking-wide text-[var(--ed-ink-soft)]'>{activeItem?.title}</h2>
             </div>
             <Tooltip>

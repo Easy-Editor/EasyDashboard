@@ -7,7 +7,14 @@ import { type Component, type ComponentMetadata, MaterialSource, materials } fro
 import { action, computed, observable, runInAction } from 'mobx'
 import { type LoadedMaterial, materialLoader } from '../../loaders'
 import type { BatchLoadResult, CachedMaterialPackage, RemoteMaterialConfig } from './types'
-import { buildVersionedName, extractPackageName } from './utils'
+import { addComponentNameAliases, buildVersionedName, extractPackageName } from './utils'
+
+export class StaleMaterialLoadError extends Error {
+  constructor(packageName: string, version: string) {
+    super(`Material load was superseded: ${packageName}@${version}`)
+    this.name = 'StaleMaterialLoadError'
+  }
+}
 
 /**
  * 远程物料管理器
@@ -15,6 +22,9 @@ import { buildVersionedName, extractPackageName } from './utils'
 class MaterialManagerClass {
   /** 已加载的远程物料包 */
   @observable.shallow private accessor remoteMaterialPackages = new Map<string, CachedMaterialPackage>()
+
+  /** 当前激活物料集合的世代，用于丢弃已被新 schema 取代的异步加载结果 */
+  private activePackagesGeneration = 0
 
   /** 是否正在加载 */
   @observable accessor isLoading = false
@@ -39,7 +49,10 @@ class MaterialManagerClass {
       const componentName = meta?.componentName
 
       if (componentName && component) {
-        componentsMap[componentName] = component
+        addComponentNameAliases(componentsMap, componentName, component)
+        for (const alias of data.componentAliases ?? []) {
+          addComponentNameAliases(componentsMap, buildVersionedName(alias, data.version), component)
+        }
       }
     }
 
@@ -47,18 +60,48 @@ class MaterialManagerClass {
   }
 
   /**
+   * Limit exposed runtime components to packages required by the active schema.
+   * This prevents a plain component alias left by a previous project/page from
+   * satisfying a schema whose own package subsequently fails to load.
+   */
+  @action
+  activatePackages(configs: RemoteMaterialConfig[]): void {
+    this.activePackagesGeneration += 1
+
+    const activeCacheKeys = new Set(
+      configs
+        .filter(config => config.enabled !== false)
+        .map(config => `${config.package}@${config.version ?? 'latest'}`),
+    )
+
+    for (const cacheKey of this.remoteMaterialPackages.keys()) {
+      if (!activeCacheKeys.has(cacheKey)) this.remoteMaterialPackages.delete(cacheKey)
+    }
+  }
+
+  /**
    * 加载远程物料元数据并注册到编辑器
    */
   @action
   async loadMeta(config: RemoteMaterialConfig): Promise<void> {
-    const { package: packageName, version = 'latest', globalName, enabled = true } = config
+    const { package: packageName, version = 'latest', globalName, componentName, enabled = true } = config
+    const loadGeneration = this.activePackagesGeneration
 
     if (!enabled) return
 
     try {
       const meta = await materialLoader.loadMeta({ package: packageName, version, globalName })
+      if (loadGeneration !== this.activePackagesGeneration) {
+        throw new StaleMaterialLoadError(packageName, version)
+      }
+
       const versionedComponentName = buildVersionedName(meta.componentName, version)
-      materials.buildComponentMetasMap([{ ...meta, componentName: versionedComponentName }])
+      materials.buildComponentMetasMap([
+        { ...meta, componentName: versionedComponentName },
+        ...(componentName && componentName !== meta.componentName
+          ? [{ ...meta, componentName: buildVersionedName(componentName, version) }]
+          : []),
+      ])
 
       const cacheKey = `${packageName}@${version}`
       runInAction(() => {
@@ -66,10 +109,12 @@ class MaterialManagerClass {
           version,
           globalName,
           meta: { ...meta, componentName: versionedComponentName },
+          componentAliases: componentName ? [componentName] : [],
           hasComponent: false,
         })
       })
     } catch (error) {
+      if (error instanceof StaleMaterialLoadError) throw error
       console.error(`[MaterialManager] Failed to load meta: ${packageName}@${version}`, error)
       throw error
     }
@@ -100,7 +145,8 @@ class MaterialManagerClass {
    */
   @action
   async loadFull(config: RemoteMaterialConfig): Promise<LoadedMaterial> {
-    const { package: packageName, version = 'latest', globalName, enabled = true } = config
+    const { package: packageName, version = 'latest', globalName, componentName, enabled = true } = config
+    const loadGeneration = this.activePackagesGeneration
 
     if (!enabled) {
       throw new Error(`Material ${packageName} is disabled`)
@@ -109,6 +155,10 @@ class MaterialManagerClass {
     try {
       const loaded = await materialLoader.loadMaterial({ package: packageName, version, globalName })
 
+      if (loadGeneration !== this.activePackagesGeneration) {
+        throw new StaleMaterialLoadError(packageName, version)
+      }
+
       runInAction(() => {
         const versionedComponentName = buildVersionedName(loaded.meta.componentName, version)
 
@@ -116,6 +166,12 @@ class MaterialManagerClass {
           { ...loaded.meta, componentName: versionedComponentName },
           { component: loaded.component, source: MaterialSource.REMOTE },
         )
+        if (componentName && componentName !== loaded.meta.componentName) {
+          materials.createComponentMeta(
+            { ...loaded.meta, componentName: buildVersionedName(componentName, version) },
+            { component: loaded.component, source: MaterialSource.REMOTE },
+          )
+        }
 
         materials.refreshComponentMetasMap()
 
@@ -124,6 +180,7 @@ class MaterialManagerClass {
           version,
           globalName,
           meta: { ...loaded.meta, componentName: versionedComponentName },
+          componentAliases: componentName ? [componentName] : [],
           component: loaded.component,
           hasComponent: true,
         })
@@ -131,6 +188,7 @@ class MaterialManagerClass {
 
       return loaded
     } catch (error) {
+      if (error instanceof StaleMaterialLoadError) throw error
       console.error(`[MaterialManager] Failed to load full material: ${packageName}@${version}`, error)
       throw error
     }
@@ -161,6 +219,7 @@ class MaterialManagerClass {
    */
   @action
   async addComponent(packageName: string, version?: string): Promise<void> {
+    const loadGeneration = this.activePackagesGeneration
     const cacheKey = version ? `${packageName}@${version}` : packageName
     let cached = this.remoteMaterialPackages.get(cacheKey)
 
@@ -186,6 +245,10 @@ class MaterialManagerClass {
         globalName: cached.globalName,
       })
 
+      if (loadGeneration !== this.activePackagesGeneration) {
+        throw new StaleMaterialLoadError(packageName, cached.version)
+      }
+
       runInAction(() => {
         const finalComponentName = cached.meta.componentName.includes('@')
           ? cached.meta.componentName
@@ -195,6 +258,12 @@ class MaterialManagerClass {
           { ...cached.meta, componentName: finalComponentName },
           { component, source: MaterialSource.REMOTE },
         )
+        for (const alias of cached.componentAliases ?? []) {
+          materials.createComponentMeta(
+            { ...cached.meta, componentName: buildVersionedName(alias, cached.version) },
+            { component, source: MaterialSource.REMOTE },
+          )
+        }
 
         materials.refreshComponentMetasMap()
 
@@ -207,6 +276,7 @@ class MaterialManagerClass {
         })
       })
     } catch (error) {
+      if (error instanceof StaleMaterialLoadError) throw error
       console.error(`[MaterialManager] Failed to add component: ${packageName}`, error)
       throw error
     }
@@ -217,6 +287,7 @@ class MaterialManagerClass {
    */
   @action
   async loadComponentVersion(packageName: string, version: string, originVersion: string): Promise<void> {
+    const loadGeneration = this.activePackagesGeneration
     const cacheKey = `${packageName}@${version}`
     const cached = this.remoteMaterialPackages.get(cacheKey)
 
@@ -236,24 +307,36 @@ class MaterialManagerClass {
         globalName: originCached?.globalName || '',
       })
 
+      if (loadGeneration !== this.activePackagesGeneration) {
+        throw new StaleMaterialLoadError(packageName, version)
+      }
+
       runInAction(() => {
         const versionedComponentName = buildVersionedName(loaded.meta.componentName, version)
         materials.createComponentMeta(
           { ...loaded.meta, componentName: versionedComponentName },
           { component: loaded.component, source: MaterialSource.REMOTE },
         )
+        for (const alias of originCached.componentAliases ?? []) {
+          materials.createComponentMeta(
+            { ...loaded.meta, componentName: buildVersionedName(alias, version) },
+            { component: loaded.component, source: MaterialSource.REMOTE },
+          )
+        }
 
         materials.refreshComponentMetasMap()
 
         this.remoteMaterialPackages.set(cacheKey, {
           version,
           globalName: loaded.meta.npm?.globalName || '',
-          meta: loaded.meta,
+          meta: { ...loaded.meta, componentName: versionedComponentName },
+          componentAliases: originCached.componentAliases,
           component: loaded.component,
           hasComponent: true,
         })
       })
     } catch (error) {
+      if (error instanceof StaleMaterialLoadError) throw error
       console.error(`[MaterialManager] Failed to load component version: ${packageName}@${version}`, error)
       throw error
     }
@@ -266,11 +349,19 @@ class MaterialManagerClass {
   async loadMaterialMultiple(
     configs: RemoteMaterialConfig[],
   ): Promise<BatchLoadResult & { results: PromiseSettledResult<LoadedMaterial>[] }> {
-    const results = await Promise.allSettled(configs.map(config => this.loadFull(config)))
-    const succeeded = results.filter(r => r.status === 'fulfilled').length
-    const failed = results.filter(r => r.status === 'rejected').length
+    this.isLoading = true
 
-    return { total: configs.length, succeeded, failed, results }
+    try {
+      const results = await Promise.allSettled(configs.map(config => this.loadFull(config)))
+      const succeeded = results.filter(r => r.status === 'fulfilled').length
+      const failed = results.filter(r => r.status === 'rejected').length
+
+      return { total: configs.length, succeeded, failed, results }
+    } finally {
+      runInAction(() => {
+        this.isLoading = false
+      })
+    }
   }
 
   /**
@@ -356,7 +447,7 @@ class MaterialManagerClass {
     const versions: string[] = []
 
     for (const [_, data] of this.remoteMaterialPackages.entries()) {
-      if (data.meta.componentName.startsWith(`${componentName}@`)) {
+      if (data.meta.componentName.startsWith(`${componentName}@`) || data.componentAliases?.includes(componentName)) {
         versions.push(data.version)
       }
     }

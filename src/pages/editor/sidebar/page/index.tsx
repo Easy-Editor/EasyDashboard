@@ -298,9 +298,7 @@ const Page: React.FC<{
         <File />
         <span className='min-w-0 flex-1'>
           <span className='block truncate text-xs font-medium text-[var(--ed-ink-soft)]'>{page.fileDesc}</span>
-          <span className='mt-0.5 block truncate font-mono text-[9px] uppercase tracking-wide text-[var(--ed-ink-faint)]'>
-            PAGE {String(pageIndex + 1).padStart(2, '0')} · {page.fileName}
-          </span>
+          <span className='mt-0.5 block truncate text-[9px] text-[var(--ed-ink-faint)]'>第 {pageIndex + 1} 页</span>
         </span>
         {page.isStartPage ? (
           <Flag className='size-3 shrink-0 fill-current text-[var(--ed-cyan)]' aria-label='启动页' />

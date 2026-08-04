@@ -4,13 +4,11 @@ export function PreviewState({
   title,
   detail,
   action,
-  eyebrow = 'PREVIEW STATUS',
   tone = 'neutral',
 }: {
   title: string
   detail?: string
   action?: React.ReactNode
-  eyebrow?: string
   tone?: 'neutral' | 'error'
 }) {
   return (
@@ -25,16 +23,9 @@ export function PreviewState({
           aria-hidden='true'
           className='absolute left-0 top-0 h-8 w-px bg-[var(--ed-cyan)] shadow-[0_0_12px_color-mix(in_srgb,var(--ed-cyan)_58%,transparent)]'
         />
-        <p
-          className={
-            tone === 'error'
-              ? 'font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--ed-error)]'
-              : 'font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--ed-cyan)]'
-          }
-        >
-          {eyebrow}
-        </p>
-        <p className='mt-3 text-base font-medium text-[var(--ed-ink)]'>{title}</p>
+        <h1 className={`text-base font-medium ${tone === 'error' ? 'text-[var(--ed-error)]' : 'text-[var(--ed-ink)]'}`}>
+          {title}
+        </h1>
         {detail ? <p className='mt-2 max-w-md text-xs leading-5 text-[var(--ed-ink-muted)]'>{detail}</p> : null}
         {action ? <div className='mt-5 flex flex-wrap items-center gap-2'>{action}</div> : null}
       </div>
@@ -54,7 +45,6 @@ export function PreviewRenderFailure({
   return (
     <PreviewState
       tone='error'
-      eyebrow='RENDER INTERRUPTED'
       title={`页面「${pageLabel}」渲染失败`}
       detail={`${error.message || '页面组件未能完成渲染'}。页面选择与编辑器入口仍可使用。`}
       action={

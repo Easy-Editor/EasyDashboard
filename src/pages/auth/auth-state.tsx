@@ -104,8 +104,8 @@ export function AuthStateNotice({
       aria-live={isError ? 'assertive' : 'polite'}
       className={
         isError
-          ? 'border-l-2 border-[#ff7f8a] bg-[#35161d]/50 px-3.5 py-3 text-[#ffabb2]'
-          : 'border-l-2 border-[var(--ed-cyan)] bg-[#0c2731]/60 px-3.5 py-3 text-[#b9f3ff]'
+          ? 'rounded-[8px] border border-[#ff7f8a]/30 bg-[#35161d]/35 px-3.5 py-3 text-[#ffabb2]'
+          : 'rounded-[8px] border border-[var(--ed-cyan)]/25 bg-[#0c2731]/45 px-3.5 py-3 text-[#b9f3ff]'
       }
     >
       <div className='flex items-start gap-2.5'>

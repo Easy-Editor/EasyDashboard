@@ -1,15 +1,22 @@
 # EasyDashboard Architecture
 
+> This document describes the currently implemented architecture. The delivered
+> Agent V1 authoring baseline and its remaining hardening contract are documented
+> in [`AI-AGENT-PLAN.md`](./AI-AGENT-PLAN.md) and sequenced in
+> [`.omx/plans/easy-dashboard-agent-v1.md`](../.omx/plans/easy-dashboard-agent-v1.md).
+
 ## Outcome
 
 EasyDashboard is a personal dashboard workspace with Supabase authentication,
-server-backed project drafts, multi-page editing, restore points, releases, and
-an isolated public viewer.
+Agent-first project creation, private project conversations, server-executed
+Agent draft changes, multi-page editing, restore points, releases, and an
+isolated public viewer.
 
-The current application does not include Agent execution, a template product
-flow, team collaboration, or 3D editing. The database contains limited
-groundwork for spaces and templates, but no current UI or route set makes those
-deferred capabilities a supported product workflow.
+The current application does not include a template product flow, real-time team
+collaboration, open MCP configuration, multi-Agent orchestration, Agent-controlled
+publishing, or 3D editing. The database contains groundwork for spaces and
+templates, but no current UI or route set makes those deferred capabilities a
+supported product workflow.
 
 ## Deployment topology
 
@@ -52,6 +59,60 @@ EasyDashboard/
 The root, `server`, and `viewer` packages are pnpm workspace members.
 `server/src/app.ts` contains the portable Hono application.
 `server/src/node.ts` and `api/index.ts` are environment adapters.
+
+## Agent authoring runtime
+
+The implemented Agent path preserves the project document as the only editable
+artifact:
+
+- `/api/agent/starts` atomically creates the project, first private conversation,
+  and first task;
+- private conversations and task presentation state are stored per actor and
+  project through a CAS workspace record;
+- personal pending context remains private, while confirmed Project Context uses
+  project-scoped CAS routes with revisioned edit, rollback, and delete;
+- project and conversation attachments use signed storage transfers; ready assets
+  can contribute extracted text and bounded image inputs to the model;
+- each run resolves an explicit server-side model profile, reserves budget,
+  requests a structured ChangeSet, validates it, and issues a scoped grant to the
+  external document executor;
+- operation outcomes, receipts, cost ranges, Skill provenance, recovery polling,
+  stale-draft rejection, and undo are persisted or surfaced through authenticated
+  project routes.
+
+The product-facing Agent contract is natural-language-first. Editor turns may
+carry a bounded selection context containing the current page, visible selected
+component names, and canvas dimensions. That context is frozen with the provider
+input and used before title, region, and recent-conversation inference; raw node
+IDs, field IDs, coordinates, component names, JSON, and ChangeSet details remain
+inside the execution boundary. User-visible questions, plans, and summaries are
+validated fail-closed when they expose those implementation details.
+
+For common edits to existing objects, the provider returns a semantic decision
+such as replacing the selected title, changing its typography, configuring a
+ranking list, or enabling a real-time clock. The server resolves that decision
+against the frozen selection or a visible title, then compiles it atomically into
+the existing strict ChangeSet before authorization and execution. Missing, stale,
+or ambiguous targets become natural user questions. Complex creation, layout,
+chart data, interaction, and custom effects continue through the compatible
+low-level operation path; both paths converge on the same validator, executor,
+durable checkpoint, and undo boundary.
+
+Every turn has four always-available core capability groups: reference and
+attachment understanding, semantic target editing, editable material composition,
+and interaction/motion. Skills are reserved for lower-frequency specialist work
+such as external data-source integration, GIS/3D, sandboxed custom components,
+publishing, and specialized data cleaning. A Skill may narrow instructions and
+declare required capabilities, but it cannot expand the run's granted authority.
+
+Successful assistant summaries are recovered from the durable decision checkpoint.
+When a project conversation is reopened, the client reconciles every terminal task
+that is missing its assistant message, so the workspace transcript is a replayable
+projection rather than a browser-lifetime side effect.
+
+The runtime fails closed when the model, encryption material, executor artifact
+lock, cost ledger, or required storage capability is unavailable. It does not
+fall back to the legacy browser-side AI chat.
 
 ## Authentication and request security
 

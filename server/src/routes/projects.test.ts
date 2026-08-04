@@ -118,6 +118,19 @@ describe('project product routes', () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code } })
   })
 
+  it('reports an in-progress permanent deletion when restoring a trashed project', async () => {
+    const restoreProject = vi.fn(async () => 'deletion_in_progress' as const)
+    const response = await createTestApp({ restoreProject }).request(
+      jsonMutation(`/projects/${projectId}/restore`, 'POST', {}),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'PROJECT_PERMANENT_DELETE_IN_PROGRESS' },
+    })
+    expect(restoreProject).toHaveBeenCalledWith(actorId, projectId)
+  })
+
   it('creates manual restore points and restores drafts without publishing them', async () => {
     const revision = {
       id: revisionId,
@@ -273,6 +286,104 @@ describe('project product routes', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({ savedAt: savedAt.toISOString() })
+  })
+
+  it('requires the immutable snapshot gate and rejects the legacy expectedVersion publish body', async () => {
+    const publish = vi.fn()
+    const response = await createTestApp({ publish }).request(
+      jsonMutation(`/projects/${projectId}/publish`, 'POST', { expectedVersion: 4 }),
+    )
+
+    expect(response.status).toBe(422)
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('creates a snapshot with real evidence, approves, and publishes that snapshot', async () => {
+    const snapshotId = '44444444-4444-4444-8444-444444444444'
+    const previewRunId = '55555555-5555-4555-8555-555555555555'
+    const approvalId = '66666666-6666-4666-8666-666666666666'
+    const sha256 = 'a'.repeat(64)
+    const snapshot = {
+      id: snapshotId,
+      projectId,
+      draftVersion: 4,
+      document: detail.draftSchema,
+      documentSha256: sha256,
+      createdBy: actorId,
+      createdAt: now,
+    }
+    const previewRun = {
+      id: previewRunId,
+      projectId,
+      publishSnapshotId: snapshotId,
+      source: 'agent_executor' as const,
+      status: 'verified' as const,
+      documentSha256: sha256,
+      rendererVersion: 'renderer@1',
+      rendererSha256: 'b'.repeat(64),
+      evidence: {
+        consoleErrors: [],
+        requestFailures: [],
+        render: { status: 'rendered', screenshotSha256: 'c'.repeat(64), resourceErrors: [] },
+        materials: { missing: [] },
+      },
+      agentOperationId: '77777777-7777-4777-8777-777777777777',
+      thumbnailArtifactId: null,
+      artifactPath: null,
+      artifactSize: null,
+      artifactDraftVersion: null,
+      createdBy: actorId,
+      createdAt: now,
+    }
+    const approval = {
+      id: approvalId,
+      projectId,
+      publishSnapshotId: snapshotId,
+      previewRunId,
+      approvedBy: actorId,
+      approvedAt: now,
+      consumedAt: null,
+      consumedReleaseId: null,
+    }
+    const createPublishSnapshot = vi.fn(async () => ({ snapshot, previewRun }))
+    const approvePublishSnapshot = vi.fn(async () => approval)
+    const publish = vi.fn(async () => ({
+      slug: 'dashboard-stable',
+      projectId,
+      name: 'Dashboard',
+      description: null,
+      revisionId,
+      revisionNumber: 8,
+      releaseNumber: 2,
+      schema: detail.draftSchema,
+      publishedAt: now,
+      isCurrent: true,
+      isPublished: true,
+    }))
+    const app = createTestApp({ createPublishSnapshot, approvePublishSnapshot, publish })
+
+    expect(
+      (await app.request(jsonMutation(`/projects/${projectId}/agent/publish-snapshots`, 'POST', { draftVersion: 4 })))
+        .status,
+    ).toBe(201)
+    expect(
+      (
+        await app.request(
+          jsonMutation(`/projects/${projectId}/agent/publish-snapshots/${snapshotId}/approve`, 'POST', {}),
+        )
+      ).status,
+    ).toBe(201)
+    expect(
+      (
+        await app.request(
+          jsonMutation(`/projects/${projectId}/agent/publish-snapshots/${snapshotId}/publish`, 'POST', {}),
+        )
+      ).status,
+    ).toBe(201)
+
+    expect(createPublishSnapshot).toHaveBeenCalledWith(actorId, projectId, 4)
+    expect(approvePublishSnapshot).toHaveBeenCalledWith(actorId, projectId, snapshotId)
+    expect(publish).toHaveBeenCalledWith(actorId, projectId, { snapshotId })
   })
 
   it('issues a signed thumbnail upload without exposing the session token', async () => {

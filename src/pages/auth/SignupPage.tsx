@@ -40,14 +40,13 @@ export function SignupPage() {
   if (confirmationEmail) {
     return (
       <div className='ed-auth-form'>
-        <p className='font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--ed-cyan)]'>Verify email</p>
-        <h1 className='mt-3 font-[var(--font-display)] text-[32px] font-medium tracking-[-0.035em]'>检查你的邮箱</h1>
+        <h1 className='font-[var(--font-display)] text-[32px] font-medium tracking-[-0.035em]'>检查你的邮箱</h1>
         <p className='mt-3 text-[13px] leading-6 text-[var(--ed-ink-muted)]'>
           验证链接已发送至 <span className='text-[var(--ed-ink)]'>{confirmationEmail}</span>。完成验证后即可登录。
         </p>
         <Button
           asChild
-          className='mt-8 h-11 w-full rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] text-[#07111d] hover:bg-white'
+          className='mt-8 h-11 w-full rounded-[8px] border border-[#315d76] bg-[#15344c] text-[#dff5ff] shadow-[0_12px_28px_rgba(2,16,27,.32)] hover:border-[#4b7f99] hover:bg-[#1b405b] hover:text-[#effbff] focus-visible:ring-[#6ddcf3]/50 focus-visible:ring-offset-[#090d13]'
         >
           <Link to='/login'>返回登录</Link>
         </Button>
@@ -57,8 +56,7 @@ export function SignupPage() {
 
   return (
     <div className='ed-auth-form'>
-      <p className='font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--ed-cyan)]'>Create workspace</p>
-      <h1 className='mt-3 font-[var(--font-display)] text-[32px] leading-tight font-medium tracking-[-0.035em]'>
+      <h1 className='font-[var(--font-display)] text-[32px] leading-tight font-medium tracking-[-0.035em]'>
         创建工作区账户
       </h1>
       <p className='mt-2 text-[13px] leading-6 text-[var(--ed-ink-muted)]'>保存画布、预览结果与发布记录。</p>
@@ -93,14 +91,17 @@ export function SignupPage() {
           />
         </div>
         {error ? (
-          <p role='alert' className='border-l-2 border-[#ff7f8a] bg-[#35161d]/50 px-3 py-2 text-xs text-[#ffabb2]'>
+          <p
+            role='alert'
+            className='rounded-[8px] border border-[#7c3440] bg-[#35161d]/50 px-3 py-2 text-xs text-[#ffabb2]'
+          >
             {error}
           </p>
         ) : null}
         <Button
           type='submit'
           disabled={submitting}
-          className='mt-1 h-11 w-full rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] text-[#07111d] hover:bg-white'
+          className='mt-1 h-11 w-full rounded-[8px] border border-[#315d76] bg-[#15344c] text-[#dff5ff] shadow-[0_12px_28px_rgba(2,16,27,.32)] hover:border-[#4b7f99] hover:bg-[#1b405b] hover:text-[#effbff] focus-visible:ring-[#6ddcf3]/50 focus-visible:ring-offset-[#090d13]'
         >
           {submitting ? '正在创建…' : '创建账户'}
           <ArrowRight />

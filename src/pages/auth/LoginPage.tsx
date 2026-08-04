@@ -66,14 +66,11 @@ export function LoginPage() {
 
   return (
     <div className='ed-auth-form'>
-      <p className='font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--ed-cyan)]'>Workspace access</p>
-      <h1 className='mt-3 font-[var(--font-display)] text-[32px] leading-tight font-medium tracking-[-0.035em]'>
-        登录工作台
-      </h1>
-      <p className='mt-2 text-[13px] leading-6 text-[var(--ed-ink-muted)]'>从上次离开的画布继续。</p>
-      <form className='mt-10 space-y-5' onSubmit={handleSubmit}>
-        <div className='space-y-2'>
-          <Label htmlFor='login-email' className='text-xs text-[var(--ed-ink-soft)]'>
+      <h1 className='font-[var(--font-display)] text-[36px] leading-tight font-medium tracking-[-0.04em]'>欢迎回来</h1>
+      <p className='mt-2.5 text-[14px] leading-6 text-[var(--ed-ink-muted)]'>继续完成你的大屏作品。</p>
+      <form className='mt-9 space-y-5' onSubmit={handleSubmit}>
+        <div className='space-y-2.5'>
+          <Label htmlFor='login-email' className='text-[13px] text-[var(--ed-ink-soft)]'>
             邮箱
           </Label>
           <Input
@@ -83,15 +80,18 @@ export function LoginPage() {
             autoComplete='email'
             required
             placeholder='name@example.com'
-            className='h-11 rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] px-3.5 text-[13px] text-[var(--ed-ink)] placeholder:text-[var(--ed-ink-faint)] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[var(--ed-cyan)]/25'
+            className='h-12 rounded-[10px] border-[#2b3946] bg-[#0e151d] px-4 text-[14px] text-[var(--ed-ink)] placeholder:text-[#70818f] hover:border-[#3a4b59] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[3px] focus-visible:ring-[var(--ed-cyan)]/15'
           />
         </div>
-        <div className='space-y-2'>
+        <div className='space-y-2.5'>
           <div className='flex items-center justify-between gap-4'>
-            <Label htmlFor='login-password' className='text-xs text-[var(--ed-ink-soft)]'>
+            <Label htmlFor='login-password' className='text-[13px] text-[var(--ed-ink-soft)]'>
               密码
             </Label>
-            <Link to='/forgot-password' className='text-xs text-[var(--ed-cyan)] hover:underline'>
+            <Link
+              to='/forgot-password'
+              className='rounded-[4px] text-[12px] text-[#9eb1bd] underline-offset-4 hover:text-[var(--ed-cyan)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]/70'
+            >
               忘记密码？
             </Link>
           </div>
@@ -103,7 +103,7 @@ export function LoginPage() {
             required
             minLength={8}
             placeholder='输入密码'
-            className='h-11 rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] px-3.5 text-[13px] text-[var(--ed-ink)] placeholder:text-[var(--ed-ink-faint)] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[var(--ed-cyan)]/25'
+            className='h-12 rounded-[10px] border-[#2b3946] bg-[#0e151d] px-4 text-[14px] text-[var(--ed-ink)] placeholder:text-[#70818f] hover:border-[#3a4b59] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[3px] focus-visible:ring-[var(--ed-cyan)]/15'
           />
         </div>
         {error ? (
@@ -114,15 +114,15 @@ export function LoginPage() {
         <Button
           type='submit'
           disabled={submitting}
-          className='h-11 w-full rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] text-[#07111d] hover:bg-white'
+          className='h-12 w-full rounded-[10px] border border-[#c9e5eb] bg-[#c9e5eb] text-[14px] font-semibold text-[#071015] shadow-none hover:border-[#e2f5f8] hover:bg-[#e2f5f8] hover:text-[#071015] active:translate-y-px focus-visible:ring-[var(--ed-cyan)]/55 focus-visible:ring-offset-[#0b1016]'
         >
           {submitting ? '正在登录…' : '登录'}
           <ArrowRight />
         </Button>
       </form>
-      <div className='my-6 flex items-center gap-3' aria-hidden='true'>
+      <div className='my-7 flex items-center gap-3' aria-hidden='true'>
         <span className='h-px flex-1 bg-[var(--ed-line)]' />
-        <span className='font-mono text-[8px] uppercase tracking-[0.16em] text-[var(--ed-ink-faint)]'>或使用</span>
+        <span className='text-[11px] text-[var(--ed-ink-faint)]'>其他登录方式</span>
         <span className='h-px flex-1 bg-[var(--ed-line)]' />
       </div>
       <div className='grid grid-cols-2 gap-3'>
@@ -130,7 +130,7 @@ export function LoginPage() {
           type='button'
           variant='outline'
           onClick={() => startOAuth('github', returnTo)}
-          className='h-10 rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-xs text-[var(--ed-ink-soft)] hover:border-[#40556a] hover:bg-[var(--ed-panel-raised)] hover:text-white'
+          className='h-11 rounded-[10px] border-[#2b3946] bg-[#0e151d] text-[13px] text-[var(--ed-ink-soft)] shadow-none hover:border-[#455765] hover:bg-[#131d26] hover:text-[var(--ed-ink)] active:translate-y-px'
         >
           <Github className='size-3.5' />
           GitHub
@@ -139,13 +139,13 @@ export function LoginPage() {
           type='button'
           variant='outline'
           onClick={() => startOAuth('google', returnTo)}
-          className='h-10 rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-xs text-[var(--ed-ink-soft)] hover:border-[#40556a] hover:bg-[var(--ed-panel-raised)] hover:text-white'
+          className='h-11 rounded-[10px] border-[#2b3946] bg-[#0e151d] text-[13px] text-[var(--ed-ink-soft)] shadow-none hover:border-[#455765] hover:bg-[#131d26] hover:text-[var(--ed-ink)] active:translate-y-px'
         >
           <span className='font-mono text-[11px] font-bold text-[var(--ed-cyan)]'>G</span>
           Google
         </Button>
       </div>
-      <p className='mt-7 text-center text-xs text-[var(--ed-ink-muted)]'>
+      <p className='mt-8 text-center text-[13px] text-[var(--ed-ink-muted)]'>
         还没有账户？
         <Link
           to='/signup'

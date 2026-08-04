@@ -1,8 +1,12 @@
 import { apiRequest, jsonBody } from '@/api/client'
+import type { AgentPreferences } from '@/features/agent'
+import type { WorkspaceRailPreference } from './workspace-rail-preference'
 
 export type UserSettings = {
   displayName?: string
   autosave?: boolean
+  workspaceRailPreference?: WorkspaceRailPreference
+  agentPreferences?: AgentPreferences
 }
 
 export async function getSettings(): Promise<UserSettings> {

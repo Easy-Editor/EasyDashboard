@@ -16,6 +16,11 @@ describe('preview navigation contract', () => {
     const notifyIndex = source.indexOf('if (nextPageId) onActivePageChange?.(nextPageId)')
 
     expect(loadIndex).toBeGreaterThan(-1)
+    expect(source).toContain("const materialRenderKey = Object.keys(remoteComponents).sort().join('|')")
+    expect(source).toContain("key={`${project.id}:${initialPage ?? 'empty'}:${materialRenderKey}`}")
+    expect(source).toContain('await navigationRunner.run({')
+    expect(source).toContain('useEffect(() => () => navigationRunner.invalidate(), [navigationRunner])')
+    expect(source).toContain("setNavigationError(reason instanceof Error ? reason : new Error('页面物料加载失败'))")
     expect(notifyIndex).toBeGreaterThan(loadIndex)
   })
 
@@ -25,5 +30,8 @@ describe('preview navigation contract', () => {
     expect(source).toContain('editorPageId={currentRenderedPageId}')
     expect(source).toContain('activePageId={currentRenderedPageId}')
     expect(source).toMatch(/onActivePageChange=\{activePageId => \{[\s\S]*?selectPage\(activePageId\)/)
+    expect(source).toContain("className='relative h-screen w-full overflow-hidden")
+    expect(source).toContain("className='absolute left-4 top-4 z-50")
+    expect(source).not.toMatch(/DRAFT UNAVAILABLE|PAGE NOT FOUND|INVALID ROUTE/)
   })
 })

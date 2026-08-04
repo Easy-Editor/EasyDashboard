@@ -32,6 +32,14 @@ setters.registerSetter(setterMap)
 let editorInitialization: Promise<void> | null = null
 let editorTeardown: Promise<void> | null = null
 let lifecycleBound = false
+let editorProjectGeneration = 0
+
+export class StaleEditorProjectLoadError extends Error {
+  constructor() {
+    super('Editor project load was superseded by a newer request')
+    this.name = 'StaleEditorProjectLoadError'
+  }
+}
 
 function bindEditorLifecycle() {
   if (lifecycleBound) return
@@ -73,8 +81,19 @@ async function ensureEditorInitialized() {
  * storage.
  */
 export async function initializeEditorProject(schema: ProjectSchema) {
+  const loadGeneration = ++editorProjectGeneration
   await ensureEditorInitialized()
-  await loadRemoteMaterialsFromComponentsMap(schema.componentsMap)
+  try {
+    await loadRemoteMaterialsFromComponentsMap(schema.componentsMap)
+  } catch (error) {
+    if (loadGeneration !== editorProjectGeneration) {
+      throw new StaleEditorProjectLoadError()
+    }
+    throw error
+  }
+  if (loadGeneration !== editorProjectGeneration) {
+    throw new StaleEditorProjectLoadError()
+  }
   project.load(schema, true)
 
   if (project.simulator) {
@@ -91,6 +110,7 @@ export async function initializeEditorProject(schema: ProjectSchema) {
  * rebuilt from the canonical draft.
  */
 export function teardownEditorProject(): Promise<void> {
+  editorProjectGeneration += 1
   if (!editorTeardown) {
     // The renderer owns a nested React root. Its effect cleanup runs in the
     // next task, so wait one additional task before removing the document.

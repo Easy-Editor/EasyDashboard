@@ -8,6 +8,8 @@ export interface RemoteMaterialConfig {
   version?: string
   /** UMD 全局变量名 */
   globalName: string
+  /** Component name used by the persisted project schema. */
+  componentName?: string
   /** 是否启用 */
   enabled?: boolean
 }
@@ -17,6 +19,8 @@ export interface CachedMaterialPackage {
   version: string
   globalName: string
   meta: ComponentMetadata
+  /** Plain schema names that resolve to this package component. */
+  componentAliases?: string[]
   component?: Component
   hasComponent: boolean
 }

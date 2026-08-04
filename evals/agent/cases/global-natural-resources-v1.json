@@ -1,0 +1,83 @@
+{
+  "id": "global-natural-resources-v1",
+  "title": "全球自然资源数据可视化大屏",
+  "inputMode": "text-with-reference-frames",
+  "canvas": { "width": 1920, "height": 1080 },
+  "prompt": "请根据随附的静态参考图和动图关键帧，创建一张1920×1080的全球自然资源数据可视化大屏。参考素材只用于理解构图、配色、层级和运动过程，最终画面必须由可编辑组件和数据生成，禁止把参考图、图片URL、base64或一个整屏自定义组件当作成品。整体是深海军蓝三栏控制舱：头部显示品牌文字、标题“全球自然资源数据可视化大屏”和每秒更新的真实日期时间；左侧依次展示国土面积TOP5发光轨道、工业用地/农业用地/国家征用三张指标卡、地球生命指数多层环；中央必须使用可复用的三维地球物料生成真实可见的地球，亚洲朝向镜头，包含星空、蓝色大气光晕、自动旋转和约2.7秒的推进式入场，底部展示地球总面积、陆地、海洋和直径指标；右侧依次展示2×2自然资源指标、2014/2016/2018/2020四针CO2排放量和大气指数环。组件树按页面装饰、头部、左侧数据、中央地球、右侧数据、底部指标分组。标题、实时钟、数字、轨道、图表优先使用对应的常规可编辑物料；中央使用可复用的地球场景能力；只有生命指数多环或CO2针柱确实超出普通物料能力时，才允许在对应局部使用自定义效果。数字和图表保留进场动画，图表提示可交互；未给出的数据使用清晰的演示数据，不得声称接入真实接口。",
+  "qualityBar": {
+    "ordinaryMaterialCount": 24,
+    "distinctOrdinaryMaterialTypeCount": 5,
+    "componentCounts": {
+      "Text": 6,
+      "DateTime": 1,
+      "NumberFlip": 10,
+      "Progress": 5,
+      "PieChart": 1
+    },
+    "chartCount": 1,
+    "distinctChartTypeCount": 1,
+    "globeSceneCount": 1,
+    "dashboardSceneCountMax": 2,
+    "fullCanvasCustomMaterialCount": 0,
+    "dominantCustomMaterialCount": 0,
+    "outOfBoundsMaterialCount": 0,
+    "externalAssetReferenceCount": 0,
+    "structuralHardGates": {
+      "structuralContainerCount": 6,
+      "requiredGroups": [
+        { "id": "decoration", "aliases": ["页面装饰", "装饰层", "背景层"] },
+        { "id": "header", "aliases": ["头部", "页头", "header"] },
+        { "id": "left-data", "aliases": ["左侧数据", "左侧分析", "左侧资源"] },
+        { "id": "center-globe", "aliases": ["中央地球", "中部地球", "地球主视区"] },
+        { "id": "right-data", "aliases": ["右侧数据", "右侧分析", "右侧资源"] },
+        { "id": "bottom-metrics", "aliases": ["底部指标", "底部数据", "地球指标"] }
+      ],
+      "regions": {
+        "header": { "x": [24, 160], "y": [24, 190], "minWidth": 1600, "maxHeight": 180 },
+        "left-data": { "x": [24, 600], "y": [150, 320], "minWidth": 360, "minHeight": 650 },
+        "center-globe": { "x": [420, 900], "y": [150, 320], "minWidth": 650, "minHeight": 600 },
+        "right-data": { "x": [1320, 1540], "y": [150, 320], "minWidth": 340, "minHeight": 650 },
+        "bottom-metrics": { "x": [650, 1250], "y": [780, 1010], "minWidth": 420, "minHeight": 90 }
+      },
+      "maxLocalizedDashboardSceneAreaRatio": 0.16,
+      "maxTotalDashboardSceneAreaRatio": 0.24,
+      "requiredContentGroups": [
+        { "id": "land-top5", "keywords": ["俄罗斯", "加拿大", "中国", "美国", "巴西"], "minimumMatches": 5 },
+        { "id": "land-use", "keywords": ["工业用地", "农业用地", "国家征用"], "minimumMatches": 3 },
+        { "id": "natural-resources", "keywords": ["最长海岸线", "最多岛屿", "矿产价值", "森林总量"], "minimumMatches": 4 },
+        { "id": "co2-years", "keywords": ["CO2", "2014", "2016", "2018", "2020"], "minimumMatches": 5 },
+        { "id": "atmosphere", "keywords": ["大气指数", "氧气", "气压", "甲烷", "酸雨"], "minimumMatches": 3 },
+        { "id": "earth-metrics", "keywords": ["地球总面积", "陆地", "海洋", "直径"], "minimumMatches": 4 }
+      ]
+    },
+    "visualHardGates": {
+      "minDarkSurfaceColorCount": 6,
+      "minCyanAccentColorCount": 6,
+      "minAnimatedMaterialCount": 12,
+      "minInteractiveMaterialCount": 2,
+      "leftTop5ProgressCount": 5,
+      "leftLandUseNumberCount": 3,
+      "rightResourceNumberCount": 4,
+      "centerBottomNumberCount": 4,
+      "globe": {
+        "minWidth": 650,
+        "minHeight": 600,
+        "centerX": [820, 1120],
+        "centerY": [450, 690],
+        "centerLongitude": [80, 125],
+        "centerLatitude": [10, 50],
+        "introDuration": [2400, 3200],
+        "globeScale": [0.75, 1.4],
+        "minStarDensity": 0.6,
+        "maxStarDensity": 1,
+        "minRotationSpeed": 0.4,
+        "requireAutoRotate": true,
+        "requireIntroAnimation": true,
+        "requireIntroLoop": false,
+        "requireAtmosphereColor": true,
+        "requireDarkBackground": true,
+        "requireSolidColors": true
+      }
+    }
+  }
+}

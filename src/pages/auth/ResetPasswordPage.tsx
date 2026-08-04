@@ -15,12 +15,9 @@ export function ResetPasswordResult({ status }: { status: Exclude<ResetPasswordV
 
   return (
     <div className='ed-auth-form' aria-labelledby='reset-password-result-title'>
-      <p className='font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--ed-cyan)]'>
-        {invalid ? 'Recovery required' : 'Credentials updated'}
-      </p>
       <h1
         id='reset-password-result-title'
-        className='mt-3 font-[var(--font-display)] text-[32px] font-medium tracking-[-0.035em]'
+        className='font-[var(--font-display)] text-[32px] font-medium tracking-[-0.035em]'
       >
         {invalid ? '重置链接已失效' : '密码已更新'}
       </h1>
@@ -34,7 +31,7 @@ export function ResetPasswordResult({ status }: { status: Exclude<ResetPasswordV
       </div>
       <Button
         asChild
-        className='mt-6 h-11 w-full rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] text-[#07111d] hover:bg-white'
+        className='mt-6 h-11 w-full rounded-[8px] border border-[#315d76] bg-[#15344c] text-[#dff5ff] shadow-[0_12px_28px_rgba(2,16,27,.32)] hover:border-[#4b7f99] hover:bg-[#1b405b] hover:text-[#effbff] focus-visible:ring-[#6ddcf3]/50 focus-visible:ring-offset-[#090d13]'
       >
         <Link to={invalid ? '/forgot-password' : '/projects'}>
           {invalid ? '重新发送重置邮件' : '进入我的项目'}
@@ -92,8 +89,7 @@ export function ResetPasswordPage() {
 
   return (
     <div className='ed-auth-form'>
-      <p className='font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--ed-cyan)]'>Set credentials</p>
-      <h1 className='mt-3 font-[var(--font-display)] text-[32px] font-medium tracking-[-0.035em]'>设置新密码</h1>
+      <h1 className='font-[var(--font-display)] text-[32px] font-medium tracking-[-0.035em]'>设置新密码</h1>
       <p className='mt-2 text-[13px] leading-6 text-[var(--ed-ink-muted)]'>新密码至少需要 8 位。</p>
       <form className='mt-9 space-y-5' onSubmit={handleSubmit}>
         <div className='space-y-2'>
@@ -122,7 +118,7 @@ export function ResetPasswordPage() {
         <Button
           type='submit'
           disabled={submitting}
-          className='h-11 w-full rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] text-[#07111d] hover:bg-white'
+          className='h-11 w-full rounded-[8px] border border-[#315d76] bg-[#15344c] text-[#dff5ff] shadow-[0_12px_28px_rgba(2,16,27,.32)] hover:border-[#4b7f99] hover:bg-[#1b405b] hover:text-[#effbff] focus-visible:ring-[#6ddcf3]/50 focus-visible:ring-offset-[#090d13]'
         >
           {submitting ? '正在更新…' : '更新密码'}
         </Button>

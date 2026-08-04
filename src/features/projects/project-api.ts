@@ -10,6 +10,8 @@ import type {
   TemplateSummary,
 } from '@/api/contracts'
 import { assertProjectSchemaBudget } from '@/api/schema-budget'
+import { decodeDashboardProjectDocument } from '@/features/projects/project-document'
+import { publishProjectRelease } from '@/features/releases/release-api'
 import type { ProjectSchema } from '@easy-editor/core'
 
 type RawProject = {
@@ -44,23 +46,9 @@ type RawProject = {
 type RawRevision = {
   id: string
   revisionNumber: number
-  kind?: 'auto' | 'manual' | 'pre_restore' | 'publish'
+  kind?: 'auto' | 'manual' | 'pre_restore' | 'publish' | 'agent'
   schema?: ProjectSchema
   createdAt: string
-}
-
-type RawPublication = {
-  projectId: string
-  slug: string
-  revisionId: string
-  revisionNumber: number
-  releaseNumber?: number
-  stableUrl?: string
-  versionUrl?: string
-  schema?: ProjectSchema
-  name: string
-  description: string | null
-  publishedAt: string
 }
 
 type RawTemplate = {
@@ -119,7 +107,7 @@ function toProjectDetail(project: RawProject): ProjectDetail<ProjectSchema> {
   if (!schema) throw new Error('项目响应缺少可编辑文档')
   return {
     ...toProjectSummary(project),
-    schema,
+    schema: decodeDashboardProjectDocument(schema).editorSchema,
   }
 }
 
@@ -254,24 +242,16 @@ export async function restoreProjectRevision(
 }
 
 export async function publishProject(projectId: string, expectedVersion: number): Promise<PublishResponse> {
-  const response = await apiRequest<{ publication: RawPublication }>(
-    `/api/projects/${encodeURIComponent(projectId)}/publish`,
-    {
-      method: 'POST',
-      body: jsonBody({ expectedVersion }),
-    },
-  )
+  const publication = await publishProjectRelease(projectId, expectedVersion)
   return {
-    projectId: response.publication.projectId,
-    revisionId: response.publication.revisionId,
-    revision: response.publication.revisionNumber,
-    releaseNumber: response.publication.releaseNumber ?? response.publication.revisionNumber,
-    slug: response.publication.slug,
-    stablePath: `/view/${encodeURIComponent(response.publication.slug)}`,
-    versionPath: `/view/${encodeURIComponent(response.publication.slug)}/versions/${
-      response.publication.releaseNumber ?? response.publication.revisionNumber
-    }`,
-    publishedAt: response.publication.publishedAt,
+    projectId: publication.projectId,
+    revisionId: publication.revisionId,
+    revision: publication.revisionNumber,
+    releaseNumber: publication.releaseNumber,
+    slug: publication.slug,
+    stablePath: publication.stablePath,
+    versionPath: publication.versionPath,
+    publishedAt: publication.publishedAt,
   }
 }
 

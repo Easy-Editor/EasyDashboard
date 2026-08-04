@@ -107,6 +107,7 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+.env.agent.local
 
 # Supabase CLI local branch state
 
@@ -184,3 +185,8 @@ dist-viewer/
 # turbo
 .turbo
 .vercel/
+
+# AI
+.impeccable
+.omx
+.tmp

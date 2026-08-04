@@ -23,11 +23,10 @@ export const MainNav = observer(function MainNav({
         asChild
         variant='ghost'
         size='sm'
-        className='h-7 shrink-0 gap-1.5 px-1.5 text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+        className='size-7 shrink-0 p-0 text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
       >
         <Link to='/projects' aria-label='返回我的项目'>
           <ArrowLeft className='size-4' />
-          <span className='hidden lg:inline'>我的项目</span>
         </Link>
       </Button>
       <div className='h-5 w-px shrink-0 bg-[var(--ed-line)]' />

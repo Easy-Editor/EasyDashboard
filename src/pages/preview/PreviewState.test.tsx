@@ -15,6 +15,7 @@ describe('preview product states', () => {
     expect(html).toContain('正在读取项目草稿')
     expect(html).toContain('重新加载')
     expect(html).toContain('role="status"')
+    expect(html).not.toContain('PREVIEW STATUS')
   })
 
   it('names the page that failed while keeping render retry available', () => {
@@ -26,5 +27,6 @@ describe('preview product states', () => {
     expect(html).toContain('地图物料初始化失败')
     expect(html).toContain('重试渲染')
     expect(html).toContain('role="alert"')
+    expect(html).not.toContain('RENDER INTERRUPTED')
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.js'
 import type { AppEnv } from '../src/env.js'
 import type { AuthService, ProjectRecord, Repository } from '../src/types.js'
@@ -6,6 +6,20 @@ import type { AuthService, ProjectRecord, Repository } from '../src/types.js'
 const actor = { id: '11111111-1111-4111-8111-111111111111', email: 'owner@example.com' }
 const projectId = '22222222-2222-4222-8222-222222222222'
 const now = new Date('2026-07-29T00:00:00.000Z')
+const executorCompatibility = {
+  runtimeVersion: '0.1.0-m0',
+  runtimeSha256: '1'.repeat(64),
+  coreVersion: '1.0.3-m0',
+  coreSha256: '2'.repeat(64),
+  rendererVersion: '1.0.3-m0',
+  rendererSha256: '3'.repeat(64),
+  dashboardAgentHostVersion: '0.1.0-m0',
+  dashboardAgentHostSha256: '4'.repeat(64),
+  browserArtifactVersion: '0.0.0-m0',
+  browserArtifactSha256: '6'.repeat(64),
+  materialManifestVersion: 'manifest-2026-07-31',
+  materialManifestSha256: '5'.repeat(64),
+}
 const project: ProjectRecord = {
   id: projectId,
   name: 'Dashboard',
@@ -84,6 +98,18 @@ function repository(overrides: Partial<Repository> = {}): Repository {
     listProjects: async () => [project],
     createProject: async () => project,
     getProject: async () => project,
+    listProjectMembers: async () => [],
+    setProjectMemberRole: async () => null,
+    removeProjectMember: async () => null,
+    getEditableProjectForAgentSpike: async () => ({
+      id: project.id,
+      draftVersion: project.draftVersion,
+      draftSchema: project.draftSchema,
+    }),
+    issueAgentSpikeOperation: async () => null,
+    prepareAgentSpikeOperation: async () => null,
+    commitAgentSpikeStage: async () => null,
+    getAgentSpikeOperationOutcome: async () => null,
     updateProject: async () => project,
     setProjectFavorite: async () => project,
     duplicateProject: async () => project,
@@ -96,6 +122,8 @@ function repository(overrides: Partial<Repository> = {}): Repository {
     createRestorePoint: async () => null,
     restoreRevision: async () => null,
     restoreRelease: async () => null,
+    createPublishSnapshot: async () => null,
+    approvePublishSnapshot: async () => null,
     publish: async () => null,
     unpublish: async () => false,
     isPublicProjectAvailable: async () => false,
@@ -259,5 +287,59 @@ describe('EasyDashboard API', () => {
     )
     expect(response.status).toBe(413)
     await expect(response.json()).resolves.toMatchObject({ error: { code: 'SCHEMA_TOO_DEEP' } })
+  })
+
+  it('does not expose direct Agent operation grant issuance to project clients', async () => {
+    const getEditableProjectForAgentSpike = vi.fn(async () => ({
+      id: project.id,
+      draftVersion: project.draftVersion,
+      draftSchema: project.draftSchema,
+    }))
+    const issueAgentSpikeOperation = vi.fn()
+    const app = createApp({
+      env: {
+        ...env,
+        AGENT_EXECUTOR_GRANT_SECRET: 'executor-grant-secret-with-at-least-32-bytes',
+        AGENT_EXECUTOR_COMPATIBILITY_JSON: executorCompatibility,
+      },
+      auth: auth(),
+      repository: repository({
+        getEditableProjectForAgentSpike,
+        issueAgentSpikeOperation,
+      }),
+    })
+
+    const response = await app.request(
+      mutation(
+        `/api/projects/${projectId}/agent-spike/operations`,
+        {
+          executorId: 'executor-1',
+          operationId: 'operation-1',
+          taskId: 'task-1',
+          stageId: 'stage-1',
+          compatibility: {
+            ...executorCompatibility,
+            coreSha256: 'f'.repeat(64),
+          },
+          invocation: {
+            sessionId: 'session-1',
+            stepId: 'step-1',
+            callId: 'call-1',
+            capability: 'screen.applyChangeSet',
+            arguments: {
+              schemaVersion: 1,
+              documentId: 'page-home',
+              operations: [{ opId: 'remove-old-title', type: 'remove', nodeId: 'old-title' }],
+            },
+          },
+        },
+        '__Host-ed-access-token=access',
+      ),
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'NOT_FOUND' } })
+    expect(getEditableProjectForAgentSpike).not.toHaveBeenCalled()
+    expect(issueAgentSpikeOperation).not.toHaveBeenCalled()
   })
 })

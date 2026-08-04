@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { defaultProjectSchema } from '@/editor/const'
 import {
   createProject,
@@ -21,12 +20,6 @@ import {
   setProjectFavorite,
   trashProject,
 } from '@/features/projects/project-api'
-import {
-  CANVAS_RESOLUTION_PRESETS,
-  type CanvasResolutionPreset,
-  createProjectSchemaWithResolution,
-  resolveCanvasResolution,
-} from '@/features/projects/project-creation'
 import { PageFrame } from '@/layouts/PageFrame'
 import { cn } from '@/lib/utils'
 import { Grid2X2, LayoutDashboard, List, Plus, Search, X } from 'lucide-react'
@@ -86,9 +79,6 @@ export function ProjectsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [resolutionPreset, setResolutionPreset] = useState<CanvasResolutionPreset>('fhd')
-  const [customWidth, setCustomWidth] = useState('1920')
-  const [customHeight, setCustomHeight] = useState('1080')
 
   const createOpen = searchParams.get('create') === '1'
 
@@ -124,9 +114,6 @@ export function ProjectsPage() {
 
   function closeCreateDialog() {
     setCreateError(null)
-    setResolutionPreset('fhd')
-    setCustomWidth('1920')
-    setCustomHeight('1080')
     setSearchParams(previous => {
       const next = new URLSearchParams(previous)
       next.delete('create')
@@ -180,14 +167,6 @@ export function ProjectsPage() {
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    let schema: typeof defaultProjectSchema
-    try {
-      const resolution = resolveCanvasResolution(resolutionPreset, customWidth, customHeight)
-      schema = createProjectSchemaWithResolution(defaultProjectSchema, resolution)
-    } catch (reason) {
-      setCreateError(reason instanceof Error ? reason.message : '画布分辨率无效')
-      return
-    }
 
     setCreating(true)
     setCreateError(null)
@@ -195,10 +174,10 @@ export function ProjectsPage() {
       const project = await createProject({
         name: String(form.get('name') ?? '').trim(),
         description: String(form.get('description') ?? '').trim(),
-        schema,
+        schema: structuredClone(defaultProjectSchema),
       })
       closeCreateDialog()
-      navigate(`/projects/${project.id}/editor`)
+      navigate(`/projects/${project.id}/agent`)
     } catch (reason) {
       setCreateError(reason instanceof ApiError ? reason.message : '项目创建失败')
     } finally {
@@ -209,48 +188,59 @@ export function ProjectsPage() {
   return (
     <>
       <PageFrame
-        eyebrow='Workspace / Projects'
-        title='所有项目'
-        description='集中查看草稿与已发布的大屏。'
+        size='standard'
+        title='项目'
+        description='继续最近的创作，或从一个新想法开始。'
         action={
           <Button
             type='button'
             onClick={() => setSearchParams({ create: '1' })}
-            className='h-10 rounded-[8px] border border-[#d9e7f2] bg-[#eef7ff] px-4 text-[#07111d] hover:bg-white'
+            className='h-10 rounded-[8px] border border-[var(--ed-action-border)] bg-[var(--ed-action-bg)] px-4 text-[var(--ed-action-ink)] hover:bg-[var(--ed-action-bg-hover)]'
           >
             <Plus />
             新建项目
           </Button>
         }
       >
-        <div className='mt-5 flex h-12 items-center gap-3 border-b border-[var(--ed-line)]'>
-          <div className='relative w-[280px]'>
+        <div className='mt-8 flex min-h-11 items-center gap-4 border-b border-[var(--ed-line)] pb-4'>
+          <div className='relative w-[320px] shrink-0'>
             <Search className='pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--ed-ink-faint)]' />
             <Input
               value={query}
               onChange={event => setQuery(event.target.value)}
               placeholder='搜索名称或说明'
               aria-label='搜索项目'
-              className='h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] pl-8 text-xs text-[var(--ed-ink)] placeholder:text-[var(--ed-ink-faint)] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[var(--ed-cyan)]/25'
+              className='h-9 rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] pl-8 text-xs text-[var(--ed-ink)] placeholder:text-[var(--ed-ink-faint)] focus-visible:border-[var(--ed-cyan)] focus-visible:ring-[var(--ed-cyan)]/25'
             />
           </div>
-          <Select value={status} onValueChange={value => setStatus(value as ProjectStatusFilter)}>
-            <SelectTrigger
-              className='h-8 w-[120px] rounded-[6px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] text-xs text-[var(--ed-ink-soft)]'
-              aria-label='按发布状态筛选'
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] text-[var(--ed-ink)]'>
-              <SelectItem value='all'>全部状态</SelectItem>
-              <SelectItem value='draft'>草稿</SelectItem>
-              <SelectItem value='published'>已发布</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className='text-[11px] text-[var(--ed-ink-faint)]'>
-            {projects ? `${filteredProjects.length} / ${projects.length}` : '加载中'}
+          <div className='flex items-center gap-1' aria-label='按发布状态筛选'>
+            {(
+              [
+                ['all', '全部'],
+                ['draft', '草稿'],
+                ['published', '已发布'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type='button'
+                onClick={() => setStatus(value)}
+                aria-pressed={status === value}
+                className={cn(
+                  'h-8 rounded-[6px] px-3 text-[11px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]',
+                  status === value
+                    ? 'bg-[var(--ed-panel-raised)] text-[var(--ed-ink)]'
+                    : 'text-[var(--ed-ink-muted)] hover:text-[var(--ed-ink)]',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className='ml-auto text-[11px] text-[var(--ed-ink-faint)]'>
+            {projects ? `共 ${filteredProjects.length} 个项目` : '正在加载'}
           </p>
-          <div className='ml-auto flex items-center rounded-[6px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)] p-0.5'>
+          <div className='flex items-center rounded-[6px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)] p-0.5'>
             <Button
               type='button'
               variant='ghost'
@@ -300,29 +290,31 @@ export function ProjectsPage() {
 
         {loadError ? null : projects ? (
           projects.length === 0 && !loadError ? (
-            <div className='mx-auto mt-20 max-w-[420px] text-center'>
-              <div className='ed-empty-canvas mx-auto grid aspect-video w-[340px] place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[#080d15]'>
-                <LayoutDashboard className='size-6 text-[#61778c]' />
+            <div className='grid min-h-[calc(100vh-240px)] place-items-center py-12'>
+              <div className='w-full max-w-[420px] text-center'>
+                <div className='ed-empty-canvas mx-auto grid aspect-video w-full max-w-[340px] place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[#080d15]'>
+                  <LayoutDashboard className='size-6 text-[#61778c]' />
+                </div>
+                <h2 className='mt-6 font-[var(--font-display)] text-lg font-medium text-[var(--ed-ink)]'>
+                  创建第一块画布
+                </h2>
+                <p className='mt-2 text-xs leading-5 text-[var(--ed-ink-muted)]'>从空白项目开始，直接进入编辑器。</p>
+                <Button
+                  type='button'
+                  onClick={() => setSearchParams({ create: '1' })}
+                  className='mt-5 h-9 rounded-[8px] border border-[var(--ed-action-border)] bg-[var(--ed-action-bg)] text-[var(--ed-action-ink)] hover:bg-[var(--ed-action-bg-hover)]'
+                >
+                  <Plus />
+                  新建项目
+                </Button>
               </div>
-              <h2 className='mt-6 font-[var(--font-display)] text-lg font-medium text-[var(--ed-ink)]'>
-                创建第一块画布
-              </h2>
-              <p className='mt-2 text-xs leading-5 text-[var(--ed-ink-muted)]'>从空白项目开始，直接进入编辑器。</p>
-              <Button
-                type='button'
-                onClick={() => setSearchParams({ create: '1' })}
-                className='mt-5 h-9 rounded-[8px] bg-[#eef7ff] text-[#07111d]'
-              >
-                <Plus />
-                新建项目
-              </Button>
             </div>
           ) : filteredProjects.length > 0 ? (
             <div
               className={cn(
                 'mt-6',
                 view === 'grid'
-                  ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,304px))] items-start gap-5'
+                  ? 'grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] items-start gap-x-4 gap-y-6'
                   : 'border-t border-[var(--ed-line)]',
               )}
             >
@@ -343,26 +335,28 @@ export function ProjectsPage() {
               ))}
             </div>
           ) : (
-            <div className='mx-auto mt-20 max-w-md text-center'>
-              <div className='mx-auto grid size-11 place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'>
-                <X className='size-4 text-[var(--ed-ink-faint)]' />
+            <div className='grid min-h-[calc(100vh-240px)] place-items-center py-12 text-center'>
+              <div className='w-full max-w-md'>
+                <div className='mx-auto grid size-11 place-items-center rounded-[8px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'>
+                  <X className='size-4 text-[var(--ed-ink-faint)]' />
+                </div>
+                <h2 className='mt-4 font-[var(--font-display)] text-base font-medium text-[var(--ed-ink)]'>
+                  没有匹配的项目
+                </h2>
+                <p className='mt-2 text-xs text-[var(--ed-ink-muted)]'>{describeEmptyProjectFilter(query, status)}</p>
+                <Button
+                  type='button'
+                  variant='outline'
+                  onClick={clearFilters}
+                  className='mt-5 h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-transparent text-xs text-[var(--ed-ink-soft)]'
+                >
+                  清除筛选
+                </Button>
               </div>
-              <h2 className='mt-4 font-[var(--font-display)] text-base font-medium text-[var(--ed-ink)]'>
-                没有匹配的项目
-              </h2>
-              <p className='mt-2 text-xs text-[var(--ed-ink-muted)]'>{describeEmptyProjectFilter(query, status)}</p>
-              <Button
-                type='button'
-                variant='outline'
-                onClick={clearFilters}
-                className='mt-5 h-8 rounded-[6px] border-[var(--ed-line-strong)] bg-transparent text-xs text-[var(--ed-ink-soft)]'
-              >
-                清除筛选
-              </Button>
             </div>
           )
         ) : (
-          <div className='mt-6 grid grid-cols-[repeat(auto-fill,minmax(260px,304px))] gap-5'>
+          <div className='mt-6 grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-x-4 gap-y-6'>
             {Array.from({ length: 4 }, (_, index) => (
               <div
                 key={index}
@@ -378,7 +372,7 @@ export function ProjectsPage() {
           <DialogHeader>
             <DialogTitle className='font-[var(--font-display)] text-lg'>新建项目</DialogTitle>
             <DialogDescription className='text-xs leading-5 text-[var(--ed-ink-muted)]'>
-              创建后将直接进入编辑器。
+              先创建一个空白项目，进入后可以继续告诉 Agent 你的需求。
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className='space-y-4'>
@@ -408,71 +402,6 @@ export function ProjectsPage() {
                 className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
               />
             </div>
-            <div className='space-y-2'>
-              <Label htmlFor='project-resolution' className='text-xs text-[var(--ed-ink-soft)]'>
-                初始页面分辨率
-              </Label>
-              <Select
-                value={resolutionPreset}
-                onValueChange={value => setResolutionPreset(value as CanvasResolutionPreset)}
-              >
-                <SelectTrigger
-                  id='project-resolution'
-                  className='w-full rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] text-[var(--ed-ink)]'>
-                  {CANVAS_RESOLUTION_PRESETS.map(preset => (
-                    <SelectItem key={preset.value} value={preset.value}>
-                      {preset.label} · {preset.width} × {preset.height}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value='custom'>自定义</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className='text-[11px] leading-5 text-[var(--ed-ink-faint)]'>
-                创建后可在编辑器底部为每个页面独立调整。
-              </p>
-            </div>
-            {resolutionPreset === 'custom' ? (
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='space-y-2'>
-                  <Label htmlFor='project-canvas-width' className='text-xs text-[var(--ed-ink-soft)]'>
-                    宽度
-                  </Label>
-                  <Input
-                    id='project-canvas-width'
-                    type='number'
-                    inputMode='numeric'
-                    min={1}
-                    max={16384}
-                    step={1}
-                    required
-                    value={customWidth}
-                    onChange={event => setCustomWidth(event.target.value)}
-                    className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
-                  />
-                </div>
-                <div className='space-y-2'>
-                  <Label htmlFor='project-canvas-height' className='text-xs text-[var(--ed-ink-soft)]'>
-                    高度
-                  </Label>
-                  <Input
-                    id='project-canvas-height'
-                    type='number'
-                    inputMode='numeric'
-                    min={1}
-                    max={16384}
-                    step={1}
-                    required
-                    value={customHeight}
-                    onChange={event => setCustomHeight(event.target.value)}
-                    className='rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)]'
-                  />
-                </div>
-              </div>
-            ) : null}
             {createError ? (
               <p role='alert' className='text-xs text-[#ffabb2]'>
                 {createError}
@@ -487,7 +416,11 @@ export function ProjectsPage() {
               >
                 取消
               </Button>
-              <Button type='submit' disabled={creating} className='rounded-[8px] bg-[#eef7ff] text-[#07111d]'>
+              <Button
+                type='submit'
+                disabled={creating}
+                className='rounded-[8px] border border-[var(--ed-action-border)] bg-[var(--ed-action-bg)] text-[var(--ed-action-ink)] hover:bg-[var(--ed-action-bg-hover)]'
+              >
                 {creating ? '正在创建…' : '创建并打开'}
               </Button>
             </DialogFooter>

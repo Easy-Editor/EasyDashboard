@@ -7,8 +7,10 @@
     "node": "22.x"
   },
   "scripts": {
-    "dev": "tsx watch --env-file-if-exists=../.env src/node.ts",
-    "start": "tsx --env-file-if-exists=../.env src/node.ts",
+    "dev": "tsx watch --env-file-if-exists=../.env --env-file-if-exists=../.env.local --env-file-if-exists=../.env.agent.local src/node.ts",
+    "dev:worker": "tsx watch --env-file-if-exists=../.env --env-file-if-exists=../.env.local --env-file-if-exists=../.env.agent.local src/worker.ts",
+    "start": "tsx --env-file-if-exists=../.env --env-file-if-exists=../.env.local --env-file-if-exists=../.env.agent.local src/node.ts",
+    "start:worker": "tsx --env-file-if-exists=../.env --env-file-if-exists=../.env.local --env-file-if-exists=../.env.agent.local src/worker.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
