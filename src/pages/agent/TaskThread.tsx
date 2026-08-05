@@ -1,14 +1,5 @@
-import { type AgentTask, type AgentTaskTechnicalDetails, formatAgentRunCost } from '@/features/agent'
-import {
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Circle,
-  CircleDashed,
-  LoaderCircle,
-  MessageCircleQuestion,
-} from 'lucide-react'
+import { type AgentTask, formatAgentRunCost } from '@/features/agent'
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Circle, CircleDashed, LoaderCircle } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { useState } from 'react'
 
@@ -19,20 +10,6 @@ type TaskStepView = {
   title: string
   status: string
   detail?: string
-}
-
-function hasTechnicalDetails(details: AgentTaskTechnicalDetails | undefined): details is AgentTaskTechnicalDetails {
-  return Boolean(details && (details.errorCode || details.operationId || details.receiptId || details.cost))
-}
-
-function formatTechnicalCost(details: NonNullable<AgentTaskTechnicalDetails['cost']>): string {
-  const amount = (details.amountMicros / 1_000_000).toFixed(6)
-  const accuracyLabels = {
-    actual: '实际',
-    estimated: '估算',
-    billing_indeterminate: '待确认',
-  } as const
-  return details.accuracy ? `$${amount}（${accuracyLabels[details.accuracy]}）` : `$${amount}`
 }
 
 export function resolveTaskSteps(task: AgentTask): TaskStepView[] {
@@ -224,77 +201,6 @@ export function TaskThread({
                 )
               })}
             </ol>
-
-            {task.pendingQuestion ? (
-              <aside
-                aria-label='等待你的回复'
-                className='mx-2 mt-2 rounded-[9px] border border-[color-mix(in_srgb,var(--ed-warning)_38%,var(--ed-line))] bg-[color-mix(in_srgb,var(--ed-warning)_7%,transparent)] px-2.5 py-2.5'
-              >
-                <div className='flex items-center gap-1.5 text-[10px] font-medium text-[var(--ed-warning)]'>
-                  <MessageCircleQuestion className='size-3.5' aria-hidden='true' />
-                  Agent 需要你确认
-                </div>
-                <p className='mt-1.5 text-[11px] leading-4 text-[var(--ed-ink-soft)]'>{task.pendingQuestion.prompt}</p>
-                <p className='mt-1 text-[10px] leading-4 text-[var(--ed-ink-faint)]'>
-                  直接在下方回复后，将继续同一任务。
-                </p>
-              </aside>
-            ) : null}
-
-            {task.activities?.length ? (
-              <div aria-label='任务活动' className='mx-2 mt-2 border-t border-[var(--ed-line)] pt-2'>
-                <p className='mb-1.5 text-[10px] font-medium text-[var(--ed-ink-muted)]'>最近活动</p>
-                <ol className='space-y-1.5'>
-                  {task.activities.slice(-8).map(activity => (
-                    <li key={activity.seq} className='text-[10px] leading-4 text-[var(--ed-ink-muted)]'>
-                      <div className='flex items-start gap-2'>
-                        <span
-                          className='mt-[7px] size-1 shrink-0 rounded-full bg-[var(--ed-line-strong)]'
-                          aria-hidden='true'
-                        />
-                        <span className='min-w-0 flex-1'>{activity.summary}</span>
-                        <time className='shrink-0 font-mono text-[9px] text-[var(--ed-ink-faint)]'>
-                          {new Date(activity.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </time>
-                      </div>
-                      {hasTechnicalDetails(activity.technicalDetails) ? (
-                        <details className='ml-3 mt-0.5 text-[9px] text-[var(--ed-ink-faint)]'>
-                          <summary className='cursor-pointer select-none hover:text-[var(--ed-ink-muted)]'>
-                            技术信息
-                          </summary>
-                          <dl className='mt-1 space-y-0.5 rounded-[5px] bg-[var(--ed-rail)] p-1.5 font-mono'>
-                            {activity.technicalDetails.errorCode ? (
-                              <div>
-                                <dt className='inline'>错误码：</dt>
-                                <dd className='inline break-all'>{activity.technicalDetails.errorCode}</dd>
-                              </div>
-                            ) : null}
-                            {activity.technicalDetails.operationId ? (
-                              <div>
-                                <dt className='inline'>执行标识：</dt>
-                                <dd className='inline break-all'>{activity.technicalDetails.operationId}</dd>
-                              </div>
-                            ) : null}
-                            {activity.technicalDetails.receiptId ? (
-                              <div>
-                                <dt className='inline'>凭据标识：</dt>
-                                <dd className='inline break-all'>{activity.technicalDetails.receiptId}</dd>
-                              </div>
-                            ) : null}
-                            {activity.technicalDetails.cost ? (
-                              <div>
-                                <dt className='inline'>费用：</dt>
-                                <dd className='inline'>{formatTechnicalCost(activity.technicalDetails.cost)}</dd>
-                              </div>
-                            ) : null}
-                          </dl>
-                        </details>
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ) : null}
 
             {task.run || task.taskRun ? (
               <div className='mx-2 mt-1 border-t border-[var(--ed-line)] px-0.5 pt-2 pb-0.5'>

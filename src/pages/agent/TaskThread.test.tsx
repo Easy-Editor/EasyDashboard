@@ -97,18 +97,13 @@ describe('TaskThread Todo presentation', () => {
     expect(source).toContain('task.taskRun.accounting.providerTurns')
   })
 
-  it('shows public activity, a focused waiting question, and keeps allowlisted technical details collapsed', async () => {
+  it('keeps execution activity and waiting questions out of the temporary Todo', async () => {
     const source = await readFile(path.join(currentDirectory, 'TaskThread.tsx'), 'utf8')
 
-    expect(source).toContain('task.activities')
-    expect(source).toContain("aria-label='任务活动'")
-    expect(source).toContain('activity.summary')
-    expect(source).toContain('<details')
-    expect(source).toContain('activity.technicalDetails')
-    expect(source).not.toContain('activity.technicalPayload')
-    expect(source).not.toContain('JSON.stringify(activity')
-    expect(source).toContain("aria-label='等待你的回复'")
-    expect(source).toContain('task.pendingQuestion.prompt')
+    expect(source).not.toContain('task.activities')
+    expect(source).not.toContain("aria-label='任务活动'")
+    expect(source).not.toContain('activity.summary')
+    expect(source).not.toContain('task.pendingQuestion.prompt')
     expect(source).toContain('任务已回滚')
     expect(source).toContain('回滚受阻')
     expect(source).toContain('缺少可用物料')

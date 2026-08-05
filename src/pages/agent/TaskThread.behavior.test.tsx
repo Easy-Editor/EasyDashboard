@@ -8,6 +8,7 @@ import {
 import type { AgentStorage, AgentTaskPublicEvent, AgentTaskRunDetail } from '@/features/agent'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { ConversationThread } from './ConversationThread'
 import { TaskThread } from './TaskThread'
 
 function createStorage(): AgentStorage {
@@ -131,6 +132,30 @@ async function hydrateTask(input: {
   return task
 }
 
+function renderConversation(conversationId: string, storage: AgentStorage): string {
+  const conversation = getConversation('user-a', conversationId, storage)
+  if (!conversation) throw new Error('Expected conversation')
+  return renderToStaticMarkup(
+    <ConversationThread
+      conversation={conversation}
+      conversations={[conversation]}
+      defaultAttachmentScope='conversation'
+      notice={null}
+      planPending={false}
+      retryPending={false}
+      showTaskProgress
+      onCreateConversation={() => undefined}
+      onRollback={() => undefined}
+      onResumeTask={() => undefined}
+      resumePendingTaskRunId={null}
+      rollbackPendingOperationId={null}
+      rolledBackOperationIds={new Set()}
+      onSelectConversation={() => undefined}
+      onSend={async () => undefined}
+    />,
+  )
+}
+
 describe('TaskThread persisted behavior', () => {
   it('renders the hydrated active plan and public activity from a V2 task identity', async () => {
     const storage = createStorage()
@@ -144,18 +169,19 @@ describe('TaskThread persisted behavior', () => {
     workspace.conversations[0]!.tasks[0]!.taskRunId = 'task-run-1'
     replaceAgentWorkspace(workspace, storage)
 
-    const hydrated = await hydrateTask({
+    await hydrateTask({
       detail: createDetail({ conversationId: conversation.id, taskId: task.id }),
       events: [createActivity()],
       storage,
     })
-    const html = renderToStaticMarkup(<TaskThread task={hydrated} />)
+    const html = renderConversation(conversation.id, storage)
 
     expect(html).toContain('先还原左右面板，再校验中间主视图。')
     expect(html).toContain('计划 v3')
     expect(html).toContain('第 1 / 2 步')
     expect(html).toContain('搭建左右信息面板')
     expect(html).toContain('正在搭建左右信息面板')
+    expect(html.match(/EasyDashboard Agent/g)).toHaveLength(1)
   })
 
   it('keeps a failed terminal state and task_failed activity visible after reload', async () => {
@@ -185,7 +211,7 @@ describe('TaskThread persisted behavior', () => {
 
     const reloaded = getConversation('user-a', conversation.id, storage)?.tasks[0]
     if (!reloaded) throw new Error('Expected reloaded task')
-    const html = renderToStaticMarkup(<TaskThread task={reloaded} />)
+    const html = renderConversation(conversation.id, storage)
 
     expect(html).toContain('执行失败')
     expect(html).toContain('文档执行失败，任务已停止')
@@ -209,7 +235,7 @@ describe('TaskThread persisted behavior', () => {
     )
     const task = conversation.tasks[0]
     if (!task) throw new Error('Expected task')
-    const hydrated = await hydrateTask({
+    await hydrateTask({
       detail: createDetail({
         conversationId: conversation.id,
         taskId: task.id,
@@ -226,11 +252,11 @@ describe('TaskThread persisted behavior', () => {
       ],
       storage,
     })
-    const html = renderToStaticMarkup(<TaskThread task={hydrated} />)
+    const html = renderConversation(conversation.id, storage)
 
-    expect(html).toContain('Agent 需要你确认')
+    expect(html).toContain('data-agent-activity="waiting_user"')
     expect(html).toContain('左右面板是否保持等宽？')
-    expect(html).toContain('直接在下方回复后，将继续同一任务。')
+    expect(html).not.toContain('直接在下方回复后，将继续同一任务。')
   })
 
   it('offers an explicit same-task resume action after an execution-limit pause', async () => {
@@ -267,13 +293,13 @@ describe('TaskThread persisted behavior', () => {
       ...event,
       technicalPayload: { secret: 'do-not-show' },
     } as AgentTaskPublicEvent
-    const hydrated = await hydrateTask({
+    await hydrateTask({
       detail: createDetail({ conversationId: conversation.id, taskId: task.id }),
       events: [compatibilityEvent],
       storage,
     })
 
-    const render = () => renderToStaticMarkup(<TaskThread task={hydrated} />)
+    const render = () => renderConversation(conversation.id, storage)
     expect(render).not.toThrow()
     expect(render()).toContain('已恢复公开活动')
     expect(render()).not.toContain('技术信息')

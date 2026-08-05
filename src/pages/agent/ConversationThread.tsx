@@ -15,16 +15,23 @@ import {
   type AgentBudgetUsage,
   type AgentConversation,
   type AgentMessage,
+  type AgentTask,
+  type AgentTaskPublicEvent,
+  type AgentTaskTechnicalDetails,
   getAgentBudgetUsage,
 } from '@/features/agent'
 import {
+  AlertCircle,
   AlertTriangle,
   Check,
+  CheckCircle2,
   ChevronDown,
   CornerDownLeft,
   FileText,
   FolderInput,
+  LoaderCircle,
   LockKeyhole,
+  MessageCircleQuestion,
   Paperclip,
   RotateCw,
   Send,
@@ -51,8 +58,61 @@ const EMPTY_PROMPTS = ['根据附件搭建一版运营大屏', '优化当前画�
 
 type ScrollMetrics = Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'>
 
+type ConversationTimelineItem =
+  | { kind: 'message'; id: string; createdAt: string; message: AgentMessage }
+  | { kind: 'activity'; id: string; createdAt: string; task: AgentTask; activity: AgentTaskPublicEvent }
+
+const ACTIVE_TASK_STATUSES = new Set<AgentTask['status']>(['waiting', 'waiting_user', 'paused', 'running'])
+const RUNNING_ACTIVITY_TYPES = new Set<AgentTaskPublicEvent['type']>([
+  'plan_created',
+  'plan_revised',
+  'step_started',
+  'change_prepared',
+  'preview_checked',
+  'step_revising',
+  'rollback_started',
+])
+const WARNING_ACTIVITY_TYPES = new Set<AgentTaskPublicEvent['type']>([
+  'material_gap',
+  'waiting_user',
+  'rollback_blocked',
+])
+const FAILED_ACTIVITY_TYPES = new Set<AgentTaskPublicEvent['type']>(['task_failed'])
+
 export function isConversationNearBottom(metrics: ScrollMetrics): boolean {
   return metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop <= CONVERSATION_BOTTOM_THRESHOLD
+}
+
+export function shouldShowTaskTodo(task: AgentTask | undefined, preferenceEnabled: boolean): task is AgentTask {
+  return Boolean(task && preferenceEnabled && ACTIVE_TASK_STATUSES.has(task.status))
+}
+
+export function resolveConversationTimelineItems(conversation: AgentConversation): ConversationTimelineItem[] {
+  const messages: ConversationTimelineItem[] = conversation.messages.map(message => ({
+    kind: 'message',
+    id: `message:${message.id}`,
+    createdAt: message.createdAt,
+    message,
+  }))
+  const activities: ConversationTimelineItem[] = conversation.tasks.flatMap(task =>
+    (task.activities ?? []).map(activity => ({
+      kind: 'activity' as const,
+      id: `activity:${activity.taskRunId}:${activity.eventKey}`,
+      createdAt: activity.createdAt,
+      task,
+      activity,
+    })),
+  )
+
+  return [...messages, ...activities].sort((left, right) => {
+    const byTime = Date.parse(left.createdAt) - Date.parse(right.createdAt)
+    if (byTime !== 0) return byTime
+    if (left.kind === right.kind) {
+      if (left.kind === 'activity' && right.kind === 'activity') return left.activity.seq - right.activity.seq
+      return left.id.localeCompare(right.id)
+    }
+    return left.kind === 'message' ? -1 : 1
+  })
 }
 
 function clampChatDockWidth(width: number): number {
@@ -158,15 +218,143 @@ function MessageBlock({
   )
 }
 
+function hasTechnicalDetails(details: AgentTaskTechnicalDetails | undefined): details is AgentTaskTechnicalDetails {
+  return Boolean(details && (details.errorCode || details.operationId || details.receiptId || details.cost))
+}
+
+function formatTechnicalCost(details: NonNullable<AgentTaskTechnicalDetails['cost']>): string {
+  const amount = (details.amountMicros / 1_000_000).toFixed(6)
+  const accuracyLabels = {
+    actual: '实际',
+    estimated: '估算',
+    billing_indeterminate: '待确认',
+  } as const
+  return details.accuracy ? `$${amount}（${accuracyLabels[details.accuracy]}）` : `$${amount}`
+}
+
+function ActivityIcon({ task, activity }: { task: AgentTask; activity: AgentTaskPublicEvent }) {
+  const isCurrentRunningActivity = task.status === 'running' && task.activities?.at(-1)?.eventKey === activity.eventKey
+  if (RUNNING_ACTIVITY_TYPES.has(activity.type) && isCurrentRunningActivity) {
+    return (
+      <LoaderCircle
+        className='size-3.5 animate-spin text-[var(--ed-cyan)] motion-reduce:animate-none'
+        aria-hidden='true'
+      />
+    )
+  }
+  if (FAILED_ACTIVITY_TYPES.has(activity.type)) {
+    return <AlertCircle className='size-3.5 text-[var(--ed-error)]' aria-hidden='true' />
+  }
+  if (WARNING_ACTIVITY_TYPES.has(activity.type)) {
+    return <MessageCircleQuestion className='size-3.5 text-[var(--ed-warning)]' aria-hidden='true' />
+  }
+  return <CheckCircle2 className='size-3.5 text-[var(--ed-success)]' aria-hidden='true' />
+}
+
+function AgentActivityBlock({
+  task,
+  activity,
+  index,
+  reduceMotion,
+  continuation,
+}: {
+  task: AgentTask
+  activity: AgentTaskPublicEvent
+  index: number
+  reduceMotion: boolean
+  continuation: boolean
+}) {
+  const content =
+    activity.type === 'waiting_user' ? (task.pendingQuestion?.prompt ?? activity.summary) : activity.summary
+
+  return (
+    <motion.article
+      data-agent-activity={activity.type}
+      className={continuation ? '-mt-3 group' : 'group'}
+      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: reduceMotion ? 0 : 0.2,
+        delay: reduceMotion ? 0 : Math.min(index * 0.025, 0.12),
+        ease: [0.16, 1, 0.3, 1],
+      }}
+    >
+      {continuation ? null : (
+        <div className='flex items-center gap-2'>
+          <BrandMark compact className='[&>span]:size-6 [&_img]:h-[14px] [&_img]:w-[17px]' />
+          <span className='text-[11px] font-medium text-[var(--ed-ink-soft)]'>EasyDashboard Agent</span>
+          <time className='ml-auto font-mono text-[9px] text-[var(--ed-ink-faint)]'>
+            {formatCompactTime(activity.createdAt)}
+          </time>
+        </div>
+      )}
+      <div className={`ml-8 border-l border-[var(--ed-line)] pl-3.5 ${continuation ? '' : 'mt-2'}`}>
+        <div className='flex items-start gap-2 text-[12px] leading-5 text-[var(--ed-ink-soft)]'>
+          <span className='mt-[3px] shrink-0'>
+            <ActivityIcon task={task} activity={activity} />
+          </span>
+          <p className='min-w-0 flex-1 whitespace-pre-wrap'>{content}</p>
+        </div>
+        {hasTechnicalDetails(activity.technicalDetails) ? (
+          <details className='mt-2 text-[9px] text-[var(--ed-ink-faint)]'>
+            <summary className='w-fit cursor-pointer select-none hover:text-[var(--ed-ink-muted)]'>技术信息</summary>
+            <dl className='mt-1.5 space-y-0.5 rounded-[5px] bg-[var(--ed-panel)] p-2 font-mono'>
+              {activity.technicalDetails.errorCode ? (
+                <div>
+                  <dt className='inline'>错误码：</dt>
+                  <dd className='inline break-all'>{activity.technicalDetails.errorCode}</dd>
+                </div>
+              ) : null}
+              {activity.technicalDetails.operationId ? (
+                <div>
+                  <dt className='inline'>执行标识：</dt>
+                  <dd className='inline break-all'>{activity.technicalDetails.operationId}</dd>
+                </div>
+              ) : null}
+              {activity.technicalDetails.receiptId ? (
+                <div>
+                  <dt className='inline'>凭据标识：</dt>
+                  <dd className='inline break-all'>{activity.technicalDetails.receiptId}</dd>
+                </div>
+              ) : null}
+              {activity.technicalDetails.cost ? (
+                <div>
+                  <dt className='inline'>费用：</dt>
+                  <dd className='inline'>{formatTechnicalCost(activity.technicalDetails.cost)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </details>
+        ) : null}
+      </div>
+    </motion.article>
+  )
+}
+
 function ConversationTimeline({
   conversation,
   reduceMotion,
 }: { conversation: AgentConversation; reduceMotion: boolean }) {
+  const items = resolveConversationTimelineItems(conversation)
   return (
     <div aria-live='polite' aria-relevant='additions text' className='space-y-6 px-5 py-6'>
-      {conversation.messages.map((message, index) => (
-        <MessageBlock key={message.id} message={message} index={index} reduceMotion={reduceMotion} />
-      ))}
+      {items.map((item, index) => {
+        if (item.kind === 'message') {
+          return <MessageBlock key={item.id} message={item.message} index={index} reduceMotion={reduceMotion} />
+        }
+        const previousItem = items[index - 1]
+        const continuation = previousItem?.kind === 'activity' && previousItem.task.id === item.task.id
+        return (
+          <AgentActivityBlock
+            key={item.id}
+            task={item.task}
+            activity={item.activity}
+            index={index}
+            reduceMotion={reduceMotion}
+            continuation={continuation}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -262,8 +450,8 @@ export function ConversationThread({
   const currentTaskId = conversation?.tasks.at(-1)?.id
   const latestTask = conversation?.tasks.at(-1)
   const conversationId = conversation?.id ?? null
-  const latestMessage = conversation?.messages.at(-1)
-  const latestMessageRevision = latestMessage ? `${latestMessage.id}:${latestMessage.content}` : null
+  const latestTimelineItem = conversation ? resolveConversationTimelineItems(conversation).at(-1) : undefined
+  const latestMessageRevision = latestTimelineItem?.id ?? null
   const budgetNeedsAttention =
     budgetUsage !== null && (budgetUsage.task.state !== 'ok' || budgetUsage.projectMonth.state !== 'ok')
   const budgetRequestKey =
@@ -404,9 +592,7 @@ export function ConversationThread({
                 <span className='block truncate text-[13px] font-medium text-[var(--ed-ink)]'>
                   {conversation?.title ?? '新对话'}
                 </span>
-                <span className='mt-0.5 block text-[10px] text-[var(--ed-ink-faint)]'>
-                  仅你可见 · {conversation?.messages.length ?? 0} 条消息
-                </span>
+                <span className='mt-0.5 block text-[10px] text-[var(--ed-ink-faint)]'>仅你可见 · 同一对话持续执行</span>
               </span>
               <ChevronDown
                 className='size-3.5 shrink-0 text-[var(--ed-ink-faint)] transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none'
@@ -464,7 +650,7 @@ export function ConversationThread({
         onScroll={handleMessageScroll}
         className='min-h-0 flex-1 overscroll-contain overflow-y-auto bg-[var(--ed-rail)]'
       >
-        {conversation && conversation.messages.length > 0 ? (
+        {conversation && resolveConversationTimelineItems(conversation).length > 0 ? (
           <ConversationTimeline conversation={conversation} reduceMotion={Boolean(reduceMotion)} />
         ) : (
           <div className='grid h-full min-h-72 place-items-center px-6 py-8'>
@@ -528,14 +714,14 @@ export function ConversationThread({
         </aside>
       ) : null}
 
-      {latestTask && showTaskProgress ? (
+      {shouldShowTaskTodo(latestTask, showTaskProgress) ? (
         <div
           data-agent-todo='current'
           className='shrink-0 border-t border-[var(--ed-line)] bg-[var(--ed-panel)] px-3.5 py-2.5'
         >
           <TaskThread
             task={latestTask}
-            defaultExpanded={!['complete', 'canceled'].includes(latestTask.status)}
+            defaultExpanded
             rollbackPending={rollbackPendingOperationId === latestTask.run?.operationId}
             rolledBack={latestTask.run ? rolledBackOperationIds.has(latestTask.run.operationId) : false}
             onRollback={onRollback}
