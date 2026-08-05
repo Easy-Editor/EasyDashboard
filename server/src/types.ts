@@ -1432,6 +1432,13 @@ export interface Repository {
     projectId: string,
     operationId: string,
   ): Promise<AgentScreenshotArtifactDownloadContract | null>
+  persistAgentScreenshotArtifact?(
+    actorId: string,
+    storageSecret: string,
+    projectId: string,
+    operationId: string,
+    bytes: Uint8Array,
+  ): Promise<AgentScreenshotArtifactRecord | 'conflict' | 'invalid_state' | null>
   reserveAgentRunCost?(
     actorId: string,
     input: {

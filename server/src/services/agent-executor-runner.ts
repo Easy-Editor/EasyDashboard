@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { z } from 'zod'
 
 const MAX_STDOUT_BYTES = 1024 * 1024
@@ -66,6 +69,7 @@ export type AgentExecutorRunnerErrorCode =
   | 'EXECUTOR_OPERATION_MISMATCH'
   | 'EXECUTOR_OUTPUT_LIMIT_EXCEEDED'
   | 'EXECUTOR_PROCESS_FAILED'
+  | 'EXECUTOR_SCREENSHOT_ARTIFACT_FAILED'
   | 'EXECUTOR_TIMEOUT'
   | 'EXECUTOR_UNCOMMITTED_OUTCOME'
 
@@ -113,6 +117,8 @@ export class AgentExecutorAbortedError extends Error {
 }
 
 export interface AgentExecutorWorkflowInput {
+  actorId: string
+  projectId: string
   operationId: string
   grantToken: string
   recoveryGrantToken: string
@@ -129,6 +135,12 @@ export interface AgentExecutorRunnerOptions {
   apiOrigin?: string
   timeoutMs?: number
   spawnProcess?: typeof spawn
+  persistScreenshotArtifact?: (input: {
+    actorId: string
+    projectId: string
+    operationId: string
+    bytes: Uint8Array
+  }) => Promise<void>
 }
 
 function endpointSet(apiOrigin: string, operationId: string) {
@@ -177,108 +189,148 @@ export function createAgentExecutorRunner(options: AgentExecutorRunnerOptions): 
     async run(input) {
       if (input.signal?.aborted) throw new AgentExecutorAbortedError(abortReason(input.signal))
       const { endpoints } = endpointSet(honoOrigin, input.operationId)
-      const child = (options.spawnProcess ?? spawn)(process.execPath, [options.cliPath as string], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...executorEnvironment(process.env),
-          EASY_EDITOR_DOCUMENT_EXECUTOR_DASHBOARD_URL: dashboardUrl.toString(),
-          EASY_EDITOR_DOCUMENT_EXECUTOR_DEBUG: process.env.NODE_ENV === 'production' ? '0' : '1',
-        },
-      })
-      let stdout = ''
-      let stdoutBytes = 0
-      let stderrBytes = 0
-      const stdoutHash = createHash('sha256')
-      const stderrHash = createHash('sha256')
-      let overflow = false
-      child.stdout.on('data', chunk => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        stdoutBytes += buffer.byteLength
-        stdoutHash.update(buffer)
-        if (overflow) return
-        stdout += buffer.toString()
-        if (stdoutBytes > MAX_STDOUT_BYTES) {
-          overflow = true
-          child.kill('SIGKILL')
-        }
-      })
-      child.stderr.on('data', chunk => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        stderrBytes += buffer.byteLength
-        stderrHash.update(buffer)
-      })
-
-      let aborted: AgentExecutorAbortReason | null = null
-      const abortChild = () => {
-        if (!input.signal || aborted) return
-        aborted = abortReason(input.signal)
-        try {
-          child.kill('SIGKILL')
-        } catch {
-          // The close/error path below remains authoritative if the process exited concurrently.
-        }
-      }
-      input.signal?.addEventListener('abort', abortChild, { once: true })
-      if (input.signal?.aborted) abortChild()
-
-      let timedOut = false
-      const timeout = setTimeout(() => {
-        timedOut = true
-        child.kill('SIGKILL')
-      }, options.timeoutMs ?? 120_000)
-      child.stdin.end(
-        JSON.stringify({
-          operationId: input.operationId,
-          grantToken: input.grantToken,
-          recoveryGrantToken: input.recoveryGrantToken,
-          honoOrigin,
-          endpoints,
-        }),
-      )
-
-      let exitCode: number | null
+      const artifactDirectory = options.persistScreenshotArtifact
+        ? await mkdtemp(join(tmpdir(), 'easy-dashboard-agent-screenshot-'))
+        : null
+      const screenshotPath = artifactDirectory ? join(artifactDirectory, 'render.png') : null
       try {
-        ;[exitCode] = (await once(child, 'close')) as [number | null]
-      } finally {
-        clearTimeout(timeout)
-        input.signal?.removeEventListener('abort', abortChild)
-      }
-      if (aborted) throw new AgentExecutorAbortedError(aborted)
-      const diagnostics: AgentExecutorRunnerDiagnostics = {
-        exitCode,
-        stdoutBytes,
-        stdoutSha256: stdoutHash.digest('hex'),
-        stderrBytes,
-        stderrSha256: stderrHash.digest('hex'),
-      }
-      if (timedOut) throw safeRunnerError('EXECUTOR_TIMEOUT', diagnostics)
-      if (overflow) throw safeRunnerError('EXECUTOR_OUTPUT_LIMIT_EXCEEDED', diagnostics)
+        const child = (options.spawnProcess ?? spawn)(process.execPath, [options.cliPath as string], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: {
+            ...executorEnvironment(process.env),
+            EASY_EDITOR_DOCUMENT_EXECUTOR_DASHBOARD_URL: dashboardUrl.toString(),
+            EASY_EDITOR_DOCUMENT_EXECUTOR_DEBUG: process.env.NODE_ENV === 'production' ? '0' : '1',
+            ...(screenshotPath ? { EASY_EDITOR_DOCUMENT_EXECUTOR_SCREENSHOT_PATH: screenshotPath } : {}),
+          },
+        })
+        let stdout = ''
+        let stdoutBytes = 0
+        let stderrBytes = 0
+        const stdoutHash = createHash('sha256')
+        const stderrHash = createHash('sha256')
+        let overflow = false
+        child.stdout.on('data', chunk => {
+          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+          stdoutBytes += buffer.byteLength
+          stdoutHash.update(buffer)
+          if (overflow) return
+          stdout += buffer.toString()
+          if (stdoutBytes > MAX_STDOUT_BYTES) {
+            overflow = true
+            child.kill('SIGKILL')
+          }
+        })
+        child.stderr.on('data', chunk => {
+          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+          stderrBytes += buffer.byteLength
+          stderrHash.update(buffer)
+        })
 
-      let parsedJson: unknown
-      try {
-        parsedJson = JSON.parse(stdout) as unknown
-      } catch {
-        throw safeRunnerError(exitCode === 0 ? 'EXECUTOR_INVALID_OUTPUT' : 'EXECUTOR_PROCESS_FAILED', diagnostics)
-      }
-      const parsedFailure = cliFailureSchema.safeParse(parsedJson)
-      if (parsedFailure.success) {
-        throw safeRunnerError('EXECUTOR_CLI_REPORTED_FAILURE', diagnostics, parsedFailure.data.failure)
-      }
-      const parsed = workflowResultSchema.safeParse(parsedJson)
-      if (!parsed.success || exitCode !== 0 || parsed.data.outcome.status !== 'committed') {
-        throw safeRunnerError(
-          exitCode !== 0
-            ? 'EXECUTOR_PROCESS_FAILED'
-            : parsed.success
-              ? 'EXECUTOR_UNCOMMITTED_OUTCOME'
-              : 'EXECUTOR_INVALID_WORKFLOW_RESULT',
-          diagnostics,
+        let aborted: AgentExecutorAbortReason | null = null
+        const abortChild = () => {
+          if (!input.signal || aborted) return
+          aborted = abortReason(input.signal)
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // The close/error path below remains authoritative if the process exited concurrently.
+          }
+        }
+        input.signal?.addEventListener('abort', abortChild, { once: true })
+        if (input.signal?.aborted) abortChild()
+
+        let timedOut = false
+        const timeout = setTimeout(() => {
+          timedOut = true
+          child.kill('SIGKILL')
+        }, options.timeoutMs ?? 120_000)
+        child.stdin.end(
+          JSON.stringify({
+            operationId: input.operationId,
+            grantToken: input.grantToken,
+            recoveryGrantToken: input.recoveryGrantToken,
+            honoOrigin,
+            endpoints,
+          }),
         )
+
+        let exitCode: number | null
+        try {
+          ;[exitCode] = (await once(child, 'close')) as [number | null]
+        } finally {
+          clearTimeout(timeout)
+          input.signal?.removeEventListener('abort', abortChild)
+        }
+        if (aborted) throw new AgentExecutorAbortedError(aborted)
+        const diagnostics: AgentExecutorRunnerDiagnostics = {
+          exitCode,
+          stdoutBytes,
+          stdoutSha256: stdoutHash.digest('hex'),
+          stderrBytes,
+          stderrSha256: stderrHash.digest('hex'),
+        }
+        if (timedOut) throw safeRunnerError('EXECUTOR_TIMEOUT', diagnostics)
+        if (overflow) throw safeRunnerError('EXECUTOR_OUTPUT_LIMIT_EXCEEDED', diagnostics)
+
+        let parsedJson: unknown
+        try {
+          parsedJson = JSON.parse(stdout) as unknown
+        } catch {
+          throw safeRunnerError(exitCode === 0 ? 'EXECUTOR_INVALID_OUTPUT' : 'EXECUTOR_PROCESS_FAILED', diagnostics)
+        }
+        const parsedFailure = cliFailureSchema.safeParse(parsedJson)
+        if (parsedFailure.success) {
+          throw safeRunnerError('EXECUTOR_CLI_REPORTED_FAILURE', diagnostics, parsedFailure.data.failure)
+        }
+        const parsed = workflowResultSchema.safeParse(parsedJson)
+        if (!parsed.success || exitCode !== 0 || parsed.data.outcome.status !== 'committed') {
+          throw safeRunnerError(
+            exitCode !== 0
+              ? 'EXECUTOR_PROCESS_FAILED'
+              : parsed.success
+                ? 'EXECUTOR_UNCOMMITTED_OUTCOME'
+                : 'EXECUTOR_INVALID_WORKFLOW_RESULT',
+            diagnostics,
+          )
+        }
+        if (parsed.data.outcome.operationId !== input.operationId) {
+          throw safeRunnerError('EXECUTOR_OPERATION_MISMATCH', diagnostics)
+        }
+        if (options.persistScreenshotArtifact && parsed.data.recovery.browserExecuted) {
+          let bytes: Uint8Array
+          try {
+            bytes = new Uint8Array(await readFile(screenshotPath as string))
+          } catch {
+            throw safeRunnerError('EXECUTOR_SCREENSHOT_ARTIFACT_FAILED', diagnostics)
+          }
+          const prepared = parsed.data.prepared
+          const expectedSha256 =
+            prepared && typeof prepared === 'object'
+              ? (prepared as { evidence?: { render?: { screenshotSha256?: unknown } } }).evidence?.render
+                  ?.screenshotSha256
+              : null
+          if (
+            typeof expectedSha256 !== 'string' ||
+            !/^[a-f0-9]{64}$/u.test(expectedSha256) ||
+            createHash('sha256').update(bytes).digest('hex') !== expectedSha256
+          ) {
+            throw safeRunnerError('EXECUTOR_SCREENSHOT_ARTIFACT_FAILED', diagnostics)
+          }
+          try {
+            await options.persistScreenshotArtifact({
+              actorId: input.actorId,
+              projectId: input.projectId,
+              operationId: input.operationId,
+              bytes,
+            })
+          } catch {
+            throw safeRunnerError('EXECUTOR_SCREENSHOT_ARTIFACT_FAILED', diagnostics)
+          }
+        }
+        return parsed.data
+      } finally {
+        if (artifactDirectory) await rm(artifactDirectory, { recursive: true, force: true }).catch(() => undefined)
       }
-      if (parsed.data.outcome.operationId !== input.operationId) {
-        throw safeRunnerError('EXECUTOR_OPERATION_MISMATCH', diagnostics)
-      }
-      return parsed.data
     },
   }
 }

@@ -83,6 +83,28 @@ describe('Agent executor environment', () => {
     })
   })
 
+  it('accepts an optional server-only Supabase secret for durable screenshot persistence', () => {
+    expect(parseEnv(baseEnv)).not.toHaveProperty('SUPABASE_SECRET_KEY')
+    expect(parseEnv({ ...baseEnv, SUPABASE_SECRET_KEY: 'sb_secret_worker_only_1234567890' })).toMatchObject({
+      SUPABASE_SECRET_KEY: 'sb_secret_worker_only_1234567890',
+    })
+    expect(() => parseEnv({ ...baseEnv, SUPABASE_SECRET_KEY: 'short' })).toThrow('SUPABASE_SECRET_KEY')
+  })
+
+  it('fails closed when production enables the durable executor without screenshot storage authority', () => {
+    expect(() =>
+      parseEnv({ ...baseEnv, NODE_ENV: 'production', AGENT_EXECUTOR_CLI_PATH: '/opt/document-executor.mjs' }),
+    ).toThrow('SUPABASE_SECRET_KEY')
+    expect(
+      parseEnv({
+        ...baseEnv,
+        NODE_ENV: 'production',
+        AGENT_EXECUTOR_CLI_PATH: '/opt/document-executor.mjs',
+        SUPABASE_SECRET_KEY: 'sb_secret_worker_only_1234567890',
+      }),
+    ).toMatchObject({ SUPABASE_SECRET_KEY: 'sb_secret_worker_only_1234567890' })
+  })
+
   it('accepts only a base64-encoded 256-bit model profile encryption key', () => {
     const encryptionKey = Buffer.alloc(32, 9).toString('base64')
     expect(parseEnv({ ...baseEnv, AGENT_MODEL_PROFILE_ENCRYPTION_KEY: encryptionKey })).toMatchObject({

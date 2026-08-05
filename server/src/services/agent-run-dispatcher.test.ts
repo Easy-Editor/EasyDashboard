@@ -143,7 +143,13 @@ function harness(input: {
       input.restoreExecution ??
       vi.fn(async () => ({
         operation: durable,
-        input: { operationId: 'operation-1', grantToken: 'grant', recoveryGrantToken: 'recovery' },
+        input: {
+          actorId: 'actor-1',
+          projectId: 'project-1',
+          operationId: 'operation-1',
+          grantToken: 'grant',
+          recoveryGrantToken: 'recovery',
+        },
       })),
     readOperation: input.readOperation ?? (async () => durable),
     planRun: input.planRun,
@@ -293,7 +299,13 @@ describe('Agent run dispatcher', () => {
   it('restores execution with the claimed dispatch attempt identity', async () => {
     const restoreExecution = vi.fn(async () => ({
       operation: operation('committed'),
-      input: { operationId: 'operation-1', grantToken: 'grant', recoveryGrantToken: 'recovery' },
+      input: {
+        actorId: 'actor-1',
+        projectId: 'project-1',
+        operationId: 'operation-1',
+        grantToken: 'grant',
+        recoveryGrantToken: 'recovery',
+      },
     }))
     const state = harness({ restoreExecution })
 

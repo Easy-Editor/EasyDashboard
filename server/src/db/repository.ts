@@ -965,6 +965,10 @@ export function createPgRepository(env: AppEnv): Repository {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       global: { headers: { Authorization: `Bearer ${accessToken}` } },
     }).storage.from(AGENT_SCREENSHOT_ARTIFACT_BUCKET)
+  const agentScreenshotArtifactAdminStorage = (secretKey: string) =>
+    createClient(env.SUPABASE_URL, secretKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    }).storage.from(AGENT_SCREENSHOT_ARTIFACT_BUCKET)
 
   const failAgentAssetUpload = async (actorId: string, accessToken: string, id: string) => {
     const failed = await withActor(actorId, async tx => {
@@ -4054,6 +4058,139 @@ export function createPgRepository(env: AppEnv): Repository {
         signedUrl: data.signedUrl,
         expiresIn: AGENT_SCREENSHOT_ARTIFACT_URL_EXPIRES_IN,
       }
+    },
+    async persistAgentScreenshotArtifact(actorId, storageSecret, projectId, operationId, bytes) {
+      if (
+        bytes.byteLength < 8 ||
+        bytes.byteLength > MAX_AGENT_SCREENSHOT_ARTIFACT_BYTES ||
+        bytes[0] !== 0x89 ||
+        bytes[1] !== 0x50 ||
+        bytes[2] !== 0x4e ||
+        bytes[3] !== 0x47 ||
+        bytes[4] !== 0x0d ||
+        bytes[5] !== 0x0a ||
+        bytes[6] !== 0x1a ||
+        bytes[7] !== 0x0a
+      ) {
+        return 'conflict'
+      }
+      const digest = createHash('sha256').update(bytes).digest('hex')
+      const reserved = await withActor(actorId, async tx => {
+        await lockAgentSpikeOperation(tx, actorId, operationId)
+        const operation = await selectAgentSpikeOperation(tx, actorId, operationId, true)
+        if (!operation || operation.projectId !== projectId) return null
+        if (!['prepared', 'committed'].includes(operation.status) || !operation.candidateDigest) {
+          return 'invalid_state' as const
+        }
+        const render =
+          operation.evidence?.render && typeof operation.evidence.render === 'object'
+            ? (operation.evidence.render as Record<string, unknown>)
+            : null
+        if (render?.screenshotSha256 !== digest) return 'conflict' as const
+        const draftVersion = operation.committedDraftVersion ?? operation.baseDraftVersion + 1
+        const [existing] = await tx
+          .select(agentScreenshotArtifactSelection)
+          .from(agentScreenshotArtifacts)
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.agentOperationId, operation.id),
+            ),
+          )
+          .for('update')
+          .limit(1)
+        if (existing) {
+          const exactReplay =
+            existing.projectId === projectId &&
+            existing.operationId === operationId &&
+            existing.candidateSha256 === operation.candidateDigest &&
+            existing.draftVersion === draftVersion &&
+            existing.contentType === 'image/png' &&
+            existing.size === bytes.byteLength &&
+            existing.sha256 === digest
+          if (!exactReplay || existing.status === 'failed') return 'conflict' as const
+          return existing
+        }
+        const artifactId = randomUUID()
+        const [artifact] = await tx
+          .insert(agentScreenshotArtifacts)
+          .values({
+            id: artifactId,
+            actorId,
+            projectId,
+            agentOperationId: operation.id,
+            operationId,
+            candidateSha256: operation.candidateDigest,
+            draftVersion,
+            contentType: 'image/png',
+            size: bytes.byteLength,
+            sha256: digest,
+            storagePath: `${actorId}/${projectId}/${artifactId}.png`,
+          })
+          .returning(agentScreenshotArtifactSelection)
+        if (!artifact) throw new Error('Agent screenshot artifact reservation returned no row')
+        return artifact
+      })
+      if (!reserved || reserved === 'conflict' || reserved === 'invalid_state') return reserved
+      if (reserved.status === 'ready') return reserved as AgentScreenshotArtifactRecord
+      const storage = agentScreenshotArtifactAdminStorage(storageSecret)
+      const { error: uploadError } = await storage.upload(reserved.storagePath, bytes, {
+        contentType: 'image/png',
+        upsert: true,
+      })
+      if (uploadError) throw new Error(uploadError.message || 'Unable to upload Agent screenshot artifact')
+      const { data: downloaded, error: downloadError } = await storage.download(reserved.storagePath)
+      if (downloadError || !downloaded) {
+        throw new Error(downloadError?.message || 'Unable to verify Agent screenshot artifact')
+      }
+      const persistedBytes = new Uint8Array(await downloaded.arrayBuffer())
+      if (
+        persistedBytes.byteLength !== reserved.size ||
+        createHash('sha256').update(persistedBytes).digest('hex') !== reserved.sha256
+      ) {
+        await storage.remove([reserved.storagePath]).catch(() => undefined)
+        await withActor(actorId, tx =>
+          tx
+            .update(agentScreenshotArtifacts)
+            .set({ status: 'failed', updatedAt: new Date() })
+            .where(
+              and(
+                eq(agentScreenshotArtifacts.id, reserved.id),
+                eq(agentScreenshotArtifacts.actorId, actorId),
+                eq(agentScreenshotArtifacts.status, 'uploading'),
+              ),
+            ),
+        )
+        return 'conflict'
+      }
+      return withActor(actorId, async tx => {
+        const completedAt = new Date()
+        const [completed] = await tx
+          .update(agentScreenshotArtifacts)
+          .set({ status: 'ready', completedAt, updatedAt: completedAt })
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.id, reserved.id),
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.status, 'uploading'),
+              eq(agentScreenshotArtifacts.sha256, digest),
+            ),
+          )
+          .returning(agentScreenshotArtifactSelection)
+        if (completed) return completed as AgentScreenshotArtifactRecord
+        const [replayed] = await tx
+          .select(agentScreenshotArtifactSelection)
+          .from(agentScreenshotArtifacts)
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.id, reserved.id),
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.status, 'ready'),
+            ),
+          )
+          .limit(1)
+        return (replayed as AgentScreenshotArtifactRecord | undefined) ?? null
+      })
     },
     enqueueAgentRunDispatch(actorId, input) {
       return withActor(actorId, async tx => {

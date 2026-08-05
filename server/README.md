@@ -147,8 +147,11 @@ declared byte size, and screenshot SHA-256. Completion downloads the private
 object and verifies its PNG signature, size, content type, and digest before it
 becomes readable. These routes require the authenticated project session; the
 Document Executor grant is intentionally not a Supabase Storage credential.
-The runner-to-upload handoff must therefore be supplied by the authenticated
-orchestration layer before screenshot bytes are persisted end to end.
+For durable execution, configure `SUPABASE_SECRET_KEY` only on the trusted Node
+worker. The parent runner gives the child a private one-use temporary path,
+verifies the returned PNG bytes against the prepared screenshot digest, and
+persists them through the server-only Storage client. The secret is never sent
+to Chromium, the Executor child process, or a browser response.
 
 The real PostgreSQL M0 integration test is opt-in. Set
 `AGENT_SPIKE_TEST_DATABASE_URL` to an isolated runtime-test database and
@@ -172,7 +175,9 @@ pnpm --dir server start:worker
 ```
 
 The API deployment and worker must use the same `DATABASE_URL` and the same
-applicable `AGENT_EXECUTOR_*` settings. Send the worker `SIGINT` or `SIGTERM`
+applicable `AGENT_EXECUTOR_*` settings. The worker also requires
+`SUPABASE_SECRET_KEY` when durable screenshot artifacts are enabled. Send the
+worker `SIGINT` or `SIGTERM`
 for graceful shutdown; it stops polling, aborts in-flight executor work, and
 waits for the dispatcher to settle before exiting. A Vercel Function alone can
 enqueue Agent work, but cannot execute it.

@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import { writeFile } from 'node:fs/promises'
 import { PassThrough } from 'node:stream'
 import { inspect } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
@@ -11,6 +12,8 @@ import {
 } from './agent-executor-runner.js'
 
 const workflowInput = {
+  actorId: 'actor-1',
+  projectId: 'project-1',
   operationId: 'operation-1',
   grantToken: 'grant-token',
   recoveryGrantToken: 'recovery-grant-token',
@@ -178,6 +181,40 @@ describe('Agent executor runner existing behavior', () => {
     const runner = createRunner(spawnProcess)
 
     await expect(runner.run(workflowInput)).resolves.toEqual(expected)
+  })
+
+  it('persists exact screenshot bytes through the parent worker without exposing its storage secret', async () => {
+    const processHarness = createHangingProcess()
+    const screenshot = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+    const screenshotSha256 = createHash('sha256').update(screenshot).digest('hex')
+    const expected = {
+      prepared: { evidence: { render: { screenshotSha256 } } },
+      outcome: { operationId: workflowInput.operationId, status: 'committed' },
+      recovery: { classification: 'executed', browserExecuted: true },
+    }
+    const persistScreenshotArtifact = vi.fn(async () => undefined)
+    let spawnedEnvironment: NodeJS.ProcessEnv | undefined
+    const spawnProcess = vi.fn((_command: string, _args: readonly string[], options: { env?: NodeJS.ProcessEnv }) => {
+      spawnedEnvironment = options.env
+      queueMicrotask(async () => {
+        await writeFile(options.env?.EASY_EDITOR_DOCUMENT_EXECUTOR_SCREENSHOT_PATH as string, screenshot)
+        processHarness.stdout.write(JSON.stringify(expected))
+        processHarness.child.emit('close', 0, null)
+      })
+      return processHarness.child
+    }) as unknown as typeof spawn
+    const runner = createRunner(spawnProcess, { persistScreenshotArtifact })
+
+    await expect(runner.run(workflowInput)).resolves.toEqual(expected)
+    expect(persistScreenshotArtifact).toHaveBeenCalledWith({
+      actorId: workflowInput.actorId,
+      projectId: workflowInput.projectId,
+      operationId: workflowInput.operationId,
+      bytes: new Uint8Array(screenshot),
+    })
+    const environment = spawnedEnvironment
+    expect(environment).toHaveProperty('EASY_EDITOR_DOCUMENT_EXECUTOR_SCREENSHOT_PATH')
+    expect(Object.values(environment ?? {})).not.toContain('storage-secret')
   })
 
   it('still terminates a timed-out executor with the existing runner error', async () => {

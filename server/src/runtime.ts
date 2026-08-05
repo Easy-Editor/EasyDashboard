@@ -84,11 +84,29 @@ function operationBinding(operation: {
 export function createRuntime() {
   const env = parseEnv()
   const repository = createPgRepository(env)
+  const screenshotStorageSecret = env.SUPABASE_SECRET_KEY
+  const persistAgentScreenshotArtifact = repository.persistAgentScreenshotArtifact?.bind(repository)
   const runner = createAgentExecutorRunner({
     cliPath: env.AGENT_EXECUTOR_CLI_PATH,
     dashboardUrl: env.AGENT_EXECUTOR_DASHBOARD_URL,
     apiOrigin: env.AGENT_EXECUTOR_API_ORIGIN ?? env.APP_ORIGIN,
     timeoutMs: env.AGENT_EXECUTOR_TIMEOUT_MS ?? 120_000,
+    ...(screenshotStorageSecret && persistAgentScreenshotArtifact
+      ? {
+          persistScreenshotArtifact: async input => {
+            const persisted = await persistAgentScreenshotArtifact(
+              input.actorId,
+              screenshotStorageSecret,
+              input.projectId,
+              input.operationId,
+              input.bytes,
+            )
+            if (!persisted || persisted === 'conflict' || persisted === 'invalid_state') {
+              throw new Error('Agent screenshot artifact could not be persisted')
+            }
+          },
+        }
+      : {}),
   })
   const agentSpike = {
     repository,
@@ -106,6 +124,8 @@ export function createRuntime() {
             return {
               operation: restored.operation,
               input: {
+                actorId: restored.operation.actorId,
+                projectId: restored.operation.projectId,
                 operationId: restored.operation.operationId,
                 grantToken: restored.grant,
                 recoveryGrantToken: restored.recoveryGrant,
