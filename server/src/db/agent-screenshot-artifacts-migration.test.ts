@@ -8,6 +8,15 @@ const migration = readFileSync(
   ),
   'utf8',
 )
+const hardeningMigration = readFileSync(
+  fileURLToPath(
+    new URL(
+      '../../../supabase/migrations/20260805121000_harden_agent_functions_and_screenshot_index.sql',
+      import.meta.url,
+    ),
+  ),
+  'utf8',
+)
 
 describe('Agent executor screenshot artifact migration', () => {
   it('keeps screenshots in their own table and private PNG-only bucket', () => {
@@ -52,5 +61,14 @@ describe('Agent executor screenshot artifact migration', () => {
     expect(migration).toContain('artifact.actor_id = (select auth.uid())')
     expect(migration).toContain("app.can_access_agent_screenshot_object(name, 'uploading')")
     expect(migration).toContain("app.can_access_agent_screenshot_object(name, 'failed')")
+  })
+
+  it('pins legacy Agent trigger search paths and indexes the artifact operation foreign key', () => {
+    expect(hardeningMigration.match(/set search_path = ''/gu)).toHaveLength(4)
+    expect(hardeningMigration).toContain('alter function app.guard_agent_spike_operation_update()')
+    expect(hardeningMigration).toContain('alter function app.guard_project_agent_model_configuration()')
+    expect(hardeningMigration).toContain('alter function app.guard_agent_provider_attempt_update()')
+    expect(hardeningMigration).toContain('alter function app.guard_agent_conversation_model_binding_update()')
+    expect(hardeningMigration).toContain('on app.agent_screenshot_artifacts(agent_operation_id)')
   })
 })
