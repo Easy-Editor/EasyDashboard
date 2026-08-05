@@ -20,6 +20,12 @@ import {
   agentTaskPlanningDecisionSchema,
   requestAgentTaskPlanningDecision,
 } from '../agent/task-planning-model.js'
+import {
+  AgentVisualAcceptanceProviderError,
+  AgentVisualAcceptanceProviderResponseError,
+  agentVisualAcceptanceDecisionSchema,
+  requestAgentVisualAcceptance,
+} from '../agent/visual-acceptance-model.js'
 import { canonicalJsonSha256 } from '../db/agent-stage-commit.js'
 import type { AppEnv } from '../env.js'
 import { ApiError } from '../http.js'
@@ -58,6 +64,7 @@ type StepRuntimeEnv = Pick<
   | 'EASY_EDITOR_AGENT_MODEL'
   | 'AGENT_MODEL_PROFILE_ENCRYPTION_KEY'
   | 'AGENT_BILLING_MAX_USD_PER_1M_TOKENS'
+  | 'SUPABASE_SECRET_KEY'
 >
 
 export interface AgentTaskStepRuntimeOptions {
@@ -68,6 +75,7 @@ export interface AgentTaskStepRuntimeOptions {
   workerId: string
   model?: typeof requestAgentChangeSet
   planningModel?: typeof requestAgentTaskPlanningDecision
+  visualAcceptanceModel?: typeof requestAgentVisualAcceptance
   resolveRuntime?: typeof resolveAgentModelRuntime
   issueOperation?: (
     options: AgentSpikeRouteOptions,
@@ -110,6 +118,36 @@ function stringValue(value: unknown): string | null {
 
 function nonnegativeInteger(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
+function visualFindingCode(value: unknown): string {
+  const normalized = typeof value === 'string' ? value.toLowerCase().replace(/[^a-z0-9_-]+/gu, '_') : ''
+  return normalized.slice(0, 64).replace(/^_+|_+$/gu, '') || 'acceptance_failed'
+}
+
+function unfinishedDocumentFindings(value: unknown): Array<Readonly<Record<string, unknown>>> {
+  const findings: Array<Readonly<Record<string, unknown>>> = []
+  const visit = (candidate: unknown, depth: number) => {
+    if (depth > 12 || findings.length >= 8) return
+    if (typeof candidate === 'string') {
+      if (/(?:当前待新增|待配置|\bTODO\b|执行记录\s*0?[1-9])/iu.test(candidate)) {
+        findings.push({
+          code: 'unfinished_placeholder',
+          severity: 'blocking',
+          description: '最终文档仍包含待新增、待配置、TODO 或执行记录类未完成占位文案。',
+        })
+      }
+      return
+    }
+    if (Array.isArray(candidate)) {
+      for (const item of candidate) visit(item, depth + 1)
+      return
+    }
+    const object = record(candidate)
+    if (object) for (const item of Object.values(object)) visit(item, depth + 1)
+  }
+  visit(value, 0)
+  return findings
 }
 
 function attemptCounters(
@@ -158,6 +196,12 @@ function decisionCheckpoint(value: Record<string, unknown> | null | undefined) {
   return parsed.success ? parsed.data : null
 }
 
+function visualAcceptanceCheckpoint(value: Record<string, unknown> | null | undefined) {
+  if (!value || value.purpose !== 'visual_acceptance') return null
+  const parsed = agentVisualAcceptanceDecisionSchema.safeParse(value.output)
+  return parsed.success ? parsed.data : null
+}
+
 function runtimeConfigDigest(runtime: ResolvedAgentModelRuntime): string {
   return canonicalJsonSha256({
     provider: runtime.provider,
@@ -189,6 +233,16 @@ function operationObservation(operation: AgentSpikeOperationRecord): Readonly<Re
         : {}),
     },
   }
+}
+
+const verificationStepPattern = /(?:预览|检查|核验|验收|确认|验证|preview|inspect|review|verify|validation)/iu
+const mutationStepPattern =
+  /(?:调整|修改|新增|添加|创建|搭建|删除|移除|移动|缩放|配置|绑定|修复|替换|更新|insert|set|remove|move|resize|create|build|change|update|fix)/iu
+
+function isVerificationOnlyStep(step: NonNullable<AgentTaskRunDetailRecord['activePlan']>['steps'][number]): boolean {
+  if (verificationStepPattern.test(step.title) && !mutationStepPattern.test(step.title)) return true
+  const description = `${step.title}\n${JSON.stringify(step.intent)}`
+  return verificationStepPattern.test(description) && !mutationStepPattern.test(description)
 }
 
 function previewEvidence(evidence: Record<string, unknown> | null): {
@@ -331,10 +385,31 @@ async function frozenTaskContext(
   project: ProjectRecord,
 ) {
   const frozen = persistedPlanningInputSchema.parse(planningInput)
+  const candidateClarification = record(transition.input.userClarification)
+  const candidateQuestion = record(candidateClarification?.question)
+  const executionClarification =
+    candidateClarification &&
+    candidateQuestion &&
+    stringValue(candidateQuestion.id) &&
+    stringValue(candidateQuestion.text) &&
+    stringValue(candidateClarification.response) &&
+    Array.isArray(candidateClarification.attachmentIds) &&
+    candidateClarification.attachmentIds.every(value => typeof value === 'string') &&
+    Array.isArray(candidateClarification.images)
+      ? [
+          {
+            question: { id: candidateQuestion.id as string, text: candidateQuestion.text as string },
+            response: candidateClarification.response as string,
+            attachmentIds: candidateClarification.attachmentIds as string[],
+            images: candidateClarification.images as Array<{ assetId: string; sha256: string }>,
+          },
+        ]
+      : []
+  const clarificationHistory = [...frozen.clarificationHistory, ...executionClarification]
   const attachmentIds = [
     ...new Set([
       ...frozen.attachmentIds,
-      ...frozen.clarificationHistory.flatMap(clarification => clarification.attachmentIds),
+      ...clarificationHistory.flatMap(clarification => clarification.attachmentIds),
     ]),
   ]
   const attachments = await resolveAttachments(
@@ -353,9 +428,10 @@ async function frozenTaskContext(
   )
   const expectedImages = [
     ...new Map(
-      [...frozen.providerInputSnapshot.images, ...frozen.clarificationHistory.flatMap(item => item.images)].map(
-        image => [image.assetId, image],
-      ),
+      [...frozen.providerInputSnapshot.images, ...clarificationHistory.flatMap(item => item.images)].map(image => [
+        image.assetId,
+        image,
+      ]),
     ).values(),
   ]
   if (
@@ -366,10 +442,10 @@ async function frozenTaskContext(
   ) {
     throw new ApiError(409, 'AGENT_TASK_SNAPSHOT_INVALID', 'Frozen Agent image inputs changed after enqueue')
   }
-  const sourceSnapshot = frozen.clarificationHistory.length
+  const sourceSnapshot = clarificationHistory.length
     ? createAgentClarificationHistoryProviderInputSnapshot(
         frozen.providerInputSnapshot,
-        frozen.clarificationHistory,
+        clarificationHistory,
         attachments,
         images.map(image => ({ assetId: image.assetId, sha256: image.sha256 })),
       )
@@ -406,6 +482,7 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
   const now = options.now ?? (() => new Date())
   const model = options.model ?? requestAgentChangeSet
   const planningModel = options.planningModel ?? requestAgentTaskPlanningDecision
+  const visualAcceptanceModel = options.visualAcceptanceModel ?? requestAgentVisualAcceptance
   const resolveRuntime = options.resolveRuntime ?? resolveAgentModelRuntime
   const issueOperation = options.issueOperation ?? issueAgentSpikeOperation
 
@@ -751,6 +828,32 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         throw new ApiError(409, 'AGENT_MODEL_BINDING_DRIFT', 'Conversation model binding changed after task creation')
       }
 
+      if (isVerificationOnlyStep(step)) {
+        const priorOperationId = detail.activePlan?.steps
+          .filter(candidate => candidate.ordinal < step.ordinal && candidate.status === 'passed')
+          .sort((left, right) => right.ordinal - left.ordinal)
+          .map(candidate => stringValue(candidate.lastObservation?.operationId))
+          .find(Boolean)
+        const priorOperation = priorOperationId
+          ? await options.repository.getAgentSpikeOperationOutcome(transition.actorId, priorOperationId)
+          : null
+        if (priorOperation?.status === 'committed' && priorOperation.committedDraftVersion === project.draftVersion) {
+          return {
+            decisionKind: 'verify_current_document',
+            operationId: priorOperation.operationId,
+            observation: { ...operationObservation(priorOperation), verificationOnly: true },
+            recoveryClass: 'committed',
+            ...attemptCounters(detail, transition),
+          }
+        }
+        return {
+          decisionKind: 'verify_current_document_unavailable',
+          observation: { outcome: 'rejected_stale', verificationOnly: true },
+          recoveryClass: 'replan_remaining',
+          ...attemptCounters(detail, transition),
+        }
+      }
+
       const priorOperationId = operationIdFromTransition(transition)
       if (priorOperationId) {
         const priorOperation = await options.repository.getAgentSpikeOperationOutcome(
@@ -807,13 +910,18 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
 
       if (!output) {
         const recoveryObservation = observationFromTransition(transition)
+        const visualRepair =
+          recoveryFromTransition(transition) === 'revise_step' &&
+          stringValue(recoveryObservation.outcome) === 'visual_acceptance_failed'
         const missingMaterialIds = Array.isArray(record(recoveryObservation.preview)?.missingMaterialIds)
           ? (record(recoveryObservation.preview)?.missingMaterialIds as unknown[]).filter(
               value => typeof value === 'string',
             )
           : []
         const prompt = [
-          `仅执行当前步骤：${step.title}`,
+          visualRepair
+            ? `执行最终视觉验收修订。原步骤“${step.title}”的业务目标已完成；现在必须修复验收观察中的 blocking findings。只修改这些 findings 直接涉及的节点或布局属性，不要重复原步骤的已完成操作。`
+            : `仅执行当前步骤：${step.title}`,
           `语义意图：${JSON.stringify(step.intent)}`,
           ...(Object.keys(recoveryObservation).length
             ? [`上一次执行观察：${JSON.stringify(recoveryObservation)}`]
@@ -1133,6 +1241,204 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
       ) {
         return { action: 'terminal', summary: '最终执行证据未通过一致性校验。', code: 'final_evidence_invalid' }
       }
+      const deterministicFindings = unfinishedDocumentFindings(project.draftSchema)
+      if (deterministicFindings.length) {
+        return {
+          action: 'revise',
+          summary: '最终文档仍包含未完成的占位内容。',
+          code: 'final_visual_unfinished_placeholder',
+          findings: deterministicFindings,
+        }
+      }
+      if (!options.env.SUPABASE_SECRET_KEY) {
+        return {
+          action: 'terminal',
+          summary: '当前模型不支持最终截图验收。',
+          code: 'final_visual_capability_unavailable',
+        }
+      }
+      const screenshotInput = await requireRepositoryMethod(
+        options.repository.getAgentScreenshotArtifactModelInput,
+        'getAgentScreenshotArtifactModelInput',
+      )(transition.actorId, options.env.SUPABASE_SECRET_KEY!, transition.projectId, latest.operationId)
+      if (!screenshotInput || screenshotInput === 'oversize') {
+        return { action: 'terminal', summary: '最终截图证据不可用于视觉验收。', code: 'final_screenshot_unavailable' }
+      }
+      const [runtime, planningInput] = await Promise.all([
+        resolveRuntime(options, transition.actorId, transition.projectId),
+        requireRepositoryMethod(options.repository.getAgentTaskPlanningInput, 'getAgentTaskPlanningInput')(
+          transition.actorId,
+          transition.projectId,
+          transition.taskRunId,
+        ),
+      ])
+      if (!runtime.capabilities.vision || !planningInput) {
+        return { action: 'terminal', summary: '最终视觉验收上下文不可用。', code: 'final_visual_context_unavailable' }
+      }
+      if (
+        runtime.provider !== detail.run.provider ||
+        runtime.model !== detail.run.model ||
+        runtime.profileId !== detail.run.profileId ||
+        runtimeConfigDigest(runtime) !== detail.run.configDigest
+      ) {
+        return {
+          action: 'terminal',
+          summary: '会话模型绑定已变化，无法继续最终验收。',
+          code: 'final_model_binding_drift',
+        }
+      }
+      const checkpoint = await options.repository.getAgentTaskTransitionProviderResult?.(
+        transition.actorId,
+        transition.taskRunId,
+        transition.id,
+      )
+      let decision = visualAcceptanceCheckpoint(checkpoint?.decisionOutput)
+      if (checkpoint && !decision) {
+        return { action: 'terminal', summary: '最终视觉验收检查点无效。', code: 'final_visual_checkpoint_invalid' }
+      }
+      if (!decision) {
+        const frozen = persistedPlanningInputSchema.parse(planningInput)
+        const taskContext = await frozenTaskContext(
+          options,
+          transition,
+          detail,
+          planningInput,
+          runtime,
+          frozen.prompt,
+          project,
+        )
+        const criteria = [
+          `用户目标：${frozen.prompt}`,
+          `计划摘要：${detail.activePlan.plan.summary}`,
+          `计划验收：${JSON.stringify(detail.activePlan.plan.verification)}`,
+          `已执行步骤：${detail.activePlan.steps.map(step => `${step.ordinal}. ${step.title}`).join('；')}`,
+          taskContext.images.length
+            ? `前 ${taskContext.images.length} 张图片是用户参考图，最后一张图片是最终实现截图。`
+            : '唯一图片是最终实现截图。',
+          '请只根据最终截图和可用参考图给出 pass 或 revise。',
+        ].join('\n')
+        const maximumRate = options.env.AGENT_BILLING_MAX_USD_PER_1M_TOKENS ?? 100
+        const estimatedMicros = Math.min(MAX_RESERVED_MICROS, Math.ceil((criteria.length / 4 + 4_000) * maximumRate))
+        const fence = transitionFence(transition, options.workerId)
+        const attemptState: { current: DurableProviderAttemptRecord | null } = { current: null }
+        try {
+          const result = await visualAcceptanceModel({
+            runtime,
+            criteria,
+            screenshotDataUrl: `data:image/png;base64,${Buffer.from(screenshotInput.bytes).toString('base64')}`,
+            referenceImageDataUrls: taskContext.images.map(image => image.url),
+            providerAttemptLifecycle: {
+              async prepare(metadata) {
+                const prepared = await requireRepositoryMethod(
+                  options.repository.prepareAgentProviderAttempt,
+                  'prepareAgentProviderAttempt',
+                )(transition.actorId, fence, {
+                  projectId: transition.projectId,
+                  taskId: detail.run.taskId,
+                  turnId: transition.transitionKey,
+                  providerRequestKey: metadata.providerRequestKey ?? null,
+                  requestBodyDigest: metadata.requestBodyDigest,
+                  idempotencyMode: metadata.idempotencyMode,
+                  reservedMicros: estimatedMicros,
+                  now: now(),
+                })
+                if (prepared === 'stale')
+                  throw new ApiError(409, 'AGENT_TASK_TRANSITION_STALE', 'Agent task lease is stale')
+                if (prepared === 'outcome_unknown')
+                  throw new ApiError(409, 'AGENT_PROVIDER_BILLING_INDETERMINATE', 'Provider outcome is unknown')
+                if (prepared === 'task_budget_exceeded' || prepared === 'project_budget_exceeded') {
+                  throw new ApiError(429, 'AGENT_TASK_BUDGET_EXCEEDED', 'Agent task budget is exhausted')
+                }
+                attemptState.current = prepared
+                return {
+                  ...(prepared.providerRequestKey ? { providerRequestKey: prepared.providerRequestKey } : {}),
+                  requestBodyDigest: prepared.requestBodyDigest,
+                  idempotencyMode: prepared.idempotencyMode,
+                }
+              },
+              async markStarted() {
+                const current = attemptState.current
+                if (!current) throw new Error('Provider attempt was not prepared')
+                const started = await requireRepositoryMethod(
+                  options.repository.markAgentProviderAttemptStarted,
+                  'markAgentProviderAttemptStarted',
+                )(transition.actorId, current.id, fence, now())
+                if (!started) throw new ApiError(409, 'AGENT_TASK_TRANSITION_STALE', 'Agent task lease is stale')
+                attemptState.current = started
+              },
+            },
+          })
+          if (!attemptState.current)
+            throw new ApiError(503, 'AGENT_PROVIDER_ATTEMPT_UNAVAILABLE', 'Visual review attempt is unavailable')
+          const totalTokens =
+            result.usage?.totalTokens ??
+            ((result.usage?.promptTokens ?? 0) + (result.usage?.completionTokens ?? 0) || undefined)
+          const settled = requireSettlement(
+            await requireRepositoryMethod(
+              options.repository.completeAgentProviderAttempt,
+              'completeAgentProviderAttempt',
+            )(transition.actorId, attemptState.current.id, fence, {
+              state: 'succeeded',
+              providerAttempt: result.providerAttempt,
+              decisionOutput: { purpose: 'visual_acceptance', output: result.output },
+              decisionUsage: result.usage ? { ...result.usage } : null,
+              decisionTrace: { purpose: 'visual_acceptance', transitionKey: transition.transitionKey, ...result.trace },
+              observedTokens: totalTokens,
+              promptTokens: result.usage?.promptTokens,
+              completionTokens: result.usage?.completionTokens,
+              cachedTokens: result.usage?.cachedTokens,
+              estimatedMicros: Math.min(
+                MAX_RESERVED_MICROS,
+                providerSettlementEstimateMicros(estimatedMicros, totalTokens, maximumRate),
+              ),
+              now: now(),
+            }),
+          )
+          if (settled.taskOutcomeClassification !== 'within_budget') {
+            return {
+              action: 'terminal',
+              summary: '最终视觉验收因预算或调用状态暂停。',
+              code: 'final_visual_review_paused',
+            }
+          }
+          decision = result.output
+        } catch (error) {
+          const current = attemptState.current
+          if (current && error instanceof AgentVisualAcceptanceProviderResponseError) {
+            await options.repository.completeAgentProviderAttempt?.(transition.actorId, current.id, fence, {
+              state: 'succeeded',
+              providerAttempt: error.providerAttempt,
+              decisionOutput: { purpose: 'visual_acceptance', error: { code: error.code } },
+              decisionUsage: null,
+              decisionTrace: { purpose: 'visual_acceptance', transitionKey: transition.transitionKey },
+              estimatedMicros,
+              now: now(),
+            })
+            return {
+              action: 'revise',
+              summary: '最终截图未形成可信验收结论，正在进行一次有界修订。',
+              code: 'final_visual_review_invalid',
+            }
+          }
+          if (current && error instanceof AgentVisualAcceptanceProviderError) {
+            await options.repository.completeAgentProviderAttempt?.(transition.actorId, current.id, fence, {
+              state: error.providerAttempt.outcome,
+              providerAttempt: error.providerAttempt,
+              estimatedMicros,
+              now: now(),
+            })
+          }
+          throw error
+        }
+      }
+      if (decision.action === 'revise') {
+        return {
+          action: 'revise',
+          summary: decision.summary,
+          code: `final_visual_${visualFindingCode(decision.findings[0]?.code)}`,
+          findings: decision.findings,
+        }
+      }
       return {
         action: 'pass',
         evidence: {
@@ -1147,6 +1453,8 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
           ...(evidence.layoutStatus === 'passed' ? { layoutPassed: true as const } : {}),
           freshContextVerified: true,
           receiptConsistent: true,
+          visualAccepted: true,
+          visualReviewConfidence: decision.confidence,
         },
       }
     },

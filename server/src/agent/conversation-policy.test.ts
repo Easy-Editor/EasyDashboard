@@ -75,4 +75,14 @@ describe('Agent conversation policy', () => {
       expect(isAgentConversationImplementationDetailText(text)).toBe(false)
     },
   )
+
+  it('does not mistake a visible English business title for the internal operations protocol', () => {
+    expect(() =>
+      assertAgentDecisionUserTextSafe({
+        action: 'execute',
+        summary: '英文副标题已更新为 BANK OPERATIONS ANALYSIS',
+        plan: ['预览并确认 BANK OPERATIONS ANALYSIS 显示完整'],
+      }),
+    ).not.toThrow()
+  })
 })

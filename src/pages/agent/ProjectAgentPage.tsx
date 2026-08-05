@@ -887,6 +887,18 @@ export function ProjectAgentPage() {
         })
         refreshLocalState(conversation.id)
       } catch (reason) {
+        try {
+          await hydratePersistedAgentTaskRun({
+            ownerUserId: user.id,
+            projectId,
+            conversationId: conversation.id,
+            taskRunId: task.taskRunId,
+          })
+          refreshLocalState(conversation.id)
+        } catch {
+          // The original response is still durable locally; the normal recovery
+          // loop will retry the authoritative task snapshot when connectivity returns.
+        }
         setPlanError(`继续任务失败：${planningErrorMessage(reason)}；回复与任务进度均已保留。`)
       } finally {
         planningRef.current = false

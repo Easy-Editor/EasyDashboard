@@ -97,7 +97,12 @@ export type AgentTaskObservationResult =
 
 export type AgentTaskVerificationResult =
   | { action: 'pass'; evidence: AgentTaskFinalVerificationEvidence }
-  | { action: 'revise' | 'replan'; summary: string; code: string }
+  | {
+      action: 'revise' | 'replan'
+      summary: string
+      code: string
+      findings?: readonly Readonly<Record<string, unknown>>[]
+    }
   | { action: 'terminal'; summary: string; code: string }
 
 export class AgentTaskPlanningFailure extends Error {
@@ -289,7 +294,11 @@ function deterministicVerificationEvidence(value: AgentTaskFinalVerificationEvid
     Array.isArray(value.resourceErrors) &&
     value.resourceErrors.length === 0 &&
     value.freshContextVerified === true &&
-    value.receiptConsistent === true
+    value.receiptConsistent === true &&
+    value.visualAccepted === true &&
+    Number.isFinite(value.visualReviewConfidence) &&
+    value.visualReviewConfidence >= 0 &&
+    value.visualReviewConfidence <= 1
   )
 }
 
@@ -404,6 +413,7 @@ export function createAgentTaskOrchestrator(options: {
     )
     const previousExecutorRetryCount = boundedCounter(transition.input.executorRetryCount)
     const previousSemanticRevisionCount = boundedCounter(transition.input.semanticRevisionCount)
+    const visualRevisionCount = boundedCounter(transition.input.visualRevisionCount)
     const executorRetryCount =
       result.executorRetryCount === undefined ? previousExecutorRetryCount : boundedCounter(result.executorRetryCount)
     const semanticRevisionCount =
@@ -465,7 +475,13 @@ export function createAgentTaskOrchestrator(options: {
         kind: 'observation',
         stepId: transition.stepId,
         transitionKey: nextTransitionKey,
-        input: { observation, recoveryClass: result.recoveryClass, executorRetryCount, semanticRevisionCount },
+        input: {
+          observation,
+          recoveryClass: result.recoveryClass,
+          executorRetryCount,
+          semanticRevisionCount,
+          ...(visualRevisionCount ? { visualRevisionCount } : {}),
+        },
       },
       now: now(),
     })
@@ -577,6 +593,7 @@ export function createAgentTaskOrchestrator(options: {
     const currentStep = detail.activePlan.steps.find(step => step.id === transition.stepId)
     if (!currentStep) throw new Error('Agent task observation step is unavailable')
     const semanticRevisionCount = boundedCounter(transition.input.semanticRevisionCount)
+    const visualRevisionCount = boundedCounter(transition.input.visualRevisionCount)
 
     if (result.action === 'pass') {
       assertAgentDecisionUserTextSafe({ summary: result.summary })
@@ -618,7 +635,7 @@ export function createAgentTaskOrchestrator(options: {
           : {
               kind: 'final_verification',
               transitionKey: nextTransitionKey,
-              input: { observation },
+              input: { observation, ...(visualRevisionCount ? { visualRevisionCount } : {}) },
             },
         now: now(),
       })
@@ -686,7 +703,12 @@ export function createAgentTaskOrchestrator(options: {
           kind: 'step_action',
           stepId: transition.stepId,
           transitionKey: nextTransitionKey,
-          input: { semanticRevisionCount: nextRevisionCount, recoveryClass: 'revise_step', observation },
+          input: {
+            semanticRevisionCount: nextRevisionCount,
+            recoveryClass: 'revise_step',
+            observation,
+            ...(visualRevisionCount ? { visualRevisionCount } : {}),
+          },
         },
         now: now(),
       })
@@ -742,7 +764,12 @@ export function createAgentTaskOrchestrator(options: {
         kind: 'step_action',
         stepOrdinal: 1,
         transitionKey: nextTransitionKey,
-        input: { planVersion: detail.run.activePlanVersion + 1, stepOrdinal: 1, semanticRevisionCount: 0 },
+        input: {
+          planVersion: detail.run.activePlanVersion + 1,
+          stepOrdinal: 1,
+          semanticRevisionCount: 0,
+          ...(visualRevisionCount ? { visualRevisionCount } : {}),
+        },
       },
       now: now(),
     })
@@ -777,6 +804,58 @@ export function createAgentTaskOrchestrator(options: {
         now: now(),
       })
       return 'continue'
+    }
+    if (result.action === 'revise' || result.action === 'replan') {
+      if (!options.store.getAgentTaskRunDetail) throw new Error('Agent task detail store is unavailable')
+      const detail = await options.store.getAgentTaskRunDetail(
+        transition.actorId,
+        transition.projectId,
+        transition.taskRunId,
+      )
+      if (!detail?.activePlan) throw new Error('Agent task active plan is unavailable during visual revision')
+      const visualRevisionCount = boundedCounter(transition.input.visualRevisionCount)
+      const nextVisualRevisionCount = visualRevisionCount + 1
+      const repairStep = [...detail.activePlan.steps].sort((left, right) => right.ordinal - left.ordinal)[0]
+      if (repairStep && nextVisualRevisionCount <= detail.run.bounds.maxStepRevisions) {
+        const code = safeReference(result.code, 'Agent visual acceptance code')!
+        const observation = sanitizedObservation({
+          outcome: 'visual_acceptance_failed',
+          errorCode: code,
+          findings: result.findings ?? [],
+        })
+        const nextTransitionKey = `step-action:${transition.taskRunId}:${transition.generation}:visual-revise-${nextVisualRevisionCount}`
+        await completePhase3(transition, {
+          status: 'completed',
+          output: { verified: false, recoveryClass: 'revise_step' },
+          taskRunPatch: { status: 'running', currentTransitionKey: nextTransitionKey },
+          accountingDelta: { semanticRevisions: 1 },
+          stepPatch: { stepId: repairStep.id, status: 'revising', lastObservation: observation },
+          events: [
+            {
+              eventKey: `agent-task-event:${transition.id}:visual-revision`,
+              stepId: repairStep.id,
+              type: 'step_revising',
+              summary: '最终截图发现未完成或视觉不一致内容，正在自动修订',
+              publicPayload: { findingCount: result.findings?.length ?? 0 },
+              technicalPayload: { code },
+              redactionVersion: 1,
+            },
+          ],
+          nextTransition: {
+            kind: 'step_action',
+            stepId: repairStep.id,
+            transitionKey: nextTransitionKey,
+            input: {
+              semanticRevisionCount: 0,
+              visualRevisionCount: nextVisualRevisionCount,
+              recoveryClass: 'revise_step',
+              observation,
+            },
+          },
+          now: now(),
+        })
+        return 'continue'
+      }
     }
     const code = result.action === 'pass' ? 'final_verification_evidence_invalid' : result.code
     const summary =

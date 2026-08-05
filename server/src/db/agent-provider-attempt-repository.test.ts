@@ -468,6 +468,57 @@ describeWithDatabase('Agent provider attempt transition fence PostgreSQL integra
     }
   })
 
+  it('preserves the provider result checkpoint when the transition completes', async () => {
+    if (!admin || !pgRepository?.getAgentTaskTransitionProviderResult || !pgRepository.completeAgentTaskTransition) {
+      throw new Error('Agent provider result repository is unavailable')
+    }
+    const fixture = await seedSucceededPlanningProviderResult()
+    try {
+      const completed = await pgRepository.completeAgentTaskTransition(fixture.actorId, fixture.fence, {
+        status: 'completed',
+        output: { phase: 'planned' },
+        taskRunPatch: { status: 'running' },
+        plan: {
+          summary: 'Build the visible dashboard shell',
+          assumptions: [],
+          verification: {},
+          steps: [{ id: 'checkpoint-step', ordinal: 1, title: 'Build the shell', intent: {} }],
+        },
+        nextTransition: {
+          stepOrdinal: 1,
+          kind: 'step_action',
+          transitionKey: `checkpoint-step:${randomUUID()}`,
+        },
+        now,
+      })
+
+      expect(completed).toMatchObject({
+        transition: {
+          status: 'completed',
+          output: {
+            phase: 'planned',
+            providerResult: {
+              attemptId: fixture.attemptId,
+              decisionOutput: fixture.decisionOutput,
+              decisionUsage: fixture.decisionUsage,
+              decisionTrace: fixture.decisionTrace,
+            },
+          },
+        },
+      })
+      await expect(
+        pgRepository.getAgentTaskTransitionProviderResult(fixture.actorId, fixture.run.id, fixture.fence.transitionId),
+      ).resolves.toEqual({
+        attemptId: fixture.attemptId,
+        decisionOutput: fixture.decisionOutput,
+        decisionUsage: fixture.decisionUsage,
+        decisionTrace: fixture.decisionTrace,
+      })
+    } finally {
+      await admin.query('delete from auth.users where id = $1', [fixture.actorId])
+    }
+  })
+
   it('replays a succeeded provider result with explicitly unavailable usage', async () => {
     if (!admin || !pgRepository?.getAgentTaskTransitionProviderResult) {
       throw new Error('Agent provider result repository is unavailable')

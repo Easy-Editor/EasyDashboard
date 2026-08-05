@@ -178,7 +178,7 @@ const runtime: ResolvedAgentModelRuntime = {
   apiKey: 'secret',
   model: 'model-1',
   budget: { taskMicros: 1_000_000, projectMonthMicros: 10_000_000, warningRatio: 0.8 },
-  capabilities: { structuredOutput: true, vision: false, toolCalling: false },
+  capabilities: { structuredOutput: true, vision: true, toolCalling: false },
   billingScope: 'project',
   payerId: projectId,
   source: 'platform-default',
@@ -216,6 +216,29 @@ function harness(
       },
     }
   },
+  visualAcceptanceModel: Parameters<typeof createAgentTaskStepRuntime>[0]['visualAcceptanceModel'] = async input => {
+    const metadata = await input.providerAttemptLifecycle?.prepare({
+      requestBodyDigest: 'f'.repeat(64),
+      idempotencyMode: 'unsupported',
+    })
+    if (!metadata) throw new Error('Expected visual acceptance provider attempt lifecycle')
+    await input.providerAttemptLifecycle?.markStarted(metadata)
+    return {
+      output: { action: 'pass' as const, summary: '截图满足目标', findings: [], confidence: 0.96 },
+      usage: { promptTokens: 80, completionTokens: 20, totalTokens: 100 },
+      trace: {
+        promptBundleId: 'dashboard-visual-acceptance',
+        promptBundleVersion: '1.0.0',
+        promptBundleHash: 'a'.repeat(64),
+        skills: [],
+      },
+      providerAttempt: {
+        requestBodyDigest: 'f'.repeat(64),
+        idempotencyMode: 'unsupported' as const,
+        idempotencyHeaderSent: false,
+      },
+    }
+  },
 ) {
   const providerInputSnapshot = createAgentProviderInputSnapshot({
     prompt: '实现经营分析大屏',
@@ -246,6 +269,10 @@ function harness(
     })),
     getProject: vi.fn(async () => project()),
     getAgentSpikeOperationOutcome: vi.fn(async () => operation()),
+    getAgentScreenshotArtifactModelInput: vi.fn(async () => ({
+      record: { sha256: 'e'.repeat(64) },
+      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+    })),
     prepareAgentProviderAttempt: vi.fn(async () => prepared),
     markAgentProviderAttemptStarted: vi.fn(async () => ({ ...prepared, state: 'started' as const })),
     completeAgentProviderAttempt: vi.fn(async () => ({
@@ -266,10 +293,11 @@ function harness(
       repository,
       dispatcher: dispatcher as never,
       spike: { repository, grantSecret: 'secret', expectedCompatibility: {} as never },
-      env: {} as never,
+      env: { SUPABASE_SECRET_KEY: 'service-secret' } as never,
       workerId: 'worker-1',
       resolveRuntime: vi.fn(async () => runtime),
       planningModel,
+      visualAcceptanceModel,
       now: () => now,
     }),
   }
@@ -514,6 +542,90 @@ describe('Agent task step runtime', () => {
     expect(issueOperation).not.toHaveBeenCalled()
   })
 
+  it('completes preview-only plan steps from fresh durable preview evidence without asking the user for a screenshot', async () => {
+    const source = detail()
+    const mutation = source.activePlan!.steps[0]!
+    source.activePlan!.steps = [
+      {
+        ...mutation,
+        status: 'passed',
+        lastObservation: { operationId: 'operation-1' },
+      },
+      {
+        ...mutation,
+        id: 'step-verify',
+        ordinal: 2,
+        semanticStepKey: 'preview-check',
+        title: '整屏预览检查',
+        intent: { purpose: 'preview-check', description: '检查左右面板完整且无重叠裁切，不实施任何额外修改' },
+        status: 'running',
+        lastObservation: null,
+      },
+    ]
+    const model = vi.fn()
+    const { repository, dispatcher } = harness({
+      getAgentTaskRunDetail: vi.fn(async () => source),
+    })
+    const service = createAgentTaskStepRuntime({
+      repository,
+      dispatcher: dispatcher as never,
+      spike: { repository, grantSecret: 'secret', expectedCompatibility: {} as never },
+      env: {} as never,
+      workerId: 'worker-1',
+      resolveRuntime: vi.fn(async () => runtime),
+      model,
+      now: () => now,
+    })
+
+    await expect(service.act({ ...transition(), stepId: 'step-verify' })).resolves.toMatchObject({
+      decisionKind: 'verify_current_document',
+      operationId: 'operation-1',
+      recoveryClass: 'committed',
+      observation: {
+        outcome: 'committed',
+        verificationOnly: true,
+        preview: { renderReady: true, browserErrorCount: 0, resourceErrorCount: 0, materialGapCount: 0 },
+      },
+    })
+    expect(model).not.toHaveBeenCalled()
+    expect(dispatcher.enqueue).not.toHaveBeenCalled()
+  })
+
+  it('recognizes a confirmation-only title even when the intent discusses the later modification', async () => {
+    const source = detail()
+    const mutation = source.activePlan!.steps[0]!
+    source.activePlan!.steps = [
+      { ...mutation, status: 'passed', lastObservation: { operationId: 'operation-1' } },
+      {
+        ...mutation,
+        id: 'step-confirm',
+        ordinal: 2,
+        title: '确认目标副标题',
+        intent: { purpose: 'confirm-target', description: '确认目标后由下一步骤修改文本' },
+        status: 'running',
+        lastObservation: null,
+      },
+    ]
+    const model = vi.fn()
+    const { repository, dispatcher } = harness({ getAgentTaskRunDetail: vi.fn(async () => source) })
+    const service = createAgentTaskStepRuntime({
+      repository,
+      dispatcher: dispatcher as never,
+      spike: { repository, grantSecret: 'secret', expectedCompatibility: {} as never },
+      env: {} as never,
+      workerId: 'worker-1',
+      resolveRuntime: vi.fn(async () => runtime),
+      model,
+      now: () => now,
+    })
+
+    await expect(service.act({ ...transition(), stepId: 'step-confirm' })).resolves.toMatchObject({
+      decisionKind: 'verify_current_document',
+      recoveryClass: 'committed',
+    })
+    expect(model).not.toHaveBeenCalled()
+  })
+
   it('passes executor layout status and aggregate counts into the durable observation', async () => {
     const { service } = harness({
       getAgentSpikeOperationOutcome: vi.fn(async () => operation('committed', 'failed')),
@@ -681,6 +793,69 @@ describe('Agent task step runtime', () => {
     })
   })
 
+  it('turns final visual findings into a focused repair prompt instead of repeating the completed step', async () => {
+    const model = vi.fn(async input => {
+      const prepared = await input.providerAttemptLifecycle?.prepare({
+        requestBodyDigest: 'c'.repeat(64),
+        idempotencyMode: 'unsupported',
+      })
+      if (!prepared) throw new Error('Expected provider attempt lifecycle')
+      await input.providerAttemptLifecycle?.markStarted(prepared)
+      return {
+        output: {
+          action: 'execute' as const,
+          summary: '修复顶部指标重叠',
+          plan: ['调整重叠指标的宽度'],
+          operations: [{ type: 'resize' as const, nodeId: 'metric-1', rect: { x: 24, y: 80, width: 280, height: 96 } }],
+        },
+        trace: {
+          promptBundleId: 'step-action',
+          promptBundleVersion: '1',
+          promptBundleHash: 'd'.repeat(64),
+          skills: [],
+        },
+        providerAttempt: {
+          requestBodyDigest: 'c'.repeat(64),
+          idempotencyMode: 'unsupported' as const,
+          idempotencyHeaderSent: false,
+        },
+      }
+    })
+    const issueOperation = vi.fn(async (_options, _actorId, _projectId, value) => ({
+      operation: operation('issued'),
+      input: {} as never,
+      grant: 'grant',
+      recoveryGrant: 'recovery-grant',
+      value,
+    }))
+    const { repository, dispatcher } = harness()
+    const service = createAgentTaskStepRuntime({
+      repository,
+      dispatcher: dispatcher as never,
+      spike: { repository, grantSecret: 'secret', expectedCompatibility: {} as never },
+      env: {} as never,
+      workerId: 'worker-1',
+      resolveRuntime: vi.fn(async () => runtime),
+      model: model as never,
+      issueOperation: issueOperation as never,
+      now: () => now,
+    })
+
+    await service.act(
+      transition({
+        recoveryClass: 'revise_step',
+        observation: {
+          outcome: 'visual_acceptance_failed',
+          findings: [{ severity: 'blocking', description: '顶部指标文字重叠' }],
+        },
+      }),
+    )
+
+    expect(model.mock.calls[0]![0].prompt).toContain('必须修复验收观察中的 blocking findings')
+    expect(model.mock.calls[0]![0].prompt).toContain('不要重复原步骤的已完成操作')
+    expect(model.mock.calls[0]![0].prompt).toContain('顶部指标文字重叠')
+  })
+
   it('issues deterministic ChangeSet identities and returns only durable committed evidence', async () => {
     const issueOperation = vi.fn(async (_options, _actorId, _projectId, value) => ({
       operation: operation('issued'),
@@ -744,8 +919,74 @@ describe('Agent task step runtime', () => {
         resourceErrors: [],
         freshContextVerified: true,
         receiptConsistent: true,
+        visualAccepted: true,
+        visualReviewConfidence: 0.96,
       },
     })
+  })
+
+  it('returns a bounded revision request when semantic screenshot acceptance fails', async () => {
+    const visualModel: NonNullable<
+      Parameters<typeof createAgentTaskStepRuntime>[0]['visualAcceptanceModel']
+    > = async input => {
+      const metadata = await input.providerAttemptLifecycle?.prepare({
+        requestBodyDigest: 'f'.repeat(64),
+        idempotencyMode: 'unsupported',
+      })
+      if (!metadata) throw new Error('Expected visual acceptance provider attempt lifecycle')
+      await input.providerAttemptLifecycle?.markStarted(metadata)
+      return {
+        output: {
+          action: 'revise',
+          summary: '底部仍有待新增占位内容',
+          findings: [{ code: 'unfinished_placeholder', severity: 'blocking', description: '底部模块仍显示当前待新增' }],
+          confidence: 0.99,
+        },
+        trace: {
+          promptBundleId: 'dashboard-visual-acceptance',
+          promptBundleVersion: '1.0.0',
+          promptBundleHash: 'a'.repeat(64),
+          skills: [],
+        },
+        providerAttempt: {
+          requestBodyDigest: 'f'.repeat(64),
+          idempotencyMode: 'unsupported',
+          idempotencyHeaderSent: false,
+        },
+      }
+    }
+    const { service } = harness(
+      { getAgentTaskRunDetail: vi.fn(async () => detail('passed', { operationId: 'operation-1' })) },
+      undefined,
+      visualModel,
+    )
+
+    await expect(service.verify(transition({}, 'final_verification'))).resolves.toMatchObject({
+      action: 'revise',
+      code: 'final_visual_unfinished_placeholder',
+      findings: [expect.objectContaining({ severity: 'blocking' })],
+    })
+  })
+
+  it('rejects deterministic unfinished placeholders before calling the visual model', async () => {
+    const visualModel = vi.fn()
+    const unfinishedProject = project()
+    ;(unfinishedProject.draftSchema as { componentsTree: Array<{ children: unknown[] }> }).componentsTree[0]!.children =
+      [{ id: 'placeholder', componentName: 'Text', props: { text: '当前待新增' } }]
+    const { service } = harness(
+      {
+        getAgentTaskRunDetail: vi.fn(async () => detail('passed', { operationId: 'operation-1' })),
+        getProject: vi.fn(async () => unfinishedProject),
+      },
+      undefined,
+      visualModel,
+    )
+
+    await expect(service.verify(transition({}, 'final_verification'))).resolves.toMatchObject({
+      action: 'revise',
+      code: 'final_visual_unfinished_placeholder',
+    })
+    expect(visualModel).not.toHaveBeenCalled()
   })
 
   it('fails final verification when any operation is indeterminate', async () => {

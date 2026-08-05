@@ -117,6 +117,7 @@ describe('Agent task planning model boundary', () => {
     expect(serialized).not.toContain('ChangeSet')
     expect(serialized).not.toContain('nodeId')
     expect(serialized).toContain('semanticKey')
+    expect(serialized).toContain('预览检查和最终验收是运行时自动职责')
   })
 
   it('accepts a clarification decision without fabricating plan steps', async () => {

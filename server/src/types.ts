@@ -630,6 +630,8 @@ export interface AgentTaskFinalVerificationEvidence {
   layoutPassed?: true
   freshContextVerified: true
   receiptConsistent: true
+  visualAccepted: true
+  visualReviewConfidence: number
 }
 
 export interface AgentTaskCompletionInput {
@@ -1443,6 +1445,12 @@ export interface Repository {
     projectId: string,
     operationId: string,
   ): Promise<AgentScreenshotArtifactDownloadContract | null>
+  getAgentScreenshotArtifactModelInput?(
+    actorId: string,
+    storageSecret: string,
+    projectId: string,
+    operationId: string,
+  ): Promise<{ record: AgentScreenshotArtifactRecord; bytes: Uint8Array } | 'oversize' | null>
   persistAgentScreenshotArtifact?(
     actorId: string,
     storageSecret: string,

@@ -1,5 +1,5 @@
 const IMPLEMENTATION_DETAIL_PATTERNS: readonly RegExp[] = [
-  /\b(?:node\s*id|field\s*(?:id|path)|component\s*name|parent\s*id|change\s*set|operations?|coordinates?|rect|JSON)\b/iu,
+  /\b(?:node\s*id|field\s*(?:id|path)|component\s*name|parent\s*id|change\s*set|coordinates?|rect|JSON)\b/iu,
   /\bprops(?:\.|\b)/iu,
   /(?:^|[^\p{L}\p{N}_])["']?(?:x|y|width|height)["']?\s*[:=]\s*-?(?:\d+(?:\.\d+)?|\.\d+)/iu,
   /(?:x|y)\s*(?:坐标|位置|是多少|多少|值)/iu,

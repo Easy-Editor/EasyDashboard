@@ -800,6 +800,32 @@ describe('agent workspace storage', () => {
       [3, '第三条'],
     ])
     expect(merged.updatedAt).toBe('2026-08-04T08:00:20.000Z')
+
+    const waitingDetail = {
+      ...detail,
+      status: 'waiting_user' as const,
+      latestEventSequence: 4,
+      waiting: { questionId: 'step-question', text: '请补充节点范围。' },
+      updatedAt: '2026-08-04T08:00:30.000Z',
+    }
+    recordAgentTaskRunDetail({ ownerUserId: 'user-a', conversationId: conversation.id, detail: waitingDetail }, storage)
+    appendAgentTurn(
+      {
+        ownerUserId: 'user-a',
+        conversationId: conversation.id,
+        content: '删除三个占位节点。',
+        createdAt: '2026-08-04T08:00:31.000Z',
+      },
+      storage,
+    )
+    const restoredWaiting = recordAgentTaskRunDetail(
+      { ownerUserId: 'user-a', conversationId: conversation.id, detail: waitingDetail },
+      storage,
+    )
+    expect(restoredWaiting).toMatchObject({
+      status: 'waiting_user',
+      pendingQuestion: { id: 'step-question', prompt: '请补充节点范围。' },
+    })
   })
 
   it('does not regress a completed semantic run from a stale same-timestamp snapshot', () => {

@@ -58,6 +58,7 @@ const taskLoopMethods = [
   'releaseAgentTaskTransition',
   'reconcileAgentTaskTransitions',
   'appendAgentTaskOperationalEvent',
+  'getAgentScreenshotArtifactModelInput',
 ] as const
 
 function supportsAgentTaskLoop(repository: Repository): repository is TaskLoopRepository {

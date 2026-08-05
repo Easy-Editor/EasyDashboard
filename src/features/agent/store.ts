@@ -925,7 +925,12 @@ export function recordAgentTaskRunDetail(input: RecordAgentTaskRunDetailInput, s
   const mergedRun = mergeSemanticTaskRun(task.taskRun, incomingTaskRun)
   task.taskRun = mergedRun.taskRun
   task.activePlan = mergeActivePlan(task.activePlan, activePlan)
-  if (mergedRun.preferIncoming) {
+  const refreshesCurrentProjection =
+    mergedRun.preferIncoming ||
+    (task.taskRun.status === incomingTaskRun.status &&
+      incomingTaskRun.latestEventSequence >= task.taskRun.latestEventSequence &&
+      incomingTaskRun.activePlanVersion >= task.taskRun.activePlanVersion)
+  if (refreshesCurrentProjection) {
     task.status = semanticTaskStatus(mergedRun.taskRun.status)
     task.pendingQuestion = waiting
       ? {

@@ -375,6 +375,8 @@ describe('Agent task orchestrator Phase 3', () => {
       resourceErrors: [] as [],
       freshContextVerified: true as const,
       receiptConsistent: true as const,
+      visualAccepted: true as const,
+      visualReviewConfidence: 0.95,
     }
     state.verify.mockResolvedValueOnce({ action: 'pass', evidence })
 
@@ -387,6 +389,34 @@ describe('Agent task orchestrator Phase 3', () => {
         taskRunPatch: { status: 'completed', currentTransitionKey: null },
         finalVerification: evidence,
         events: [expect.objectContaining({ type: 'task_completed', summary: '任务已完成' })],
+      }),
+    )
+  })
+
+  it('routes failed final visual acceptance back into a bounded repair step', async () => {
+    const state = harness(transition('final_verification', { input: { visualRevisionCount: 0 } }))
+    state.verify.mockResolvedValueOnce({
+      action: 'revise',
+      summary: '底部仍有未完成内容',
+      code: 'final_visual_unfinished_placeholder',
+      findings: [{ code: 'unfinished_placeholder', severity: 'blocking', description: '底部仍显示当前待新增' }],
+    })
+
+    await state.service.runOnce()
+
+    expect(state.store.completeAgentTaskTransition).toHaveBeenCalledWith(
+      'actor-1',
+      expect.any(Object),
+      expect.objectContaining({
+        status: 'completed',
+        taskRunPatch: expect.objectContaining({ status: 'running' }),
+        accountingDelta: { semanticRevisions: 1 },
+        stepPatch: expect.objectContaining({ status: 'revising' }),
+        events: [expect.objectContaining({ type: 'step_revising' })],
+        nextTransition: expect.objectContaining({
+          kind: 'step_action',
+          input: expect.objectContaining({ visualRevisionCount: 1, recoveryClass: 'revise_step' }),
+        }),
       }),
     )
   })
@@ -427,6 +457,8 @@ describe('Agent task orchestrator Phase 3', () => {
         resourceErrors: [],
         freshContextVerified: true,
         receiptConsistent: true,
+        visualAccepted: true,
+        visualReviewConfidence: 0.95,
       },
     })
 

@@ -636,4 +636,118 @@ describeWithDatabase('Agent task aggregate and continuation repository', () => {
       await admin.query('delete from auth.users where id = $1', [fixture.actorId])
     }
   })
+
+  it('continues an execution-step question on the same active plan and step exactly once', async () => {
+    if (
+      !admin ||
+      !pgRepository?.claimAgentTaskTransition ||
+      !pgRepository.completeAgentTaskTransition ||
+      !pgRepository.continueAgentTaskRun ||
+      !pgRepository.appendAgentTaskEvent
+    ) {
+      throw new Error('Agent execution continuation repository is unavailable')
+    }
+    const fixture = await seedProject()
+    try {
+      const run = await createAgentTaskRunFixture(admin, pgRepository, fixture.actorId, taskInput(fixture.projectId))
+      if (!run || typeof run === 'string') throw new Error('Agent task run fixture could not be created')
+      const workerId = `execution-question-${randomUUID()}`
+      const claim = await pgRepository.claimAgentTaskTransition(workerId, now, new Date(now.getTime() + 30_000), [
+        'planning',
+      ])
+      if (!claim?.leaseToken) throw new Error('Planning transition fixture could not be claimed')
+      const planned = await pgRepository.completeAgentTaskTransition(
+        fixture.actorId,
+        {
+          transitionId: claim.id,
+          workerId,
+          leaseGeneration: claim.leaseGeneration,
+          leaseToken: claim.leaseToken,
+        },
+        {
+          status: 'completed',
+          taskRunPatch: { status: 'running' },
+          plan: {
+            summary: 'Execution question plan',
+            assumptions: [],
+            verification: {},
+            steps: [{ id: 'execution-question-step', ordinal: 1, title: 'Resolve exact nodes', intent: {} }],
+          },
+          nextTransition: {
+            kind: 'step_action',
+            stepOrdinal: 1,
+            transitionKey: 'execution-question:initial-action',
+          },
+          now,
+        },
+      )
+      if (!planned || typeof planned === 'string' || !planned.nextTransition?.stepId) {
+        throw new Error('Execution question plan fixture could not be created')
+      }
+      const stepId = planned.nextTransition.stepId
+      await pgRepository.appendAgentTaskEvent(fixture.actorId, run.id, {
+        eventKey: 'execution-question:waiting',
+        stepId,
+        type: 'waiting_user',
+        summary: '请确认需要删除的节点。',
+        publicPayload: { question: { id: 'execution-question-1', text: '请确认需要删除的节点。' } },
+        now: new Date(now.getTime() + 1_000),
+      })
+      await admin.query(
+        `update app.agent_task_transitions
+         set status='completed', completed_at=$2, updated_at=$2
+         where id=$1`,
+        [planned.nextTransition.id, new Date(now.getTime() + 1_000)],
+      )
+      await admin.query(`update app.agent_task_steps set status='verifying' where id=$1`, [stepId])
+      await admin.query(
+        `update app.agent_task_runs
+         set status='waiting_user', current_transition_key=null, updated_at=$2
+         where id=$1`,
+        [run.id, new Date(now.getTime() + 1_000)],
+      )
+
+      const idempotencyKey = randomUUID()
+      const input = {
+        projectId: fixture.projectId,
+        taskRunId: run.id,
+        idempotencyKey,
+        questionId: 'execution-question-1',
+        response: '删除三个占位节点。',
+        attachmentIds: [],
+        imageInputs: [],
+        now: new Date(now.getTime() + 2_000),
+      }
+      const first = await pgRepository.continueAgentTaskRun(fixture.actorId, input)
+      const replay = await pgRepository.continueAgentTaskRun(fixture.actorId, {
+        ...input,
+        now: new Date(now.getTime() + 3_000),
+      })
+      if (!first || typeof first === 'string' || !replay || typeof replay === 'string') {
+        throw new Error('Execution question continuation could not be persisted')
+      }
+
+      expect(replay.transition.id).toBe(first.transition.id)
+      expect(first.taskRun).toMatchObject({ status: 'running', activePlanVersion: 1 })
+      expect(first.transition).toMatchObject({
+        kind: 'step_action',
+        stepId,
+        input: {
+          recoveryClass: 'user_action_resolved',
+          userClarification: {
+            question: { id: 'execution-question-1', text: '请确认需要删除的节点。' },
+            response: '删除三个占位节点。',
+            attachmentIds: [],
+            images: [],
+          },
+        },
+      })
+      const resumedStep = await admin.query<{ status: string }>('select status from app.agent_task_steps where id=$1', [
+        stepId,
+      ])
+      expect(resumedStep.rows[0]?.status).toBe('revising')
+    } finally {
+      await admin.query('delete from auth.users where id = $1', [fixture.actorId])
+    }
+  })
 })

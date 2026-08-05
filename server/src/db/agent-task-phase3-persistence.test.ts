@@ -632,10 +632,51 @@ describeWithDatabase('Agent task Phase 3 PostgreSQL persistence safety', () => {
             resourceErrors: [],
             freshContextVerified: true,
             receiptConsistent: true,
+            visualAccepted: true,
+            visualReviewConfidence: 0.95,
           },
           now,
         }),
       ).resolves.toBe('invalid_state')
+    } finally {
+      await admin.query('delete from auth.users where id=$1', [fixture.actorId])
+    }
+  })
+
+  it('atomically reopens the passed step when final visual acceptance requests a bounded repair', async () => {
+    if (!admin || !repository?.completeAgentTaskTransition) throw new Error('Phase 3 repository is unavailable')
+    const fixture = await seedProject()
+    try {
+      const final = await advanceToFinalVerification(fixture.actorId, fixture.projectId)
+      const nextTransitionKey = 'phase3:visual-repair:1'
+      const completion = await repository.completeAgentTaskTransition(fixture.actorId, final.fence, {
+        status: 'completed',
+        output: { verified: false, recoveryClass: 'revise_step' },
+        taskRunPatch: { status: 'running', currentTransitionKey: nextTransitionKey },
+        accountingDelta: { semanticRevisions: 1 },
+        stepPatch: {
+          stepId: final.stepId,
+          status: 'revising',
+          lastObservation: { outcome: 'visual_acceptance_failed' },
+        },
+        nextTransition: {
+          kind: 'step_action',
+          stepId: final.stepId,
+          transitionKey: nextTransitionKey,
+          input: { visualRevisionCount: 1, recoveryClass: 'revise_step' },
+        },
+        now,
+      })
+
+      expect(completion).toMatchObject({
+        taskRun: { status: 'running', semanticRevisions: 1, currentTransitionKey: nextTransitionKey },
+        nextTransition: { kind: 'step_action', stepId: final.stepId, status: 'pending' },
+      })
+      const result = await admin.query<{ status: string }>(
+        'select status from app.agent_task_steps where id=$1 and task_run_id=$2',
+        [final.stepId, final.run.id],
+      )
+      expect(result.rows[0]?.status).toBe('revising')
     } finally {
       await admin.query('delete from auth.users where id=$1', [fixture.actorId])
     }
@@ -666,6 +707,8 @@ describeWithDatabase('Agent task Phase 3 PostgreSQL persistence safety', () => {
           resourceErrors: [],
           freshContextVerified: true,
           receiptConsistent: true,
+          visualAccepted: true,
+          visualReviewConfidence: 0.95,
         },
         events: [{ eventKey: 'phase3:task-completed:1', type: 'task_completed', summary: '任务已完成' }],
         now,

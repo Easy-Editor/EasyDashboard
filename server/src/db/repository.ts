@@ -157,7 +157,11 @@ function completeAgentTaskFinalVerificationEvidence(input: AgentTaskCompletionIn
       Array.isArray(input.resourceErrors) &&
       input.resourceErrors.length === 0 &&
       input.freshContextVerified === true &&
-      input.receiptConsistent === true,
+      input.receiptConsistent === true &&
+      input.visualAccepted === true &&
+      Number.isFinite(input.visualReviewConfidence) &&
+      input.visualReviewConfidence >= 0 &&
+      input.visualReviewConfidence <= 1,
   )
 }
 
@@ -1817,7 +1821,8 @@ export function createPgRepository(env: AppEnv): Repository {
           .for('update')
           .limit(1)
         if (!run) return null
-        const transitionKey = `planning:continue:${input.idempotencyKey}`
+        const continuationKind = run.activePlanVersion === 0 ? 'planning' : 'step-action'
+        const transitionKey = `${continuationKind}:continue:${input.idempotencyKey}`
         const [existing] = await tx
           .select()
           .from(agentTaskTransitions)
@@ -1825,12 +1830,23 @@ export function createPgRepository(env: AppEnv): Repository {
           .limit(1)
         if (existing) {
           const history = agentTaskClarificationHistory(existing.input.clarificationHistory)
-          const last = history?.at(-1)
-          const replayMatches =
-            last?.question.id === input.questionId &&
-            last.response === input.response &&
-            canonicalJsonSha256(last.attachmentIds) === canonicalJsonSha256(input.attachmentIds) &&
-            canonicalJsonSha256(last.images) === canonicalJsonSha256(input.imageInputs)
+          const clarification = existing.input.userClarification
+          const executionClarification =
+            clarification && typeof clarification === 'object' && !Array.isArray(clarification)
+              ? (clarification as Record<string, unknown>)
+              : null
+          const last = history?.at(-1) ?? executionClarification
+          const lastQuestion =
+            last?.question && typeof last.question === 'object' && !Array.isArray(last.question)
+              ? (last.question as Record<string, unknown>)
+              : null
+          const replayMatches = Boolean(
+            last &&
+              lastQuestion?.id === input.questionId &&
+              last.response === input.response &&
+              canonicalJsonSha256(last.attachmentIds) === canonicalJsonSha256(input.attachmentIds) &&
+              canonicalJsonSha256(last.images) === canonicalJsonSha256(input.imageInputs),
+          )
           return replayMatches ? ({ taskRun: run, transition: existing } as never) : 'conflict'
         }
         const [latestPlanning] = await tx
@@ -1840,7 +1856,7 @@ export function createPgRepository(env: AppEnv): Repository {
           .orderBy(desc(agentTaskTransitions.generation))
           .limit(1)
         const [waitingEvent] = await tx
-          .select({ publicPayload: agentTaskEvents.publicPayload })
+          .select({ stepId: agentTaskEvents.stepId, publicPayload: agentTaskEvents.publicPayload })
           .from(agentTaskEvents)
           .where(and(eq(agentTaskEvents.taskRunId, run.id), eq(agentTaskEvents.type, 'waiting_user')))
           .orderBy(desc(agentTaskEvents.seq))
@@ -1861,6 +1877,97 @@ export function createPgRepository(env: AppEnv): Repository {
           question.text.length < 1
         )
           return 'invalid_state'
+        if (run.status !== 'waiting_user') return 'invalid_state'
+        const [nonterminal] = await tx
+          .select({ id: agentTaskTransitions.id })
+          .from(agentTaskTransitions)
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, run.id),
+              inArray(agentTaskTransitions.status, ['pending', 'leased']),
+            ),
+          )
+          .limit(1)
+        if (nonterminal) return 'invalid_state'
+
+        if (run.activePlanVersion > 0) {
+          if (!waitingEvent.stepId) return 'invalid_state'
+          const [step] = await tx
+            .select({ id: agentTaskSteps.id, status: agentTaskSteps.status })
+            .from(agentTaskSteps)
+            .where(
+              and(
+                eq(agentTaskSteps.id, waitingEvent.stepId),
+                eq(agentTaskSteps.taskRunId, run.id),
+                eq(agentTaskSteps.planVersion, run.activePlanVersion),
+              ),
+            )
+            .limit(1)
+          if (!step || !['running', 'verifying', 'revising'].includes(step.status)) return 'invalid_state'
+          const userClarification = {
+            question: { id: question.id, text: question.text },
+            response: input.response,
+            attachmentIds: input.attachmentIds,
+            images: input.imageInputs,
+          }
+          const transitionInput = {
+            semanticRevisionCount: 0,
+            recoveryClass: 'user_action_resolved',
+            userClarification,
+            observation: {
+              outcome: 'user_input_provided',
+              question: userClarification.question,
+              response: input.response,
+              attachmentIds: input.attachmentIds,
+            },
+          }
+          const requestDigest = agentTaskTransitionRequestDigest({
+            taskRunId: run.id,
+            stepId: step.id,
+            kind: 'step_action',
+            transitionKey,
+            payload: transitionInput,
+          })
+          const generation = run.nextTransitionGeneration
+          const [transition] = await tx
+            .insert(agentTaskTransitions)
+            .values({
+              actorId,
+              projectId: run.projectId,
+              taskRunId: run.id,
+              stepId: step.id,
+              kind: 'step_action',
+              transitionKey,
+              generation,
+              status: 'pending',
+              availableAt: input.now,
+              input: transitionInput,
+              requestDigest,
+              createdAt: input.now,
+              updatedAt: input.now,
+            })
+            .returning()
+          if (!transition) throw new Error('Agent task execution continuation insert returned no row')
+          const [updatedStep] = await tx
+            .update(agentTaskSteps)
+            .set({ status: 'revising', updatedAt: input.now })
+            .where(and(eq(agentTaskSteps.id, step.id), eq(agentTaskSteps.taskRunId, run.id)))
+            .returning({ id: agentTaskSteps.id })
+          if (!updatedStep) throw new Error('Agent task execution continuation step update returned no row')
+          const [updatedRun] = await tx
+            .update(agentTaskRuns)
+            .set({
+              status: 'running',
+              currentTransitionKey: transitionKey,
+              nextTransitionGeneration: generation + 1,
+              updatedAt: input.now,
+            })
+            .where(eq(agentTaskRuns.id, run.id))
+            .returning()
+          if (!updatedRun) throw new Error('Agent task execution continuation run update returned no row')
+          return { taskRun: updatedRun, transition } as never
+        }
+
         const history = agentTaskClarificationHistory(latestPlanning.input.clarificationHistory)
         if (!history || history.length >= 8) return 'invalid_state'
         const basePlanningInput = Object.fromEntries(
@@ -1885,18 +1992,7 @@ export function createPgRepository(env: AppEnv): Repository {
           transitionKey,
           payload: transitionInput,
         })
-        if (run.status !== 'waiting_user' || run.activePlanVersion !== 0) return 'invalid_state'
-        const [nonterminal] = await tx
-          .select({ id: agentTaskTransitions.id })
-          .from(agentTaskTransitions)
-          .where(
-            and(
-              eq(agentTaskTransitions.taskRunId, run.id),
-              inArray(agentTaskTransitions.status, ['pending', 'leased']),
-            ),
-          )
-          .limit(1)
-        if (nonterminal) return 'invalid_state'
+        if (run.activePlanVersion !== 0) return 'invalid_state'
 
         const generation = run.nextTransitionGeneration
         const [transition] = await tx
@@ -2623,6 +2719,26 @@ export function createPgRepository(env: AppEnv): Repository {
 
         const nextRunStatus = input.taskRunPatch?.status ?? run.status
         if (!allowsAgentStateEdge(agentTaskStatusEdges, run.status, nextRunStatus)) return 'invalid_state'
+        let patchedStep = transitionStep
+        if (!patchedStep && transition.kind === 'final_verification' && input.stepPatch) {
+          ;[patchedStep] = await tx
+            .select()
+            .from(agentTaskSteps)
+            .where(and(eq(agentTaskSteps.id, input.stepPatch.stepId), eq(agentTaskSteps.taskRunId, run.id)))
+            .for('update')
+            .limit(1)
+          if (!patchedStep || patchedStep.planVersion !== run.activePlanVersion) return 'invalid_state'
+        }
+        const isFinalVisualRevision =
+          transition.kind === 'final_verification' &&
+          input.status === 'completed' &&
+          nextRunStatus === 'running' &&
+          patchedStep?.status === 'passed' &&
+          input.stepPatch?.stepId === patchedStep.id &&
+          input.stepPatch.status === 'revising' &&
+          input.nextTransition?.kind === 'step_action' &&
+          input.nextTransition.stepId === patchedStep.id &&
+          input.accountingDelta?.semanticRevisions === 1
         if (transition.kind === 'final_verification' && nextRunStatus === 'completed') {
           if (!completeAgentTaskFinalVerificationEvidence(input.finalVerification)) return 'invalid_state'
           const [notPassedStep] = await tx
@@ -2735,7 +2851,10 @@ export function createPgRepository(env: AppEnv): Repository {
             (input.stepAttempt.semanticRevisionCount ?? 0) !== stepRevisionCount
           )
             return 'invalid_state'
-        } else if (accountingDelta.executorRetries > 0 || accountingDelta.semanticRevisions > 0) {
+        } else if (
+          accountingDelta.executorRetries > 0 ||
+          (accountingDelta.semanticRevisions > 0 && !isFinalVisualRevision)
+        ) {
           return 'invalid_state'
         }
         const nextAccounting = {
@@ -2771,9 +2890,12 @@ export function createPgRepository(env: AppEnv): Repository {
         )
           return 'invalid_state'
         if (input.stepPatch) {
-          if (!transitionStep || input.stepPatch.stepId !== transitionStep.id)
+          if (!patchedStep || input.stepPatch.stepId !== patchedStep.id)
             throw new AgentTaskCompletionRollback('invalid_state')
-          if (!allowsAgentStateEdge(agentStepStatusEdges, transitionStep.status, input.stepPatch.status))
+          if (
+            !allowsAgentStateEdge(agentStepStatusEdges, patchedStep.status, input.stepPatch.status) &&
+            !isFinalVisualRevision
+          )
             throw new AgentTaskCompletionRollback('invalid_state')
         }
         if (input.stepAttempt) {
@@ -2839,7 +2961,7 @@ export function createPgRepository(env: AppEnv): Repository {
             planning: ['step_action'],
             step_action: ['observation'],
             observation: ['step_action', 'final_verification'],
-            final_verification: [],
+            final_verification: ['step_action'],
             rollback: ['rollback'],
           }
           if (!allowedNextKinds[transition.kind]?.includes(input.nextTransition.kind)) return 'invalid_state'
@@ -2930,9 +3052,12 @@ export function createPgRepository(env: AppEnv): Repository {
         )
           throw new AgentTaskCompletionRollback('invalid_state')
         if (input.stepPatch) {
-          if (!transitionStep || input.stepPatch.stepId !== transitionStep.id)
+          if (!patchedStep || input.stepPatch.stepId !== patchedStep.id)
             throw new AgentTaskCompletionRollback('invalid_state')
-          if (!allowsAgentStateEdge(agentStepStatusEdges, transitionStep.status, input.stepPatch.status))
+          if (
+            !allowsAgentStateEdge(agentStepStatusEdges, patchedStep.status, input.stepPatch.status) &&
+            !isFinalVisualRevision
+          )
             throw new AgentTaskCompletionRollback('invalid_state')
           await tx
             .update(agentTaskSteps)
@@ -3023,7 +3148,7 @@ export function createPgRepository(env: AppEnv): Repository {
             planning: ['step_action'],
             step_action: ['observation'],
             observation: ['step_action', 'final_verification'],
-            final_verification: [],
+            final_verification: ['step_action'],
             rollback: ['rollback'],
           }
           if (!allowedNextKinds[transition.kind]?.includes(input.nextTransition.kind))
@@ -3123,11 +3248,18 @@ export function createPgRepository(env: AppEnv): Repository {
           })
           .where(eq(agentTaskRuns.id, run.id))
           .returning()
+        const checkpointedProviderResult = transition.output?.providerResult
+        const completedOutput = input.output
+          ? {
+              ...input.output,
+              ...(checkpointedProviderResult === undefined ? {} : { providerResult: checkpointedProviderResult }),
+            }
+          : transition.output
         const [completed] = await tx
           .update(agentTaskTransitions)
           .set({
             status: input.status,
-            output: input.output ?? null,
+            output: completedOutput ?? null,
             error: input.error ?? null,
             completionDigest,
             completedAt: input.now,
@@ -4147,6 +4279,32 @@ export function createPgRepository(env: AppEnv): Repository {
         signedUrl: data.signedUrl,
         expiresIn: AGENT_SCREENSHOT_ARTIFACT_URL_EXPIRES_IN,
       }
+    },
+    async getAgentScreenshotArtifactModelInput(actorId, storageSecret, projectId, operationId) {
+      const artifact = await withActor(actorId, async tx => {
+        const [row] = await tx
+          .select(agentScreenshotArtifactSelection)
+          .from(agentScreenshotArtifacts)
+          .where(
+            and(
+              eq(agentScreenshotArtifacts.actorId, actorId),
+              eq(agentScreenshotArtifacts.projectId, projectId),
+              eq(agentScreenshotArtifacts.operationId, operationId),
+              eq(agentScreenshotArtifacts.status, 'ready'),
+            ),
+          )
+          .limit(1)
+        return row ?? null
+      })
+      if (!artifact) return null
+      if (artifact.size > 4 * 1024 * 1024) return 'oversize'
+      const { data, error } = await agentScreenshotArtifactAdminStorage(storageSecret).download(artifact.storagePath)
+      if (error || !data) return null
+      const bytes = new Uint8Array(await data.arrayBuffer())
+      if (bytes.byteLength !== artifact.size || createHash('sha256').update(bytes).digest('hex') !== artifact.sha256) {
+        return null
+      }
+      return { record: artifact as AgentScreenshotArtifactRecord, bytes }
     },
     async persistAgentScreenshotArtifact(actorId, storageSecret, projectId, operationId, bytes) {
       if (
