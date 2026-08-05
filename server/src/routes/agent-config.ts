@@ -468,6 +468,7 @@ function configuredProfileInput(
     existing.profile.endpoint !== endpoint ||
     existing.profile.model !== model ||
     Boolean(input.apiKey)
+  const platformCapabilities = { vision: true, toolCalling: true, structuredOutput: true } as const
   return {
     profile: {
       id,
@@ -478,8 +479,9 @@ function configuredProfileInput(
       model,
       billingScope: input.scope,
       fallbackToPlatform: input.fallbackToPlatform,
-      status: modelChanged ? 'unverified' : existing.profile.status,
-      capabilities: modelChanged ? null : existing.profile.capabilities,
+      status: input.provider === 'platform' ? 'active' : modelChanged ? 'unverified' : existing.profile.status,
+      capabilities:
+        input.provider === 'platform' ? platformCapabilities : modelChanged ? null : existing.profile.capabilities,
       secret: null,
       createdAt: existing?.profile.createdAt ?? now,
       updatedAt: now,
@@ -675,26 +677,33 @@ export function createAgentConfigRoutes(options: AgentConfigRouteOptions) {
     const config = await readScopedConfig(options.repository, actorId, input.scope, projectId)
     if (!config) throw new ApiError(404, 'MODEL_PROFILE_NOT_FOUND', 'Model profile is not configured')
 
-    const encryptionKey = options.env.AGENT_MODEL_PROFILE_ENCRYPTION_KEY
-    let apiKey: string
     if (config.profile.provider === 'platform') {
       if (!platformConfigured(options.env)) {
         throw new ApiError(503, 'PLATFORM_MODEL_UNAVAILABLE', 'Platform Agent model is not configured')
       }
-      apiKey = options.env.EASY_EDITOR_AGENT_API_KEY as string
-    } else {
-      if (!encryptionKey || !config.encryptedSecret) {
-        throw new ApiError(503, 'MODEL_PROFILE_SECRET_UNAVAILABLE', 'Model profile secret is unavailable')
+      const active = structuredClone(config)
+      active.profile.status = 'active'
+      active.profile.capabilities = { vision: true, toolCalling: true, structuredOutput: true }
+      active.profile.updatedAt = (options.now?.() ?? new Date()).toISOString()
+      if (!(await compareAndSetScopedConfig(options.repository, actorId, input.scope, config, active, projectId))) {
+        await throwProbeConflict(options.repository, actorId, input.scope, projectId)
       }
-      try {
-        apiKey = decryptModelProfileApiKey({
-          secret: config.encryptedSecret,
-          encryptionKey,
-          profileId: config.profile.id,
-        })
-      } catch {
-        throw new ApiError(503, 'MODEL_PROFILE_SECRET_UNAVAILABLE', 'Model profile secret is unavailable')
-      }
+      return c.json({ config: publicConfig(active, options.env), platformConfigured: true })
+    }
+
+    const encryptionKey = options.env.AGENT_MODEL_PROFILE_ENCRYPTION_KEY
+    let apiKey: string
+    if (!encryptionKey || !config.encryptedSecret) {
+      throw new ApiError(503, 'MODEL_PROFILE_SECRET_UNAVAILABLE', 'Model profile secret is unavailable')
+    }
+    try {
+      apiKey = decryptModelProfileApiKey({
+        secret: config.encryptedSecret,
+        encryptionKey,
+        profileId: config.profile.id,
+      })
+    } catch {
+      throw new ApiError(503, 'MODEL_PROFILE_SECRET_UNAVAILABLE', 'Model profile secret is unavailable')
     }
 
     const configured = structuredClone(config)

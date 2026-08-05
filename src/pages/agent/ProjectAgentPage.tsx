@@ -35,6 +35,7 @@ import {
   recordAgentTaskRunDetail,
   refreshLegacyAgentRunProjection,
   respondAgentTask,
+  resumeAgentTaskRun,
   rollbackProjectContext,
   rollbackSharedProjectContext,
   saveSharedProjectContext,
@@ -112,6 +113,7 @@ export function ProjectAgentPage() {
   const [agentPreferences, setAgentPreferences] = useState<AgentPreferences>(DEFAULT_AGENT_PREFERENCES)
   const [contextOpen, setContextOpen] = useState(false)
   const [planPending, setPlanPending] = useState(false)
+  const [resumePendingTaskRunId, setResumePendingTaskRunId] = useState<string | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
   const [draftRefreshError, setDraftRefreshError] = useState<string | null>(null)
   const [contextError, setContextError] = useState<string | null>(null)
@@ -392,14 +394,14 @@ export function ProjectAgentPage() {
               })
               await pollAgentTaskRun(projectId, createdTaskRun.id, {
                 afterSeq: createdTaskRun.latestEventSequence,
-                maxAttempts: 1,
-                onSnapshot: snapshot => {
+                onSnapshot: async snapshot => {
                   recordAgentTaskRunDetail({
                     ownerUserId: user.id,
                     conversationId: conversation.id,
                     detail: snapshot.detail,
                     events: snapshot.events,
                   })
+                  await refreshProjectDraft('提交')
                   refreshLocalState(conversation.id)
                 },
               })
@@ -612,10 +614,51 @@ export function ProjectAgentPage() {
         conversationId,
         taskRunId,
       })
+      await refreshProjectDraft('提交')
       refreshLocalState(conversationId)
       return snapshot.detail
     },
-    [projectId, refreshLocalState, user],
+    [projectId, refreshLocalState, refreshProjectDraft, user],
+  )
+
+  const resumeSemanticTaskRun = useCallback(
+    async (taskRunId: string) => {
+      if (!user || !projectId || !activeConversation) return
+      setResumePendingTaskRunId(taskRunId)
+      setPlanError(null)
+      try {
+        const detail = await resumeAgentTaskRun(projectId, taskRunId)
+        recordAgentTaskRunDetail({
+          ownerUserId: user.id,
+          conversationId: activeConversation.id,
+          detail,
+        })
+        refreshLocalState(activeConversation.id)
+        await pollAgentTaskRun(projectId, taskRunId, {
+          afterSeq: detail.latestEventSequence,
+          onSnapshot: async snapshot => {
+            recordAgentTaskRunDetail({
+              ownerUserId: user.id,
+              conversationId: activeConversation.id,
+              detail: snapshot.detail,
+              events: snapshot.events,
+            })
+            await refreshProjectDraft('提交')
+            refreshLocalState(activeConversation.id)
+          },
+        })
+      } catch (reason) {
+        if (reason instanceof ApiError && reason.code === 'AGENT_TASK_RESUME_INVALID_STATE') {
+          setPlanError('请先在设置中提高单次任务预算，再继续同一任务。')
+        } else {
+          setPlanError(`继续任务失败：${planningErrorMessage(reason)}`)
+        }
+      } finally {
+        setResumePendingTaskRunId(null)
+        refreshLocalState(activeConversation.id)
+      }
+    },
+    [activeConversation, projectId, refreshLocalState, refreshProjectDraft, user],
   )
 
   useEffect(() => {
@@ -651,9 +694,7 @@ export function ProjectAgentPage() {
       try {
         const detail = await refreshSemanticTaskRun(semanticRecoveryConversationId, semanticRecoveryTaskRunId)
         const needsAnotherRefresh =
-          detail &&
-          (['planning', 'verifying', 'rolling_back'].includes(detail.status) ||
-            (detail.status === 'running' && detail.activePlan === null))
+          detail && ['planning', 'running', 'verifying', 'rolling_back'].includes(detail.status)
         if (!cancelled && needsAnotherRefresh) {
           timer = setTimeout(() => void refresh(), 1_000)
         }
@@ -1316,6 +1357,8 @@ export function ProjectAgentPage() {
               onCreateConversation={createConversation}
               onRetry={retryNotice}
               onRollback={operationId => void rollbackRun(operationId)}
+              onResumeTask={taskRunId => void resumeSemanticTaskRun(taskRunId)}
+              resumePendingTaskRunId={resumePendingTaskRunId}
               rollbackPendingOperationId={rollbackPendingOperationId}
               rolledBackOperationIds={rolledBackOperationIds}
               onSelectConversation={selectConversation}

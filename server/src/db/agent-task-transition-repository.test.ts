@@ -14,6 +14,10 @@ const migration = readFileSync(
   new URL('../../../supabase/migrations/20260804120000_agent_task_loop_persistence_kernel.sql', import.meta.url),
   'utf8',
 ).toLowerCase()
+const rowLockGrantMigration = readFileSync(
+  new URL('../../../supabase/migrations/20260805015826_grant_agent_model_binding_row_lock.sql', import.meta.url),
+  'utf8',
+).toLowerCase()
 
 const runtimeDatabaseUrl = process.env.AGENT_SPIKE_TEST_DATABASE_URL
 const adminDatabaseUrl = process.env.AGENT_SPIKE_TEST_ADMIN_DATABASE_URL
@@ -110,6 +114,12 @@ describe('Agent task transition repository contract', () => {
     expect(source).toContain('provider')
     expect(source).toContain('model')
     expect(source).toContain('configDigest')
+  })
+
+  it('grants the runtime role the privilege PostgreSQL requires for immutable binding row locks', () => {
+    expect(rowLockGrantMigration).toContain(
+      'grant update on app.agent_conversation_model_bindings to easy_dashboard_runtime',
+    )
   })
 
   it('uses one project-scoped lease row to fence mutating chains across conversations', () => {

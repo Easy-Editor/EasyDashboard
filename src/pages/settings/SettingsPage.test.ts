@@ -30,6 +30,8 @@ describe('Agent preference settings', () => {
     expect(source).toContain('图片理解')
     expect(source).toContain('工具调用')
     expect(source).toContain('结构化输出')
+    expect(source).toContain('平台能力已配置')
+    expect(source).toContain("agentModelForm.provider === 'platform'")
   })
 
   it('uses clear Chinese groups with page navigation and a page-level save action', async () => {

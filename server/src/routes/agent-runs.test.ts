@@ -314,6 +314,7 @@ function harness(
     listAgentTaskEvents: vi.fn(),
     listAgentTaskEventPage: vi.fn(),
     continueAgentTaskRun: vi.fn(),
+    resumeAgentTaskRun: vi.fn(),
   } as unknown as DurableTurnRepository
   const model = vi.fn(async () => {
     throw new Error('HTTP must never call the provider')
@@ -927,7 +928,7 @@ describe('semantic Agent task-run routes', () => {
       maxProviderTurns: 12,
       maxStepRevisions: 2,
       maxExecutorRetries: 2,
-      tokenLimit: 64_000,
+      tokenLimit: 256_000,
       costLimitMicros: 2_000_000,
     },
     providerTurns: 0,
@@ -1042,6 +1043,38 @@ describe('semantic Agent task-run routes', () => {
       taskRunId: run.id,
     })
     expect(JSON.stringify(taskOrchestratorLogger.warn.mock.calls)).not.toContain('raw-wake-error-SENTINEL')
+  })
+
+  it('resumes the same paused task with the current increased execution limits', async () => {
+    const wakeTaskOrchestrator = vi.fn()
+    const state = harness({ taskLoop: true, wakeTaskOrchestrator })
+    const pausedRun = { ...run, status: 'paused' as const, costMicros: 1_900_000, currentTransitionKey: null }
+    const resumedRun = { ...pausedRun, status: 'running' as const, currentTransitionKey: 'step:resume-generation' }
+    vi.mocked(state.repository.getAgentTaskRunDetail!)
+      .mockResolvedValueOnce({ run: pausedRun, activePlan: null, waitingReason: null, latestEventSequence: 4 })
+      .mockResolvedValueOnce({ run: resumedRun, activePlan: null, waitingReason: null, latestEventSequence: 5 })
+    vi.mocked(state.repository.resumeAgentTaskRun!).mockResolvedValueOnce({
+      taskRun: resumedRun,
+      transition: {} as never,
+    })
+
+    const response = await state.app.request(
+      new Request(`http://test/projects/${projectId}/agent/task-runs/${run.id}/resume`, { method: 'POST' }),
+    )
+
+    expect(response.status).toBe(202)
+    expect(state.repository.resumeAgentTaskRun).toHaveBeenCalledWith(
+      actorId,
+      expect.objectContaining({
+        projectId,
+        taskRunId: run.id,
+        costLimitMicros: 2_000_000,
+        tokenLimit: 256_000,
+        configDigest: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      }),
+    )
+    expect(wakeTaskOrchestrator).toHaveBeenCalledOnce()
+    await expect(response.json()).resolves.toMatchObject({ taskRun: { id: run.id, status: 'running' } })
   })
 
   it('returns strictly paged durable task activity', async () => {

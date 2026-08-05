@@ -9,7 +9,7 @@ patchedDependencies:
     hash: 8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887
     path: patches/@easy-editor__core@1.0.3.patch
   '@easy-editor/react-renderer-dashboard@1.0.4':
-    hash: a2d062f9ee29eb270c8d01d26c25438f75687a2ea8520521c5ae14e38a5cff4e
+    hash: 3e61d97457a6d7754b061e81b9651b653b330293d03f07285f5ba05aa8335bd2
     path: patches/@easy-editor__react-renderer-dashboard@1.0.4.patch
 
 importers:
@@ -30,7 +30,7 @@ importers:
         version: 1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(@easy-editor/renderer-core@1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0)))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@easy-editor/react-renderer-dashboard':
         specifier: ^1.0.4
-        version: 1.0.4(patch_hash=a2d062f9ee29eb270c8d01d26c25438f75687a2ea8520521c5ae14e38a5cff4e)(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(@easy-editor/plugin-dashboard@1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(mobx@6.15.0))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 1.0.4(patch_hash=3e61d97457a6d7754b061e81b9651b653b330293d03f07285f5ba05aa8335bd2)(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(@easy-editor/plugin-dashboard@1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(mobx@6.15.0))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@easy-editor/renderer-core':
         specifier: ^1.0.3
         version: 1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))
@@ -4911,7 +4911,7 @@ snapshots:
     transitivePeerDependencies:
       - rax
 
-  '@easy-editor/react-renderer-dashboard@1.0.4(patch_hash=a2d062f9ee29eb270c8d01d26c25438f75687a2ea8520521c5ae14e38a5cff4e)(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(@easy-editor/plugin-dashboard@1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(mobx@6.15.0))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@easy-editor/react-renderer-dashboard@1.0.4(patch_hash=3e61d97457a6d7754b061e81b9651b653b330293d03f07285f5ba05aa8335bd2)(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(@easy-editor/plugin-dashboard@1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(mobx@6.15.0))(@types/react-dom@19.2.3(@types/react@19.2.10))(@types/react@19.2.10)(mobx-react@9.2.1(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(mobx@6.15.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@easy-editor/core': 1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0)
       '@easy-editor/plugin-dashboard': 1.0.3(@easy-editor/core@1.0.3(patch_hash=8cc794fd252d9c50da2553178514efe8796531bb221abf3331cf68e6fa68a887)(mobx@6.15.0))(mobx@6.15.0)

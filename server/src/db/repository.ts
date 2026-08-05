@@ -1931,6 +1931,95 @@ export function createPgRepository(env: AppEnv): Repository {
         return { taskRun: updatedRun, transition } as never
       })
     },
+    resumeAgentTaskRun(actorId, input) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, input.taskRunId),
+              eq(agentTaskRuns.projectId, input.projectId),
+              eq(agentTaskRuns.actorId, actorId),
+              canEditAgentTaskProject(actorId),
+            ),
+          )
+          .for('update')
+          .limit(1)
+        if (!run) return null
+        if (run.status !== 'paused') return 'invalid_state'
+        const bounds = run.bounds as unknown as AgentTaskRunBounds
+        if (
+          input.costLimitMicros <= run.costMicros ||
+          (input.costLimitMicros <= bounds.costLimitMicros &&
+            input.tokenLimit <= bounds.tokenLimit &&
+            input.configDigest === run.configDigest)
+        )
+          return 'invalid_state'
+        const [failedTransition] = await tx
+          .select()
+          .from(agentTaskTransitions)
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, run.id),
+              eq(agentTaskTransitions.status, 'failed'),
+              sql`${agentTaskTransitions.error}->>'code' = 'task_budget_exceeded'`,
+            ),
+          )
+          .orderBy(desc(agentTaskTransitions.generation))
+          .limit(1)
+        if (!failedTransition || !['planning', 'step_action'].includes(failedTransition.kind)) return 'invalid_state'
+        const transitionKind: 'planning' | 'step_action' =
+          failedTransition.kind === 'planning' ? 'planning' : 'step_action'
+        const generation = run.nextTransitionGeneration
+        const transitionKey = `${failedTransition.transitionKey}:resume-${generation}`
+        const transitionInput = failedTransition.input ?? {}
+        const requestDigest = agentTaskTransitionRequestDigest({
+          taskRunId: run.id,
+          stepId: failedTransition.stepId,
+          kind: transitionKind,
+          transitionKey,
+          payload: transitionInput,
+        })
+        const [transition] = await tx
+          .insert(agentTaskTransitions)
+          .values({
+            actorId,
+            projectId: run.projectId,
+            taskRunId: run.id,
+            stepId: failedTransition.stepId,
+            kind: transitionKind,
+            transitionKey,
+            generation,
+            status: 'pending',
+            availableAt: input.now,
+            input: transitionInput,
+            requestDigest,
+            createdAt: input.now,
+            updatedAt: input.now,
+          })
+          .returning()
+        if (!transition) throw new Error('Agent task resume transition insert returned no row')
+        const [updatedRun] = await tx
+          .update(agentTaskRuns)
+          .set({
+            bounds: {
+              ...bounds,
+              costLimitMicros: Math.max(bounds.costLimitMicros, input.costLimitMicros),
+              tokenLimit: Math.max(bounds.tokenLimit, input.tokenLimit),
+            },
+            configDigest: input.configDigest,
+            status: transitionKind === 'planning' ? 'planning' : 'running',
+            currentTransitionKey: transitionKey,
+            nextTransitionGeneration: generation + 1,
+            updatedAt: input.now,
+          })
+          .where(eq(agentTaskRuns.id, run.id))
+          .returning()
+        if (!updatedRun) throw new Error('Agent task resume run update returned no row')
+        return { taskRun: updatedRun, transition } as never
+      })
+    },
     getAgentTaskTransitionProviderResult(actorId, taskRunId, transitionId) {
       return withActor(actorId, async tx => {
         const [transition] = await tx
@@ -4582,13 +4671,31 @@ export function createPgRepository(env: AppEnv): Repository {
                 eventKey,
                 stepId: transition.stepId,
                 type: 'waiting_user',
-                summary: 'Execution paused because the task budget was reached.',
+                summary: '任务已达到本轮执行上限，已安全暂停。',
                 publicPayload: { code: 'task_budget_exceeded', action: 'review_budget_before_resume' },
                 technicalPayload: {},
                 redactionVersion: 1,
                 createdAt: input.now,
               })
             }
+            await tx
+              .update(agentTaskTransitions)
+              .set({
+                status: 'failed',
+                completionDigest: canonicalJsonSha256({ code: 'task_budget_exceeded', transitionId: transition.id }),
+                error: { code: 'task_budget_exceeded' },
+                completedAt: input.now,
+                updatedAt: input.now,
+              })
+              .where(
+                and(
+                  eq(agentTaskTransitions.id, transition.id),
+                  eq(agentTaskTransitions.status, 'leased'),
+                  eq(agentTaskTransitions.leaseGeneration, dispatchAttempt.leaseGeneration),
+                  eq(agentTaskTransitions.leaseToken, dispatchAttempt.leaseToken),
+                  eq(agentTaskTransitions.leaseOwner, dispatchAttempt.workerId),
+                ),
+              )
             await tx
               .update(agentTaskRuns)
               .set({ status: 'paused', currentTransitionKey: null, nextEventSequence, updatedAt: input.now })
@@ -5162,7 +5269,7 @@ export function createPgRepository(env: AppEnv): Repository {
                   eventKey: budgetEventKey,
                   stepId: transition.stepId,
                   type: 'waiting_user',
-                  summary: 'Execution paused because actual provider usage exceeded the task budget.',
+                  summary: '本次模型调用达到任务执行上限，任务已安全暂停。',
                   publicPayload: { code: 'task_budget_exceeded', action: 'review_budget_before_resume' },
                   technicalPayload: {},
                   redactionVersion: 1,

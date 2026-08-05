@@ -1068,6 +1068,14 @@ describeWithDatabase('Agent provider attempt transition fence PostgreSQL integra
           now,
         }),
       ).resolves.toBe('task_budget_exceeded')
+      const transition = await admin.query<{ status: string; error_json: { code?: string } | null }>(
+        'select status, error_json from app.agent_task_transitions where id=$1',
+        [fixture.fence.transitionId],
+      )
+      expect(transition.rows[0]).toEqual({
+        status: 'failed',
+        error_json: { code: 'task_budget_exceeded' },
+      })
     } finally {
       await admin.query('delete from auth.users where id = $1', [fixture.actorId])
     }

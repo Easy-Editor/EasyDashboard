@@ -1200,7 +1200,11 @@ export function createAgentRunRoutes(options: AgentRunRouteOptions) {
         maxProviderTurns: 12,
         maxStepRevisions: 2,
         maxExecutorRetries: 2,
-        tokenLimit: Math.max(estimatedTokens, 64_000),
+        // A dashboard task commonly needs several large, schema-aware turns. The
+        // previous 64k floor paused otherwise healthy runs after only a handful
+        // of committed stages, even when the configured cost budget had ample
+        // headroom.
+        tokenLimit: Math.max(estimatedTokens, 256_000),
         costLimitMicros: runtime.budget.taskMicros,
       },
       taskStartDocumentRevision: project.draftVersion,
@@ -1313,6 +1317,50 @@ export function createAgentRunRoutes(options: AgentRunRouteOptions) {
     const detail = await repository.getAgentTaskRunDetail(actorId, projectId, taskRunId)
     if (!detail)
       throw new ApiError(503, 'AGENT_TASK_RUN_UNAVAILABLE', 'Agent task run could not be read after continue')
+    wakeTaskOrchestrator(projectId, taskRunId)
+    return c.json({ taskRun: publicTaskRunDetail(detail) }, 202)
+  })
+
+  app.post('/:projectId/agent/task-runs/:taskRunId/resume', async c => {
+    const repository = requireSemanticTaskRuns()
+    if (!repository.resumeAgentTaskRun) {
+      throw new ApiError(503, 'AGENT_TASK_RESUME_UNAVAILABLE', 'Agent task resume persistence is unavailable')
+    }
+    const actorId = c.get('actorId')
+    const projectId = c.req.param('projectId')
+    const taskRunId = c.req.param('taskRunId')
+    const currentDetail = await repository.getAgentTaskRunDetail(actorId, projectId, taskRunId)
+    if (!currentDetail) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    const runtime = await resolveAgentModelRuntime(
+      { repository, env: options.env, ...options.modelConfig },
+      actorId,
+      projectId,
+    )
+    if (
+      runtime.provider !== currentDetail.run.provider ||
+      runtime.model !== currentDetail.run.model ||
+      runtime.profileId !== currentDetail.run.profileId
+    ) {
+      throw new ApiError(409, 'AGENT_MODEL_BINDING_DRIFT', 'Conversation model binding changed after task creation')
+    }
+    const resumed = await repository.resumeAgentTaskRun(actorId, {
+      projectId,
+      taskRunId,
+      costLimitMicros: runtime.budget.taskMicros,
+      tokenLimit: 256_000,
+      configDigest: agentTaskRuntimeConfigDigest(runtime),
+      now: options.modelConfig?.now?.() ?? new Date(),
+    })
+    if (resumed === 'invalid_state') {
+      throw new ApiError(
+        409,
+        'AGENT_TASK_RESUME_INVALID_STATE',
+        'Agent task cannot resume until its configured execution limit is increased',
+      )
+    }
+    if (!resumed) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    const detail = await repository.getAgentTaskRunDetail(actorId, projectId, taskRunId)
+    if (!detail) throw new ApiError(503, 'AGENT_TASK_RUN_UNAVAILABLE', 'Agent task run could not be read after resume')
     wakeTaskOrchestrator(projectId, taskRunId)
     return c.json({ taskRun: publicTaskRunDetail(detail) }, 202)
   })

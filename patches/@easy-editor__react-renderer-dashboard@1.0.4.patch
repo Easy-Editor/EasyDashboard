@@ -320,3 +320,31 @@ index a9b75de33c9291d0afa453f6160e334bd33f816d..73e334fbcbac4b8abf164a628698316b
    return /*#__PURE__*/jsx("div", {
      ref: canvasRef,
      className: classnames('lc-simulator-canvas', `lc-simulator-device-${host.device}`, host.deviceClassName),
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -3438,7 +3438,9 @@ var DashboardRenderer = (props) => {
+       } = entries[0].contentRect;
+       const ww = width / viewportWidth;
+       const wh = height / viewportHeight;
+-      viewportRef.current.style.transform = `scale(${Math.min(ww, wh)})  translate(-50%, -50%)`;
++      const viewportElement = viewportRef.current;
++      if (!viewportElement) return;
++      viewportElement.style.transform = `scale(${Math.min(ww, wh)})  translate(-50%, -50%)`;
+     }
+   });
+   return /*#__PURE__*/jsxRuntime.jsx("div", {
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -3418,7 +3418,9 @@ var DashboardRenderer = (props) => {
+       } = entries[0].contentRect;
+       const ww = width / viewportWidth;
+       const wh = height / viewportHeight;
+-      viewportRef.current.style.transform = `scale(${Math.min(ww, wh)})  translate(-50%, -50%)`;
++      const viewportElement = viewportRef.current;
++      if (!viewportElement) return;
++      viewportElement.style.transform = `scale(${Math.min(ww, wh)})  translate(-50%, -50%)`;
+     }
+   });
+   return /*#__PURE__*/jsx("div", {

@@ -56,13 +56,16 @@ export function resolveTodoSummary(task: AgentTask): { label: string; detail: st
     return { label: '已取消', detail: '任务已取消，未完成阶段仍保留', tone: 'waiting' }
   }
   if (task.status === 'paused') {
-    return { label: '已暂停', detail: '任务已暂停，可继续执行', tone: 'waiting' }
+    return { label: '已暂停', detail: '任务已安全暂停；调整上限后可重试当前阶段', tone: 'waiting' }
   }
   if (task.status === 'waiting_user') {
     return { label: '等待回复', detail: 'Agent 需要你的回复才能继续', tone: 'waiting' }
   }
   if (task.status === 'complete') {
     return { label: '已完成', detail: '全部阶段已完成', tone: 'complete' }
+  }
+  if (['planning', 'running', 'verifying', 'revising'].includes(task.status)) {
+    return { label: '运行中', detail: 'Agent 正在处理当前阶段', tone: 'running' }
   }
   const statuses = resolveTaskSteps(task).map(stage => stage.status)
   if (statuses.includes('failed')) {
@@ -118,12 +121,16 @@ export function TaskThread({
   rolledBack = false,
   defaultExpanded = true,
   onRollback,
+  onResume,
+  resumePending = false,
 }: {
   task: AgentTask
   rollbackPending?: boolean
   rolledBack?: boolean
   defaultExpanded?: boolean
   onRollback?: (operationId: string) => void
+  onResume?: (taskRunId: string) => void
+  resumePending?: boolean
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [technicalOpen, setTechnicalOpen] = useState(false)
@@ -399,6 +406,16 @@ export function TaskThread({
           <ChevronDown className='size-3.5 text-[var(--ed-ink-faint)]' aria-hidden='true' />
         </motion.span>
       </button>
+      {task.status === 'paused' && task.taskRunId && onResume ? (
+        <button
+          type='button'
+          disabled={resumePending}
+          onClick={() => onResume(task.taskRunId!)}
+          className='mx-auto mt-2 flex h-7 items-center rounded-[6px] border border-[var(--ed-cyan)]/35 px-2.5 text-[10px] text-[var(--ed-cyan)] hover:bg-[var(--ed-cyan)]/10 disabled:cursor-not-allowed disabled:opacity-50'
+        >
+          {resumePending ? '继续中…' : '继续同一任务'}
+        </button>
+      ) : null}
       <p className='sr-only'>
         {summary.label}：{summary.detail}
       </p>

@@ -242,7 +242,11 @@ export function SettingsPage() {
       })
       setPlatformConfigured(response.platformConfigured)
       applyAgentModelConfig(response.config)
-      setAgentModelMessage('配置已保存。验证三项能力后才会启用。')
+      setAgentModelMessage(
+        agentModelForm.provider === 'platform'
+          ? '平台模型配置已保存并启用。能力由平台统一保障。'
+          : '配置已保存。验证三项能力后才会启用。',
+      )
     } catch {
       setAgentModelMessage('模型配置保存失败，请检查填写内容后重试。')
     } finally {
@@ -689,10 +693,20 @@ export function SettingsPage() {
                   type='button'
                   variant='outline'
                   onClick={() => void handleAgentModelProbe()}
-                  disabled={agentModelLoading || agentModelSaving || agentModelProbing || !agentModelConfig?.configured}
+                  disabled={
+                    agentModelForm.provider === 'platform' ||
+                    agentModelLoading ||
+                    agentModelSaving ||
+                    agentModelProbing ||
+                    !agentModelConfig?.configured
+                  }
                   className='h-9 rounded-[8px] border-[var(--ed-line-strong)] bg-transparent text-xs text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] hover:text-white'
                 >
-                  {agentModelProbing ? '正在验证…' : '验证三项能力'}
+                  {agentModelForm.provider === 'platform'
+                    ? '平台能力已配置'
+                    : agentModelProbing
+                      ? '正在验证…'
+                      : '验证三项能力'}
                 </Button>
               </div>
             </div>

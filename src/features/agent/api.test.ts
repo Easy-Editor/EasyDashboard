@@ -14,6 +14,7 @@ import {
   pollAgentTaskRun,
   recoverAgentRun,
   respondAgentTask,
+  resumeAgentTaskRun,
   startAgentProject,
   startAgentRun,
   startAgentTurn,
@@ -30,6 +31,65 @@ afterEach(() => {
 })
 
 describe('Agent planning API boundary', () => {
+  it('resumes an existing semantic task without creating a replacement task', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          taskRun: {
+            id: 'task-run-1',
+            projectId: 'project-1',
+            conversationId: 'conversation-1',
+            taskId: 'task-1',
+            status: 'running',
+            activePlanVersion: 1,
+            currentTransitionKey: 'step:resume-generation',
+            modelBinding: {
+              provider: 'platform',
+              model: 'model',
+              profileId: 'platform:default',
+              configDigest: 'digest',
+            },
+            bounds: {
+              maxProviderTurns: 12,
+              maxStepRevisions: 2,
+              maxExecutorRetries: 2,
+              tokenLimit: 256000,
+              costLimitMicros: 2000000,
+            },
+            accounting: {
+              providerTurns: 5,
+              executorRetries: 0,
+              semanticRevisions: 0,
+              promptTokens: 100,
+              completionTokens: 20,
+              costMicros: 1900000,
+            },
+            taskStartDocumentRevision: 1,
+            latestEventSequence: 5,
+            plan: null,
+            steps: [],
+            waiting: null,
+            createdAt: '2026-08-05T00:00:00.000Z',
+            updatedAt: '2026-08-05T00:05:00.000Z',
+            completedAt: null,
+          },
+        }),
+        { status: 202, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(resumeAgentTaskRun('project-1', 'task-run-1')).resolves.toMatchObject({
+      id: 'task-run-1',
+      taskId: 'task-1',
+      status: 'running',
+    })
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/projects/project-1/agent/task-runs/task-run-1/resume',
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+  })
+
   it('refreshes detail immediately when a waiting snapshot has a newer continued event tail', async () => {
     const baseDetail = {
       id: 'task-run-race',

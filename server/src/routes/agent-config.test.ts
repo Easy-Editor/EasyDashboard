@@ -175,6 +175,32 @@ describe('Agent model configuration routes', () => {
     expect(loadedText).not.toContain('encryptedSecret')
   })
 
+  it('activates the operator-managed platform profile without asking the user to probe platform credentials', async () => {
+    const probe = vi.fn<NonNullable<AgentConfigRouteOptions['probe']>>()
+    const { app } = createHarness({ probe })
+    const platformInput = {
+      scope: 'user',
+      provider: 'platform',
+      fallbackToPlatform: false,
+      budget: { taskMicros: 2_000_000, projectMonthMicros: 20_000_000, warningRatio: 0.8 },
+    }
+
+    const saved = await app.request(request('/config', 'PUT', platformInput))
+    expect(saved.status).toBe(200)
+    await expect(saved.json()).resolves.toMatchObject({
+      config: {
+        provider: 'platform',
+        status: 'active',
+        capabilities: { vision: true, toolCalling: true, structuredOutput: true },
+      },
+    })
+
+    const verified = await app.request(request('/config/probe', 'POST', { scope: 'user' }))
+    expect(verified.status).toBe(200)
+    await expect(verified.json()).resolves.toMatchObject({ config: { status: 'active' }, platformConfigured: true })
+    expect(probe).not.toHaveBeenCalled()
+  })
+
   it('requires explicit fallback and fixes the warning threshold at 80 percent', async () => {
     const { app } = createHarness()
     const missingFallback = customConfig()

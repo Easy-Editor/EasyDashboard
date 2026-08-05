@@ -216,6 +216,8 @@ export function ConversationThread({
   onCreateConversation,
   onRetry,
   onRollback,
+  onResumeTask,
+  resumePendingTaskRunId,
   rollbackPendingOperationId,
   rolledBackOperationIds,
   onSelectConversation,
@@ -232,6 +234,8 @@ export function ConversationThread({
   onCreateConversation: () => void
   onRetry?: () => Promise<void>
   onRollback: (operationId: string) => void
+  onResumeTask: (taskRunId: string) => void
+  resumePendingTaskRunId: string | null
   rollbackPendingOperationId: string | null
   rolledBackOperationIds: Set<string>
   onSelectConversation: (conversationId: string) => void
@@ -535,6 +539,8 @@ export function ConversationThread({
             rollbackPending={rollbackPendingOperationId === latestTask.run?.operationId}
             rolledBack={latestTask.run ? rolledBackOperationIds.has(latestTask.run.operationId) : false}
             onRollback={onRollback}
+            onResume={onResumeTask}
+            resumePending={resumePendingTaskRunId === latestTask.taskRunId}
           />
         </div>
       ) : null}

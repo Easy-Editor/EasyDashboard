@@ -932,6 +932,17 @@ export interface Repository {
   ): Promise<
     { taskRun: AgentTaskRunRecord; transition: AgentTaskTransitionRecord } | 'conflict' | 'invalid_state' | null
   >
+  resumeAgentTaskRun?(
+    actorId: string,
+    input: {
+      projectId: string
+      taskRunId: string
+      costLimitMicros: number
+      tokenLimit: number
+      configDigest: string
+      now: Date
+    },
+  ): Promise<{ taskRun: AgentTaskRunRecord; transition: AgentTaskTransitionRecord } | 'invalid_state' | null>
   getAgentTaskTransitionProviderResult?(
     actorId: string,
     taskRunId: string,

@@ -16,6 +16,7 @@ describe('project Agent workspace source contract', () => {
     expect(source).toContain('const createdTaskRun = await createAgentTaskRun({')
     expect(source).toContain('await syncAgentTaskWorkspaceBarrier({')
     expect(source).toContain('await pollAgentTaskRun(projectId, createdTaskRun.id')
+    expect(source).not.toContain('maxAttempts: 1,')
     expect(source).toContain("reason.code !== 'AGENT_TASK_RUN_NOT_FOUND'")
     expect(source).toContain('await respondAgentTask({')
     expect(source).toContain('questionId: pendingQuestion.id, turnId: userTurn.id')
@@ -41,7 +42,7 @@ describe('project Agent workspace source contract', () => {
     expect(source).toContain('showTaskProgress={agentPreferences.showTaskProgress}')
     expect(source).toContain('recordAgentRun({')
     expect(source).toContain("run.status === 'committed'")
-    expect(source.match(/await refreshProjectDraft\('提交'\)/g)).toHaveLength(3)
+    expect(source.match(/await refreshProjectDraft\('提交'\)/g)).toHaveLength(6)
     expect(source.match(/await refreshProjectDraft\('回滚'\)/g)).toHaveLength(1)
     expect(source).toContain("recoveredCommittedRun ||= run.status === 'committed'")
     expect(source).toContain('publishUpdate: publishProjectDraftUpdate')
@@ -77,6 +78,8 @@ describe('project Agent workspace source contract', () => {
     expect(source).toContain('resumeAgentRun(activeConversation, projectedTask)')
     expect(source).toContain('hydratePersistedAgentTaskRun({')
     expect(source).toContain('recordAgentTaskRunDetail({')
+    expect(source).toContain("['planning', 'running', 'verifying', 'rolling_back'].includes(detail.status)")
+    expect(source).toContain("await refreshProjectDraft('提交')")
   })
 
   it('continues a waiting semantic task run instead of creating a replacement run', async () => {

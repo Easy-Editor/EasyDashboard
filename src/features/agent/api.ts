@@ -1083,6 +1083,14 @@ export async function continueAgentTaskRun(input: ContinueAgentTaskRunInput): Pr
   return normalizeTaskRunDetail(response.taskRun)
 }
 
+export async function resumeAgentTaskRun(projectId: string, taskRunId: string): Promise<AgentTaskRunDetail> {
+  const response = await apiRequest<{ taskRun: unknown }>(
+    `/api/projects/${encodeURIComponent(projectId)}/agent/task-runs/${encodeURIComponent(taskRunId)}/resume`,
+    { method: 'POST' },
+  )
+  return normalizeTaskRunDetail(response.taskRun)
+}
+
 export type AgentTaskRunSnapshot = {
   detail: AgentTaskRunDetail
   events: AgentTaskPublicEvent[]

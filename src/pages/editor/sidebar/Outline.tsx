@@ -88,11 +88,7 @@ export const OutlineSidebar = observer(() => {
   return (
     <SidebarMenu className={styles.outlineTree}>
       {rootNode.childrenNodes.map((childNode: Node<NodeSchema>, index: Key | null | undefined) => (
-        <SidebarMenuItem key={index} className='px-4'>
-          <RendererContextMenu>
-            <OutlineTree node={childNode} depth={0} />
-          </RendererContextMenu>
-        </SidebarMenuItem>
+        <OutlineTree key={index} node={childNode} depth={0} />
       ))}
     </SidebarMenu>
   )
@@ -120,87 +116,93 @@ const OutlineTree = observer(({ node, depth = 0 }: { node: Node<NodeSchema>; dep
 
   if (!node.childrenNodes?.length) {
     return (
-      <div
-        onClick={handleSelect}
-        onContextMenu={handleSelect}
-        onMouseEnter={() => setIsShowExtra(true)}
-        onMouseLeave={() => setIsShowExtra(false)}
-        className={styles.treeNode}
-        data-selected={selected.includes(node)}
-        data-hidden={node.isHidden}
-        data-locked={node.isLocked}
-        style={{ paddingLeft: `calc(${depth} * var(--outline-indent-size) + 0.5rem)` }}
-      >
-        <div className={styles.nodeContent}>
-          <ComponentIcon className={styles.nodeIcon} />
-          <span className={styles.nodeName}>{node.title || node.componentName}</span>
-        </div>
-        <SidebarMenuExtra>
-          <SidebarMenuExtraItem
-            className={cn(styles.actionButton, (isShowExtra || node.isHidden) && styles.actionButtonVisible)}
-            onClick={handleHide}
+      <SidebarMenuItem>
+        <RendererContextMenu>
+          <div
+            onClick={handleSelect}
+            onContextMenu={handleSelect}
+            onMouseEnter={() => setIsShowExtra(true)}
+            onMouseLeave={() => setIsShowExtra(false)}
+            className={styles.treeNode}
+            data-selected={selected.includes(node)}
+            data-hidden={node.isHidden}
+            data-locked={node.isLocked}
+            style={{ paddingLeft: `calc(${depth} * var(--outline-indent-size) + 0.5rem)` }}
           >
-            {node.isHidden ? <EyeOff /> : <Eye />}
-          </SidebarMenuExtraItem>
-          <SidebarMenuExtraItem
-            className={cn(styles.actionButton, (isShowExtra || node.isLocked) && styles.actionButtonVisible)}
-            onClick={handleLock}
-          >
-            {node.isLocked ? <LockKeyhole /> : <LockKeyholeOpen />}
-          </SidebarMenuExtraItem>
-        </SidebarMenuExtra>
-      </div>
-    )
-  }
-
-  return (
-    <SidebarMenuItem>
-      <Collapsible className={styles.collapsible} defaultOpen>
-        <div
-          onClick={handleSelect}
-          onContextMenu={handleSelect}
-          onMouseEnter={() => setIsShowExtra(true)}
-          onMouseLeave={() => setIsShowExtra(false)}
-          className={styles.treeNode}
-          data-selected={selected.includes(node)}
-          data-hidden={node.isHidden}
-          data-locked={node.isLocked}
-          style={{ paddingLeft: `calc(${depth} * var(--outline-indent-size) + 0.5rem)` }}
-        >
-          <div className={styles.nodeContent}>
-            <CollapsibleTrigger asChild>
-              <ChevronRight className={styles.chevronIcon} />
-            </CollapsibleTrigger>
-            <ComponentIcon className={styles.nodeIcon} />
-            <span className={styles.nodeName}>{node.title || node.componentName}</span>
-          </div>
-          {!node.isRoot && (
+            <div className={styles.nodeContent}>
+              <ComponentIcon className={styles.nodeIcon} />
+              <span className={styles.nodeName}>{node.title || node.componentName}</span>
+            </div>
             <SidebarMenuExtra>
               <SidebarMenuExtraItem
                 className={cn(styles.actionButton, (isShowExtra || node.isHidden) && styles.actionButtonVisible)}
-                data-active={node.isHidden}
                 onClick={handleHide}
               >
                 {node.isHidden ? <EyeOff /> : <Eye />}
               </SidebarMenuExtraItem>
               <SidebarMenuExtraItem
                 className={cn(styles.actionButton, (isShowExtra || node.isLocked) && styles.actionButtonVisible)}
-                data-active={node.isLocked}
                 onClick={handleLock}
               >
                 {node.isLocked ? <LockKeyhole /> : <LockKeyholeOpen />}
               </SidebarMenuExtraItem>
             </SidebarMenuExtra>
-          )}
-        </div>
-        <CollapsibleContent>
-          <SidebarMenuSub className={cn('mr-0 pr-0', styles.menuSub)}>
-            {node.childrenNodes?.map((childrenNode: Node<NodeSchema>, index: Key | null | undefined) => (
-              <OutlineTree key={index} node={childrenNode} depth={depth + 1} />
-            ))}
-          </SidebarMenuSub>
-        </CollapsibleContent>
-      </Collapsible>
+          </div>
+        </RendererContextMenu>
+      </SidebarMenuItem>
+    )
+  }
+
+  return (
+    <SidebarMenuItem>
+      <RendererContextMenu>
+        <Collapsible className={styles.collapsible} defaultOpen>
+          <div
+            onClick={handleSelect}
+            onContextMenu={handleSelect}
+            onMouseEnter={() => setIsShowExtra(true)}
+            onMouseLeave={() => setIsShowExtra(false)}
+            className={styles.treeNode}
+            data-selected={selected.includes(node)}
+            data-hidden={node.isHidden}
+            data-locked={node.isLocked}
+            style={{ paddingLeft: `calc(${depth} * var(--outline-indent-size) + 0.5rem)` }}
+          >
+            <div className={styles.nodeContent}>
+              <CollapsibleTrigger asChild>
+                <ChevronRight className={styles.chevronIcon} />
+              </CollapsibleTrigger>
+              <ComponentIcon className={styles.nodeIcon} />
+              <span className={styles.nodeName}>{node.title || node.componentName}</span>
+            </div>
+            {!node.isRoot && (
+              <SidebarMenuExtra>
+                <SidebarMenuExtraItem
+                  className={cn(styles.actionButton, (isShowExtra || node.isHidden) && styles.actionButtonVisible)}
+                  data-active={node.isHidden}
+                  onClick={handleHide}
+                >
+                  {node.isHidden ? <EyeOff /> : <Eye />}
+                </SidebarMenuExtraItem>
+                <SidebarMenuExtraItem
+                  className={cn(styles.actionButton, (isShowExtra || node.isLocked) && styles.actionButtonVisible)}
+                  data-active={node.isLocked}
+                  onClick={handleLock}
+                >
+                  {node.isLocked ? <LockKeyhole /> : <LockKeyholeOpen />}
+                </SidebarMenuExtraItem>
+              </SidebarMenuExtra>
+            )}
+          </div>
+          <CollapsibleContent>
+            <SidebarMenuSub className={cn('mr-0 pr-0', styles.menuSub)}>
+              {node.childrenNodes?.map((childrenNode: Node<NodeSchema>, index: Key | null | undefined) => (
+                <OutlineTree key={index} node={childrenNode} depth={depth + 1} />
+              ))}
+            </SidebarMenuSub>
+          </CollapsibleContent>
+        </Collapsible>
+      </RendererContextMenu>
     </SidebarMenuItem>
   )
 })

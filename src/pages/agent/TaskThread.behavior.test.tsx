@@ -233,6 +233,26 @@ describe('TaskThread persisted behavior', () => {
     expect(html).toContain('直接在下方回复后，将继续同一任务。')
   })
 
+  it('offers an explicit same-task resume action after an execution-limit pause', async () => {
+    const storage = createStorage()
+    const conversation = createAgentConversation(
+      { ownerUserId: 'user-a', projectId: 'project-a', initialMessage: '继续完成大屏' },
+      storage,
+    )
+    const task = conversation.tasks[0]
+    if (!task) throw new Error('Expected task')
+    const hydrated = await hydrateTask({
+      detail: createDetail({ conversationId: conversation.id, taskId: task.id, status: 'paused' }),
+      events: [],
+      storage,
+    })
+    const html = renderToStaticMarkup(<TaskThread task={hydrated} onResume={() => undefined} />)
+
+    expect(html).toContain('任务已安全暂停')
+    expect(html).toContain('继续同一任务')
+    expect(html).not.toContain('重新创建任务')
+  })
+
   it('renders public activity without technical details and never exposes a raw technical payload', async () => {
     const storage = createStorage()
     const conversation = createAgentConversation(
