@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  cancelAgentTaskRun,
   compileAgentPlanPayload,
   continueAgentTaskRun,
   controlAgentRun,
@@ -31,6 +32,62 @@ afterEach(() => {
 })
 
 describe('Agent planning API boundary', () => {
+  it('cancels an existing semantic task in place', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          taskRun: {
+            id: 'task-run-cancel',
+            projectId: 'project-1',
+            conversationId: 'conversation-1',
+            taskId: 'task-1',
+            status: 'canceled',
+            activePlanVersion: 1,
+            currentTransitionKey: null,
+            modelBinding: {
+              provider: 'platform',
+              model: 'model',
+              profileId: 'platform:default',
+              configDigest: 'digest',
+            },
+            bounds: {
+              maxExecutorRetries: 2,
+              tokenLimit: 256000,
+              costLimitMicros: 2000000,
+            },
+            accounting: {
+              providerTurns: 1,
+              executorRetries: 0,
+              semanticRevisions: 0,
+              promptTokens: 100,
+              completionTokens: 20,
+              costMicros: 100000,
+            },
+            taskStartDocumentRevision: 1,
+            latestEventSequence: 2,
+            plan: null,
+            steps: [],
+            waiting: null,
+            createdAt: '2026-08-05T00:00:00.000Z',
+            updatedAt: '2026-08-05T00:00:01.000Z',
+            completedAt: '2026-08-05T00:00:01.000Z',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(cancelAgentTaskRun('project-1', 'task-run-cancel')).resolves.toMatchObject({
+      id: 'task-run-cancel',
+      status: 'canceled',
+    })
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/projects/project-1/agent/task-runs/task-run-cancel/cancel',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
   it('resumes an existing semantic task without creating a replacement task', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
       new Response(

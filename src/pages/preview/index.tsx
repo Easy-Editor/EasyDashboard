@@ -136,7 +136,7 @@ function DraftProjectPreview({ projectId }: { projectId: string }) {
     let cancelled = false
 
     const load = async () => {
-      setProjectDetail(null)
+      setProjectDetail(current => (current?.id === projectId ? current : null))
       setError(null)
 
       try {

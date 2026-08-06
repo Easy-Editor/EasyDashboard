@@ -261,13 +261,18 @@ describe('Agent task transition repository contract', () => {
     ['active plan', /activePlanVersion/],
     ['cross-run step', /taskRunId/],
     ['executor retry budget', /maxExecutorRetries/],
-    ['semantic revision budget', /maxStepRevisions/],
     ['additive accounting', /accountingDelta/],
   ])('rejects completion that violates the %s invariant', (_label, invariant) => {
     const complete = method('completeAgentTaskTransition', 'reconcileAgentTaskTransition')
 
     expect(complete).toMatch(invariant)
     expect(complete).toContain("'invalid_state'")
+  })
+
+  it('does not treat semantic revision count as a task hard bound', () => {
+    const complete = method('completeAgentTaskTransition', 'reconcileAgentTaskTransition')
+
+    expect(complete).not.toMatch(/stepRevisionCount > bounds\.maxStepRevisions/)
   })
 
   it('rejects provider-owned transition accounting fields even when their value is zero', () => {

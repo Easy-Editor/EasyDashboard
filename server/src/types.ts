@@ -394,8 +394,10 @@ export interface AgentConversationModelBindingRecord {
   createdAt: Date
 }
 export interface AgentTaskRunBounds {
-  maxProviderTurns: number
-  maxStepRevisions: number
+  /** Legacy telemetry only. Provider turns are no longer a task execution bound. */
+  maxProviderTurns?: number
+  /** Legacy telemetry only. Semantic revisions continue until completion or cost exhaustion. */
+  maxStepRevisions?: number
   maxExecutorRetries: number
   tokenLimit: number
   costLimitMicros: number
@@ -945,6 +947,10 @@ export interface Repository {
       now: Date
     },
   ): Promise<{ taskRun: AgentTaskRunRecord; transition: AgentTaskTransitionRecord } | 'invalid_state' | null>
+  cancelAgentTaskRun?(
+    actorId: string,
+    input: { projectId: string; taskRunId: string; now: Date },
+  ): Promise<{ taskRun: AgentTaskRunRecord; operationIds: string[] } | 'invalid_state' | null>
   getAgentTaskTransitionProviderResult?(
     actorId: string,
     taskRunId: string,

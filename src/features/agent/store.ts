@@ -22,6 +22,7 @@ import type {
   RecordAgentTaskPlanInput,
   RecordAgentTaskQuestionInput,
   RecordAgentTaskRunDetailInput,
+  RenameAgentConversationInput,
   SetAgentMessageAttachmentsInput,
   UpdateTaskProgressInput,
   UpsertProjectContextInput,
@@ -322,6 +323,12 @@ function normalizeAgentWorkspace(workspace: AgentWorkspace): AgentWorkspace {
     ...workspace,
     version: 2,
     preferences: { ...DEFAULT_AGENT_PREFERENCES, ...workspace.preferences },
+    conversations: workspace.conversations.map(conversation => {
+      const firstUserRequest = conversation.messages.find(message => message.role === 'user')?.content.trim()
+      return conversation.title === '新对话' && firstUserRequest
+        ? { ...conversation, title: firstUserRequest.replace(/\s+/g, ' ').slice(0, 40) }
+        : conversation
+    }),
     projectContexts: workspace.projectContexts.map(context => ({
       ...context,
       revision: context.revision ?? 1,
@@ -473,9 +480,15 @@ export function appendAgentTurn(input: AppendAgentTurnInput, storage?: AgentStor
     : implicitClarificationTask
   if (input.taskId && !continuedTask) throw new Error(`Unknown agent task: ${input.taskId}`)
   const createdTask = role === 'user' && !continuedTask ? createInitialAgentTask(createdAt) : undefined
+  const shouldDeriveTitle =
+    role === 'user' &&
+    conversation.title === '新对话' &&
+    conversation.messages.every(message => message.role !== 'user') &&
+    input.content.trim().length > 0
   conversation.messages.push(
     createMessage(role, input.content, attachments, createdAt, continuedTask?.id ?? createdTask?.id),
   )
+  if (shouldDeriveTitle) conversation.title = input.content.trim().replace(/\s+/g, ' ').slice(0, 40)
   if (createdTask) conversation.tasks.push(createdTask)
   if (role === 'user' && continuedTask) {
     continuedTask.status = 'waiting'
@@ -483,6 +496,21 @@ export function appendAgentTurn(input: AppendAgentTurnInput, storage?: AgentStor
     continuedTask.updatedAt = createdAt
   }
   conversation.updatedAt = createdAt
+  replaceAgentWorkspace(workspace, storage)
+  return structuredClone(conversation)
+}
+
+export function renameAgentConversation(
+  input: RenameAgentConversationInput,
+  storage?: AgentStorage,
+): AgentConversation {
+  const workspace = readAgentWorkspace(input.ownerUserId, storage)
+  const conversation = workspace.conversations.find(candidate => candidate.id === input.conversationId)
+  if (!conversation) throw new Error(`Unknown agent conversation: ${input.conversationId}`)
+  const title = input.title.trim().replace(/\s+/g, ' ').slice(0, 80)
+  if (!title) throw new Error('Conversation title cannot be empty')
+  conversation.title = title
+  conversation.updatedAt = timestamp(input.updatedAt)
   replaceAgentWorkspace(workspace, storage)
   return structuredClone(conversation)
 }
@@ -1122,6 +1150,7 @@ export function createAgentStore(storage: AgentStorage): AgentStore {
     readWorkspace: ownerUserId => readAgentWorkspace(ownerUserId, storage),
     createConversation: input => createAgentConversation(input, storage),
     appendTurn: input => appendAgentTurn(input, storage),
+    renameConversation: input => renameAgentConversation(input, storage),
     setMessageAttachments: input => setAgentMessageAttachments(input, storage),
     getProjectConversations: (ownerUserId, projectId) => getProjectConversations(ownerUserId, projectId, storage),
     getConversation: (ownerUserId, conversationId) => getConversation(ownerUserId, conversationId, storage),

@@ -17,9 +17,9 @@ import {
   type AgentMessage,
   type AgentTask,
   type AgentTaskPublicEvent,
-  type AgentTaskTechnicalDetails,
   getAgentBudgetUsage,
 } from '@/features/agent'
+import { resolveQuestionChoices } from '@/features/agent/question-choices'
 import {
   AlertCircle,
   AlertTriangle,
@@ -78,14 +78,34 @@ const WARNING_ACTIVITY_TYPES = new Set<AgentTaskPublicEvent['type']>([
   'rollback_blocked',
 ])
 const FAILED_ACTIVITY_TYPES = new Set<AgentTaskPublicEvent['type']>(['task_failed'])
+const TRANSIENT_ACTIVITY_TYPES = new Set<AgentTaskPublicEvent['type']>([
+  'step_started',
+  'change_prepared',
+  'step_revising',
+])
+const STEP_SETTLED_ACTIVITY_TYPES = new Set<AgentTaskPublicEvent['type']>([
+  'change_committed',
+  'step_passed',
+  'step_superseded',
+  'task_failed',
+  'task_completed',
+])
 
 export function isConversationNearBottom(metrics: ScrollMetrics): boolean {
   return metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop <= CONVERSATION_BOTTOM_THRESHOLD
 }
 
 export function shouldShowTaskTodo(task: AgentTask | undefined, preferenceEnabled: boolean): task is AgentTask {
-  return Boolean(task && preferenceEnabled && ACTIVE_TASK_STATUSES.has(task.status))
+  return Boolean(
+    task &&
+      preferenceEnabled &&
+      task.status !== 'waiting_user' &&
+      ACTIVE_TASK_STATUSES.has(task.status) &&
+      (task.activePlan?.steps ?? task.plan?.steps ?? task.stages).length > 1,
+  )
 }
+
+export { resolveQuestionChoices }
 
 export function resolveConversationTimelineItems(conversation: AgentConversation): ConversationTimelineItem[] {
   const messages: ConversationTimelineItem[] = conversation.messages.map(message => ({
@@ -94,17 +114,49 @@ export function resolveConversationTimelineItems(conversation: AgentConversation
     createdAt: message.createdAt,
     message,
   }))
-  const activities: ConversationTimelineItem[] = conversation.tasks.flatMap(task =>
-    (task.activities ?? []).map(activity => ({
-      kind: 'activity' as const,
-      id: `activity:${activity.taskRunId}:${activity.eventKey}`,
-      createdAt: activity.createdAt,
-      task,
-      activity,
-    })),
-  )
+  const activities: ConversationTimelineItem[] = conversation.tasks.flatMap(task => {
+    const activeStepIds = new Set(
+      (task.activePlan?.steps ?? [])
+        .filter(step => ['running', 'verifying', 'revising'].includes(step.status))
+        .map(step => step.id),
+    )
+    const latestTransientByStep = new Map<string, AgentTaskPublicEvent>()
+    const latestSettledSequenceByStep = new Map<string, number>()
+    for (const activity of task.activities ?? []) {
+      if (TRANSIENT_ACTIVITY_TYPES.has(activity.type)) {
+        latestTransientByStep.set(activity.stepId ?? task.id, activity)
+      }
+      if (STEP_SETTLED_ACTIVITY_TYPES.has(activity.type)) {
+        const key = activity.stepId ?? task.id
+        latestSettledSequenceByStep.set(key, Math.max(latestSettledSequenceByStep.get(key) ?? 0, activity.seq))
+      }
+    }
+    return (task.activities ?? [])
+      .filter(activity => {
+        if (activity.type === 'waiting_user') return false
+        if (!TRANSIENT_ACTIVITY_TYPES.has(activity.type)) return true
+        if ((latestSettledSequenceByStep.get(activity.stepId ?? task.id) ?? 0) > activity.seq) return false
+        const isTaskActivelyExecuting = ['waiting', 'running'].includes(task.status)
+        const isCurrentStep = task.activePlan
+          ? isTaskActivelyExecuting && Boolean(activity.stepId && activeStepIds.has(activity.stepId))
+          : task.status === 'running'
+        return isCurrentStep && latestTransientByStep.get(activity.stepId ?? task.id)?.eventKey === activity.eventKey
+      })
+      .map(activity => ({
+        kind: 'activity' as const,
+        id: `activity:${activity.taskRunId}:${activity.eventKey}`,
+        createdAt: activity.createdAt,
+        task,
+        activity,
+      }))
+  })
 
   return [...messages, ...activities].sort((left, right) => {
+    if (left.kind === 'activity' && right.kind === 'activity' && left.task.id === right.task.id) {
+      return left.activity.seq - right.activity.seq
+    }
+    if (left.kind === 'message' && right.kind === 'activity' && left.message.taskId === right.task.id) return -1
+    if (left.kind === 'activity' && right.kind === 'message' && right.message.taskId === left.task.id) return 1
     const byTime = Date.parse(left.createdAt) - Date.parse(right.createdAt)
     if (byTime !== 0) return byTime
     if (left.kind === right.kind) {
@@ -113,6 +165,68 @@ export function resolveConversationTimelineItems(conversation: AgentConversation
     }
     return left.kind === 'message' ? -1 : 1
   })
+}
+
+function activityChangeDescription(activity: AgentTaskPublicEvent): string | null {
+  const payload = activity.publicPayload.changeCounts
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const labels: Record<string, string> = {
+    add: '新增',
+    configure: '更新配置',
+    move: '调整位置',
+    resize: '调整尺寸',
+    reorder: '调整层级',
+    remove: '移除',
+  }
+  const parts = Object.entries(payload as Record<string, unknown>).flatMap(([key, value]) =>
+    typeof value === 'number' && value > 0 && labels[key] ? [`${labels[key]} ${value} 项`] : [],
+  )
+  return parts.length ? parts.join('，') : null
+}
+
+export function resolveActivityPresentation(task: AgentTask, activity: AgentTaskPublicEvent) {
+  const stepTitle = task.activePlan?.steps.find(step => step.id === activity.stepId)?.title
+  const changeDescription = activityChangeDescription(activity)
+  if (activity.type === 'waiting_user') {
+    return {
+      status: '需要你的回复',
+      title: stepTitle ?? '继续当前任务',
+      detail: task.pendingQuestion?.prompt ?? activity.summary,
+    }
+  }
+  if (activity.type === 'step_started' || activity.type === 'change_prepared') {
+    return {
+      status: '正在修改',
+      title: stepTitle ?? '当前画布内容',
+      detail: changeDescription ? `${changeDescription}，完成后同步到右侧画布。` : 'Agent 正在把这一步应用到右侧画布。',
+    }
+  }
+  if (activity.type === 'step_revising') {
+    return {
+      status: '正在重新调整',
+      title: stepTitle ?? '当前步骤',
+      detail: '上一次修改没有形成可用结果，Agent 正在调整执行方式。',
+    }
+  }
+  if (activity.type === 'change_committed') {
+    return {
+      status: '已更新画布',
+      title: stepTitle ?? '当前步骤',
+      detail: changeDescription ? `${changeDescription}，已同步到右侧草稿。` : '本轮修改已同步到右侧草稿。',
+    }
+  }
+  if (activity.type === 'step_passed') {
+    return {
+      status: '检查通过',
+      title: stepTitle ?? '当前步骤',
+      detail: '画布结果与本步目标一致，Agent 将继续后续工作。',
+    }
+  }
+  return {
+    status: RUNNING_ACTIVITY_TYPES.has(activity.type) ? 'Agent 正在处理' : 'Agent 进度',
+    title: stepTitle ?? activity.summary,
+    detail: stepTitle && activity.summary !== stepTitle ? activity.summary : null,
+  }
 }
 
 function clampChatDockWidth(width: number): number {
@@ -218,20 +332,6 @@ function MessageBlock({
   )
 }
 
-function hasTechnicalDetails(details: AgentTaskTechnicalDetails | undefined): details is AgentTaskTechnicalDetails {
-  return Boolean(details && (details.errorCode || details.operationId || details.receiptId || details.cost))
-}
-
-function formatTechnicalCost(details: NonNullable<AgentTaskTechnicalDetails['cost']>): string {
-  const amount = (details.amountMicros / 1_000_000).toFixed(6)
-  const accuracyLabels = {
-    actual: '实际',
-    estimated: '估算',
-    billing_indeterminate: '待确认',
-  } as const
-  return details.accuracy ? `$${amount}（${accuracyLabels[details.accuracy]}）` : `$${amount}`
-}
-
 function ActivityIcon({ task, activity }: { task: AgentTask; activity: AgentTaskPublicEvent }) {
   const isCurrentRunningActivity = task.status === 'running' && task.activities?.at(-1)?.eventKey === activity.eventKey
   if (RUNNING_ACTIVITY_TYPES.has(activity.type) && isCurrentRunningActivity) {
@@ -264,8 +364,7 @@ function AgentActivityBlock({
   reduceMotion: boolean
   continuation: boolean
 }) {
-  const content =
-    activity.type === 'waiting_user' ? (task.pendingQuestion?.prompt ?? activity.summary) : activity.summary
+  const presentation = resolveActivityPresentation(task, activity)
 
   return (
     <motion.article
@@ -289,43 +388,48 @@ function AgentActivityBlock({
         </div>
       )}
       <div className={`ml-8 border-l border-[var(--ed-line)] pl-3.5 ${continuation ? '' : 'mt-2'}`}>
-        <div className='flex items-start gap-2 text-[12px] leading-5 text-[var(--ed-ink-soft)]'>
+        <div className='flex items-start gap-2'>
           <span className='mt-[3px] shrink-0'>
             <ActivityIcon task={task} activity={activity} />
           </span>
-          <p className='min-w-0 flex-1 whitespace-pre-wrap'>{content}</p>
+          <div className='min-w-0 flex-1'>
+            <p className='text-[10px] font-medium leading-4 text-[var(--ed-cyan)]'>{presentation.status}</p>
+            <p className='mt-0.5 whitespace-pre-wrap text-[12px] font-medium leading-5 text-[var(--ed-ink-soft)]'>
+              {presentation.title}
+            </p>
+            {presentation.detail ? (
+              <p className='mt-0.5 whitespace-pre-wrap text-[10px] leading-4 text-[var(--ed-ink-faint)]'>
+                {presentation.detail}
+              </p>
+            ) : null}
+          </div>
         </div>
-        {hasTechnicalDetails(activity.technicalDetails) ? (
-          <details className='mt-2 text-[9px] text-[var(--ed-ink-faint)]'>
-            <summary className='w-fit cursor-pointer select-none hover:text-[var(--ed-ink-muted)]'>技术信息</summary>
-            <dl className='mt-1.5 space-y-0.5 rounded-[5px] bg-[var(--ed-panel)] p-2 font-mono'>
-              {activity.technicalDetails.errorCode ? (
-                <div>
-                  <dt className='inline'>错误码：</dt>
-                  <dd className='inline break-all'>{activity.technicalDetails.errorCode}</dd>
-                </div>
-              ) : null}
-              {activity.technicalDetails.operationId ? (
-                <div>
-                  <dt className='inline'>执行标识：</dt>
-                  <dd className='inline break-all'>{activity.technicalDetails.operationId}</dd>
-                </div>
-              ) : null}
-              {activity.technicalDetails.receiptId ? (
-                <div>
-                  <dt className='inline'>凭据标识：</dt>
-                  <dd className='inline break-all'>{activity.technicalDetails.receiptId}</dd>
-                </div>
-              ) : null}
-              {activity.technicalDetails.cost ? (
-                <div>
-                  <dt className='inline'>费用：</dt>
-                  <dd className='inline'>{formatTechnicalCost(activity.technicalDetails.cost)}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </details>
-        ) : null}
+      </div>
+    </motion.article>
+  )
+}
+
+function AgentPendingBlock({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <motion.article
+      data-agent-pending='true'
+      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <div className='flex items-center gap-2'>
+        <BrandMark compact className='[&>span]:size-6 [&_img]:h-[14px] [&_img]:w-[17px]' />
+        <span className='text-[11px] font-medium text-[var(--ed-ink-soft)]'>EasyDashboard Agent</span>
+      </div>
+      <div className='ml-8 mt-2 flex items-start gap-2 border-l border-[var(--ed-line)] pl-3.5'>
+        <LoaderCircle
+          className='mt-[3px] size-3.5 shrink-0 animate-spin text-[var(--ed-cyan)] motion-reduce:animate-none'
+          aria-hidden='true'
+        />
+        <div>
+          <p className='text-[10px] font-medium leading-4 text-[var(--ed-cyan)]'>Agent 正在思考</p>
+          <p className='mt-0.5 text-[11px] leading-5 text-[var(--ed-ink-muted)]'>正在理解你的要求并准备下一步操作。</p>
+        </div>
       </div>
     </motion.article>
   )
@@ -334,8 +438,10 @@ function AgentActivityBlock({
 function ConversationTimeline({
   conversation,
   reduceMotion,
-}: { conversation: AgentConversation; reduceMotion: boolean }) {
+  planPending,
+}: { conversation: AgentConversation; reduceMotion: boolean; planPending: boolean }) {
   const items = resolveConversationTimelineItems(conversation)
+  const showPendingAgent = planPending && items.at(-1)?.kind === 'message'
   return (
     <div aria-live='polite' aria-relevant='additions text' className='space-y-6 px-5 py-6'>
       {items.map((item, index) => {
@@ -355,6 +461,7 @@ function ConversationTimeline({
           />
         )
       })}
+      {showPendingAgent ? <AgentPendingBlock reduceMotion={reduceMotion} /> : null}
     </div>
   )
 }
@@ -402,6 +509,7 @@ export function ConversationThread({
   retryPending,
   showTaskProgress,
   onCreateConversation,
+  onRenameConversation,
   onRetry,
   onRollback,
   onResumeTask,
@@ -420,6 +528,7 @@ export function ConversationThread({
   retryPending: boolean
   showTaskProgress: boolean
   onCreateConversation: () => void
+  onRenameConversation?: (title: string) => void
   onRetry?: () => Promise<void>
   onRollback: (operationId: string) => void
   onResumeTask: (taskRunId: string) => void
@@ -439,7 +548,17 @@ export function ConversationThread({
   const [budgetUsage, setBudgetUsage] = useState<AgentBudgetUsage | null>(null)
   const [dockWidth, setDockWidth] = useState(CHAT_DOCK_DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!editingTitle) return
+    titleInputRef.current?.focus()
+    titleInputRef.current?.select()
+  }, [editingTitle])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messageInputRef = useRef<HTMLTextAreaElement>(null)
   const messageScrollRef = useRef<HTMLDivElement>(null)
   const shouldFollowMessagesRef = useRef(true)
   const lastConversationIdRef = useRef<string | null>(null)
@@ -449,6 +568,8 @@ export function ConversationThread({
   const currentProjectId = conversation?.projectId
   const currentTaskId = conversation?.tasks.at(-1)?.id
   const latestTask = conversation?.tasks.at(-1)
+  const pendingQuestion = latestTask?.status === 'waiting_user' ? latestTask.pendingQuestion : undefined
+  const questionChoices = pendingQuestion ? resolveQuestionChoices(pendingQuestion.prompt) : []
   const conversationId = conversation?.id ?? null
   const latestTimelineItem = conversation ? resolveConversationTimelineItems(conversation).at(-1) : undefined
   const latestMessageRevision = latestTimelineItem?.id ?? null
@@ -581,64 +702,123 @@ export function ConversationThread({
         }}
       />
       <div className='flex h-16 shrink-0 items-center gap-2 border-b border-[var(--ed-line)] px-3.5'>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        {editingTitle ? (
+          <form
+            className='flex min-w-0 flex-1 items-center gap-1.5'
+            onSubmit={event => {
+              event.preventDefault()
+              if (!titleDraft.trim()) return
+              onRenameConversation?.(titleDraft)
+              setEditingTitle(false)
+            }}
+          >
+            <label className='sr-only' htmlFor='agent-conversation-title'>
+              对话名称
+            </label>
+            <input
+              ref={titleInputRef}
+              id='agent-conversation-title'
+              value={titleDraft}
+              maxLength={80}
+              onChange={event => setTitleDraft(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Escape') setEditingTitle(false)
+              }}
+              className='h-10 min-w-0 flex-1 rounded-[6px] border border-[var(--ed-cyan)] bg-[var(--ed-panel-raised)] px-2.5 text-[13px] text-[var(--ed-ink)] outline-none ring-2 ring-[var(--ed-cyan)]/10'
+            />
+            <button
+              type='submit'
+              aria-label='保存对话名称'
+              disabled={!titleDraft.trim()}
+              className='grid size-9 place-items-center rounded-[6px] text-[var(--ed-cyan)] hover:bg-[var(--ed-panel-raised)] disabled:opacity-40'
+            >
+              <Check className='size-4' aria-hidden='true' />
+            </button>
             <button
               type='button'
-              aria-label='切换对话'
-              className='group flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[7px] px-2.5 text-left outline-none transition-colors hover:bg-[var(--ed-panel-raised)] focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)] data-[state=open]:bg-[var(--ed-panel-raised)]'
+              aria-label='取消重命名'
+              onClick={() => setEditingTitle(false)}
+              className='grid size-9 place-items-center rounded-[6px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)]'
             >
-              <span className='min-w-0 flex-1'>
-                <span className='block truncate text-[13px] font-medium text-[var(--ed-ink)]'>
-                  {conversation?.title ?? '新对话'}
-                </span>
-                <span className='mt-0.5 block text-[10px] text-[var(--ed-ink-faint)]'>仅你可见 · 同一对话持续执行</span>
-              </span>
-              <ChevronDown
-                className='size-3.5 shrink-0 text-[var(--ed-ink-faint)] transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none'
-                aria-hidden='true'
-              />
+              <X className='size-4' aria-hidden='true' />
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            data-ed-shell='agent'
-            align='start'
-            sideOffset={6}
-            className='w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] max-w-[410px] rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] p-1.5 text-[var(--ed-ink)] shadow-[0_18px_48px_rgba(0,0,0,.42)]'
-          >
-            <DropdownMenuLabel className='px-2 py-1.5 text-[10px] font-medium text-[var(--ed-ink-faint)]'>
-              项目对话
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator className='bg-[var(--ed-line)]' />
-            {conversations.map(candidate => {
-              const active = candidate.id === conversation?.id
-              return (
-                <DropdownMenuItem
-                  key={candidate.id}
-                  onSelect={() => onSelectConversation(candidate.id)}
-                  className='min-h-10 rounded-[6px] px-2 py-2 focus:bg-[var(--ed-panel-raised)] focus:text-[var(--ed-ink)]'
-                >
-                  <Check
-                    className={`size-3.5 shrink-0 ${active ? 'text-[var(--ed-cyan)]' : 'text-transparent'}`}
-                    aria-hidden='true'
-                  />
-                  <span className='min-w-0 flex-1 truncate text-[11px] text-[var(--ed-ink-soft)]'>
-                    {candidate.title}
+          </form>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type='button'
+                aria-label='切换对话'
+                className='group flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[7px] px-2.5 text-left outline-none transition-colors hover:bg-[var(--ed-panel-raised)] focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)] data-[state=open]:bg-[var(--ed-panel-raised)]'
+              >
+                <span className='min-w-0 flex-1'>
+                  <span className='block truncate text-[13px] font-medium text-[var(--ed-ink)]'>
+                    {conversation?.title ?? '新对话'}
                   </span>
-                  <time className='shrink-0 font-mono text-[9px] text-[var(--ed-ink-faint)]'>
-                    {formatCompactTime(candidate.updatedAt)}
-                  </time>
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                  <span className='mt-0.5 block text-[10px] text-[var(--ed-ink-faint)]'>
+                    仅你可见 · 同一对话持续执行
+                  </span>
+                </span>
+                <ChevronDown
+                  className='size-3.5 shrink-0 text-[var(--ed-ink-faint)] transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none'
+                  aria-hidden='true'
+                />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              data-ed-shell='agent'
+              align='start'
+              sideOffset={6}
+              className='w-[var(--radix-dropdown-menu-trigger-width)] min-w-[320px] max-w-[410px] rounded-[8px] border-[var(--ed-line-strong)] bg-[var(--ed-panel)] p-1.5 text-[var(--ed-ink)] shadow-[0_18px_48px_rgba(0,0,0,.42)]'
+            >
+              <DropdownMenuLabel className='px-2 py-1.5 text-[10px] font-medium text-[var(--ed-ink-faint)]'>
+                项目对话
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className='bg-[var(--ed-line)]' />
+              {conversations.map(candidate => {
+                const active = candidate.id === conversation?.id
+                return (
+                  <DropdownMenuItem
+                    key={candidate.id}
+                    onSelect={() => onSelectConversation(candidate.id)}
+                    className='min-h-10 rounded-[6px] px-2 py-2 focus:bg-[var(--ed-panel-raised)] focus:text-[var(--ed-ink)]'
+                  >
+                    <Check
+                      className={`size-3.5 shrink-0 ${active ? 'text-[var(--ed-cyan)]' : 'text-transparent'}`}
+                      aria-hidden='true'
+                    />
+                    <span className='min-w-0 flex-1 truncate text-[11px] text-[var(--ed-ink-soft)]'>
+                      {candidate.title}
+                    </span>
+                    <time className='shrink-0 font-mono text-[9px] text-[var(--ed-ink-faint)]'>
+                      {formatCompactTime(candidate.updatedAt)}
+                    </time>
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {!editingTitle && conversation && onRenameConversation ? (
+          <button
+            type='button'
+            aria-label='重命名当前对话'
+            title='重命名当前对话'
+            onClick={() => {
+              setTitleDraft(conversation.title)
+              setEditingTitle(true)
+            }}
+            className='grid size-9 shrink-0 place-items-center rounded-[6px] text-[var(--ed-ink-faint)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
+          >
+            <SquarePen className='size-3.5' aria-hidden='true' />
+          </button>
+        ) : null}
         <button
           type='button'
           aria-label='新建对话'
           title='新建对话'
           onClick={onCreateConversation}
-          className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[6px] px-2 text-[10px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
+          className='inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] px-2 text-[11px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
         >
           <SquarePen className='size-3.5' aria-hidden='true' />
           新对话
@@ -648,10 +828,14 @@ export function ConversationThread({
         ref={messageScrollRef}
         data-agent-message-scroll='true'
         onScroll={handleMessageScroll}
-        className='min-h-0 flex-1 overscroll-contain overflow-y-auto bg-[var(--ed-rail)]'
+        className='min-h-0 flex-1 overscroll-contain overflow-y-auto bg-[var(--ed-rail)] pb-12'
       >
         {conversation && resolveConversationTimelineItems(conversation).length > 0 ? (
-          <ConversationTimeline conversation={conversation} reduceMotion={Boolean(reduceMotion)} />
+          <ConversationTimeline
+            conversation={conversation}
+            reduceMotion={Boolean(reduceMotion)}
+            planPending={planPending}
+          />
         ) : (
           <div className='grid h-full min-h-72 place-items-center px-6 py-8'>
             <div className='w-full max-w-sm'>
@@ -714,24 +898,62 @@ export function ConversationThread({
         </aside>
       ) : null}
 
-      {shouldShowTaskTodo(latestTask, showTaskProgress) ? (
-        <div
-          data-agent-todo='current'
-          className='shrink-0 border-t border-[var(--ed-line)] bg-[var(--ed-panel)] px-3.5 py-2.5'
-        >
-          <TaskThread
-            task={latestTask}
-            defaultExpanded
-            rollbackPending={rollbackPendingOperationId === latestTask.run?.operationId}
-            rolledBack={latestTask.run ? rolledBackOperationIds.has(latestTask.run.operationId) : false}
-            onRollback={onRollback}
-            onResume={onResumeTask}
-            resumePending={resumePendingTaskRunId === latestTask.taskRunId}
-          />
-        </div>
-      ) : null}
-
-      <div className='shrink-0 border-t border-[var(--ed-line)] bg-[var(--ed-panel)] px-3.5 py-3'>
+      <div className='relative shrink-0 border-t border-[var(--ed-line)] bg-[var(--ed-panel)] px-3.5 py-3'>
+        {pendingQuestion ? (
+          <section
+            data-agent-question='current'
+            aria-label='Agent 等待你的选择'
+            className='absolute bottom-[calc(100%+10px)] left-3.5 right-3.5 z-30 rounded-[9px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] p-3 shadow-[0_14px_36px_rgba(0,0,0,0.32)]'
+          >
+            <div className='flex items-start gap-2.5'>
+              <MessageCircleQuestion className='mt-0.5 size-4 shrink-0 text-[var(--ed-cyan)]' aria-hidden='true' />
+              <div className='min-w-0 flex-1'>
+                <p className='text-[10px] font-medium text-[var(--ed-cyan)]'>需要你的选择</p>
+                <p className='mt-1 text-[12px] leading-5 text-[var(--ed-ink-soft)]'>{pendingQuestion.prompt}</p>
+              </div>
+            </div>
+            <div className='mt-3 grid gap-1.5'>
+              {questionChoices.map(choice => {
+                const selected = content.trim() === choice
+                return (
+                  <button
+                    key={choice}
+                    type='button'
+                    aria-pressed={selected}
+                    onClick={() => {
+                      if (choice === '我需要补充说明') {
+                        setContent('')
+                      } else {
+                        setContent(choice)
+                      }
+                      messageInputRef.current?.focus()
+                    }}
+                    className={`min-h-10 rounded-[6px] border px-3 text-left text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)] active:scale-[0.99] motion-reduce:transition-none ${
+                      selected
+                        ? 'border-[var(--ed-cyan)]/55 bg-[var(--ed-cyan)]/10 text-[var(--ed-ink)]'
+                        : 'border-[var(--ed-line)] bg-[var(--ed-panel)] text-[var(--ed-ink-muted)] hover:border-[var(--ed-line-strong)] hover:text-[var(--ed-ink)]'
+                    }`}
+                  >
+                    {choice}
+                  </button>
+                )
+              })}
+            </div>
+            <p className='mt-2 text-[11px] text-[var(--ed-ink-faint)]'>也可以在下方输入自己的回答</p>
+          </section>
+        ) : null}
+        {shouldShowTaskTodo(latestTask, showTaskProgress) ? (
+          <div data-agent-todo='current' className='absolute bottom-[calc(100%+10px)] left-3.5 right-3.5 z-30'>
+            <TaskThread
+              task={latestTask}
+              rollbackPending={rollbackPendingOperationId === latestTask.run?.operationId}
+              rolledBack={latestTask.run ? rolledBackOperationIds.has(latestTask.run.operationId) : false}
+              onRollback={onRollback}
+              onResume={onResumeTask}
+              resumePending={resumePendingTaskRunId === latestTask.taskRunId}
+            />
+          </div>
+        ) : null}
         <div className='rounded-[10px] border border-[var(--ed-line-strong)] bg-[var(--ed-rail)] p-3 focus-within:border-[var(--ed-cyan)]/65 focus-within:ring-2 focus-within:ring-[var(--ed-cyan)]/10'>
           {attachments.length > 0 ? (
             <ul className='mb-2 flex flex-wrap gap-1.5'>
@@ -779,6 +1001,7 @@ export function ConversationThread({
             输入任务
           </label>
           <textarea
+            ref={messageInputRef}
             id='project-agent-message'
             value={content}
             onChange={event => setContent(event.target.value)}
@@ -806,7 +1029,7 @@ export function ConversationThread({
               aria-label='添加文件清单'
               title={`支持 ${AGENT_ATTACHMENT_FORMAT_LABEL}`}
               onClick={() => fileInputRef.current?.click()}
-              className='grid size-7 place-items-center rounded-[5px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
+              className='grid size-9 place-items-center rounded-[5px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
             >
               <Paperclip className='size-3.5' aria-hidden='true' />
             </button>
@@ -815,7 +1038,7 @@ export function ConversationThread({
                 <button
                   type='button'
                   aria-label={`附件范围：${attachmentScope === 'conversation' ? '仅本对话' : '项目文件清单'}`}
-                  className='flex h-7 items-center gap-1.5 rounded-[5px] border border-[var(--ed-line)] bg-[var(--ed-rail)] px-2 text-[10px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
+                  className='flex h-9 items-center gap-1.5 rounded-[5px] border border-[var(--ed-line)] bg-[var(--ed-rail)] px-2.5 text-[11px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
                 >
                   {attachmentScope === 'conversation' ? (
                     <LockKeyhole className='size-3' aria-hidden='true' />
@@ -869,7 +1092,7 @@ export function ConversationThread({
               aria-label='发送'
               disabled={(!content.trim() && attachments.length === 0) || planPending}
               onClick={() => void send()}
-              className='grid size-8 place-items-center rounded-[6px] bg-[var(--ed-ink)] text-[var(--ed-canvas)] hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
+              className='grid size-9 place-items-center rounded-[6px] bg-[var(--ed-ink)] text-[var(--ed-canvas)] hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
             >
               <Send className='size-3.5' aria-hidden='true' />
             </button>

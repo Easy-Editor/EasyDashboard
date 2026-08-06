@@ -3,16 +3,26 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AgentConversation, AgentTask } from '@/features/agent'
 import { describe, expect, it } from 'vitest'
-import { isConversationNearBottom, resolveConversationTimelineItems, shouldShowTaskTodo } from './ConversationThread'
+import {
+  isConversationNearBottom,
+  resolveConversationTimelineItems,
+  resolveQuestionChoices,
+  shouldShowTaskTodo,
+} from './ConversationThread'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 
-function createTask(status: AgentTask['status']): AgentTask {
+function createTask(status: AgentTask['status'], stepCount = 2): AgentTask {
+  const stageIds = ['understand-requirements', 'plan-layout', 'bind-data', 'preview-check'] as const
   return {
     id: 'task-1',
     title: '搭建大屏',
     status,
-    stages: [],
+    stages: stageIds.slice(0, stepCount).map((id, index) => ({
+      id,
+      title: `任务 ${index + 1}`,
+      status: index === 0 ? 'running' : 'pending',
+    })),
     taskRunId: 'run-1',
     activities: [
       {
@@ -76,9 +86,112 @@ describe('ConversationThread budget and attachment contracts', () => {
     expect(timeline.at(-1)?.id).toBe('activity:run-1:task-completed')
   })
 
+  it('keeps one task activity in durable sequence order even when timestamps arrive out of order', () => {
+    const task = createTask('complete')
+    task.activities = [
+      {
+        ...task.activities![0]!,
+        seq: 3,
+        eventKey: 'step-passed',
+        type: 'step_passed',
+        stepId: 'step-1',
+        createdAt: '2026-08-01T00:00:01.000Z',
+      },
+      {
+        ...task.activities![0]!,
+        seq: 1,
+        eventKey: 'step-started',
+        type: 'step_started',
+        stepId: 'step-1',
+        createdAt: '2026-08-01T00:00:03.000Z',
+      },
+      {
+        ...task.activities![0]!,
+        seq: 2,
+        eventKey: 'change-committed',
+        type: 'change_committed',
+        stepId: 'step-1',
+        createdAt: '2026-08-01T00:00:02.000Z',
+      },
+    ]
+    const conversation: AgentConversation = {
+      id: 'conversation-sequence',
+      ownerUserId: 'owner-1',
+      projectId: 'project-1',
+      visibility: 'private',
+      title: '调整告警列表',
+      messages: [
+        {
+          id: 'message-1',
+          taskId: task.id,
+          role: 'user',
+          content: '调整告警列表',
+          attachments: [],
+          createdAt: task.createdAt,
+        },
+      ],
+      tasks: [task],
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+    }
+
+    const activityItems = resolveConversationTimelineItems(conversation).filter(item => item.kind === 'activity')
+
+    expect(activityItems.map(item => item.activity.seq)).toEqual([2, 3])
+    expect(activityItems.map(item => item.activity.type)).not.toContain('step_started')
+  })
+
+  it('does not present an old transient activity as current after the task pauses', () => {
+    const task = createTask('paused')
+    task.activePlan = {
+      id: 'plan-1',
+      version: 1,
+      summary: '调整告警列表',
+      assumptions: [],
+      verification: {},
+      createdAt: task.createdAt,
+      steps: [
+        {
+          id: 'step-1',
+          planVersion: 1,
+          ordinal: 1,
+          semanticStepKey: 'alert-list',
+          title: '调整告警列表',
+          intent: {},
+          status: 'revising',
+          lastObservation: null,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+        },
+      ],
+    }
+    task.activities = [
+      {
+        ...task.activities![0]!,
+        seq: 1,
+        eventKey: 'step-revising',
+        type: 'step_revising',
+        stepId: 'step-1',
+      },
+    ]
+    const conversation: AgentConversation = {
+      id: 'conversation-paused',
+      ownerUserId: 'owner-1',
+      projectId: 'project-1',
+      visibility: 'private',
+      title: '调整告警列表',
+      messages: [],
+      tasks: [task],
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+    }
+
+    expect(resolveConversationTimelineItems(conversation)).toEqual([])
+  })
+
   it.each([
     ['running', true],
-    ['waiting_user', true],
+    ['waiting_user', false],
     ['paused', true],
     ['complete', false],
     ['failed', false],
@@ -86,6 +199,16 @@ describe('ConversationThread budget and attachment contracts', () => {
   ] as const)('shows the Todo only while status is %s', (status, expected) => {
     expect(shouldShowTaskTodo(createTask(status), true)).toBe(expected)
     expect(shouldShowTaskTodo(createTask(status), false)).toBe(false)
+  })
+
+  it('keeps the temporary Todo hidden for a single-step task', () => {
+    expect(shouldShowTaskTodo(createTask('running', 1), true)).toBe(false)
+  })
+
+  it('derives compact question choices while preserving a custom answer path', () => {
+    expect(resolveQuestionChoices('使用实时接口，还是先使用示例数据？')).toEqual(['使用实时接口', '先使用示例数据'])
+    expect(resolveQuestionChoices('左右面板是否保持等宽？')).toEqual(['确认，按此继续', '不，保持当前状态'])
+    expect(resolveQuestionChoices('请补充需要展示的指标。')).toEqual(['按 Agent 建议继续', '我需要补充说明'])
   })
 
   it('keeps an explicit scroll container and resets it to the latest reply when a conversation is opened', async () => {
@@ -125,6 +248,8 @@ describe('ConversationThread budget and attachment contracts', () => {
     expect(source).toContain('conversations.map(candidate =>')
     expect(source).not.toContain('<ConversationSidebar')
     expect(source).not.toContain('historyOpen')
+    expect(source).toContain("aria-label='重命名当前对话'")
+    expect(source).toContain("id='agent-conversation-title'")
   })
 
   it('renders exactly one temporary current Todo immediately above the composer', async () => {
@@ -172,9 +297,20 @@ describe('ConversationThread budget and attachment contracts', () => {
     expect(source).toContain('EasyDashboard Agent')
     expect(source).toContain('resolveConversationTimelineItems(conversation)')
     expect(source).toContain('data-agent-activity={activity.type}')
+    expect(source).toContain("data-agent-pending='true'")
+    expect(source).toContain('Agent 正在思考')
     expect(source).toContain('rounded-[9px_9px_3px_9px]')
     expect(source).toContain("className='space-y-6 px-5 py-6'")
     expect(source).not.toContain("className='divide-y divide-[var(--ed-line)]'")
     expect(source).toContain('EMPTY_PROMPTS.map(prompt =>')
+  })
+
+  it('shows waiting questions beside the composer instead of the Todo or activity timeline', async () => {
+    const source = await readFile(path.join(currentDirectory, 'ConversationThread.tsx'), 'utf8')
+
+    expect(source).toContain("data-agent-question='current'")
+    expect(source).toContain('需要你的选择')
+    expect(source).toContain('也可以在下方输入自己的回答')
+    expect(source).toContain("if (activity.type === 'waiting_user') return false")
   })
 })

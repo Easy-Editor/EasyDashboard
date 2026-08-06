@@ -34,13 +34,16 @@ describe('Agent preference settings', () => {
     expect(source).toContain("agentModelForm.provider === 'platform'")
   })
 
-  it('uses clear Chinese groups with page navigation and a page-level save action', async () => {
+  it('uses clear Chinese groups with page navigation and one persistent global save action', async () => {
     const source = await readFile(path.join(currentDirectory, 'SettingsPage.tsx'), 'utf8')
 
     expect(source).toContain('grid-cols-[168px_minmax(0,760px)]')
     expect(source).toContain("aria-label='设置分区'")
     expect(source).toContain("id='personal-settings-form'")
-    expect(source).toContain("form='personal-settings-form'")
+    expect(source).toContain("data-settings-save='global'")
+    expect(source).toContain('sticky bottom-4')
+    expect(source).toContain('保存个人资料、工作区与 Agent 偏好')
+    expect(source).not.toContain("form='personal-settings-form'")
     expect(source).toContain("id='settings-profile'")
     expect(source).toContain("id='settings-agent-model'")
     expect(source).toContain("aria-labelledby='settings-profile-title'")

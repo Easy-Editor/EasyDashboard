@@ -40,7 +40,10 @@ const MAX_ATTACHMENT_TEXT = 20_000
 const MAX_ATTACHMENT_TEXT_TOTAL = 60_000
 const MAX_CONVERSATION_TURNS = 24
 const MAX_CONVERSATION_TURN_TEXT = 4_000
-const MAX_CONVERSATION_TEXT_TOTAL = 40_000
+const CONTEXT_COMPACTION_THRESHOLD = 24_000
+const MAX_CONTEXT_SUMMARY_TEXT = 12_000
+const RECENT_CONVERSATION_TURNS = 7
+const RECENT_CLARIFICATIONS = 6
 
 type ProviderJsonSchema = Record<string, unknown>
 
@@ -779,20 +782,41 @@ export type AgentSelectionContext = {
   viewport?: { width: number; height: number }
 }
 
-function conversationProjection(turns: readonly AgentConversationTurn[] | undefined): AgentConversationTurn[] {
-  if (!turns?.length) return []
+function mergeContextSummary(existing: unknown, additions: readonly string[]): string | undefined {
+  const sections = [typeof existing === 'string' ? existing.trim() : '', ...additions.map(item => item.trim())].filter(
+    Boolean,
+  )
+  if (!sections.length) return undefined
+  return safeModelText(sections.join('\n\n')).slice(-MAX_CONTEXT_SUMMARY_TEXT)
+}
+
+function conversationProjection(turns: readonly AgentConversationTurn[] | undefined): {
+  contextSummary?: string
+  conversationTurns: AgentConversationTurn[]
+} {
+  if (!turns?.length) return { conversationTurns: [] }
   const selected =
     turns.length <= MAX_CONVERSATION_TURNS
       ? turns
       : [turns[0] as AgentConversationTurn, ...turns.slice(-(MAX_CONVERSATION_TURNS - 1))]
-  let remaining = MAX_CONVERSATION_TEXT_TOTAL
-  return selected.flatMap(turn => {
-    if (remaining <= 0 || (turn.role !== 'user' && turn.role !== 'assistant')) return []
-    const content = turn.content.trim().slice(0, Math.min(MAX_CONVERSATION_TURN_TEXT, remaining))
+  const projected = selected.flatMap(turn => {
+    if (turn.role !== 'user' && turn.role !== 'assistant') return []
+    const content = turn.content.trim().slice(0, MAX_CONVERSATION_TURN_TEXT)
     if (!content) return []
-    remaining -= content.length
     return [{ role: turn.role, content: safeModelText(content) }]
   })
+  const projectedLength = projected.reduce((total, turn) => total + turn.content.length, 0)
+  if (projectedLength <= CONTEXT_COMPACTION_THRESHOLD) return { conversationTurns: projected }
+
+  const conversationTurns = projected.slice(-RECENT_CONVERSATION_TURNS)
+  const olderTurns = projected.slice(0, -RECENT_CONVERSATION_TURNS)
+  const summary = olderTurns
+    .map(turn => `${turn.role === 'user' ? '用户' : 'Agent'}：${turn.content.slice(0, 1_200)}`)
+    .join('\n')
+  return {
+    ...(summary ? { contextSummary: safeModelText(summary).slice(0, MAX_CONTEXT_SUMMARY_TEXT) } : {}),
+    conversationTurns,
+  }
 }
 
 function selectionContextProjection(context: AgentSelectionContext | undefined): AgentSelectionContext | undefined {
@@ -876,7 +900,7 @@ export function createAgentProviderInputSnapshot(input: {
     systemPrompt: renderPromptBundle(bundle),
     userText: JSON.stringify({
       requirement: safeModelText(input.prompt),
-      conversationTurns: conversationProjection(input.conversationTurns),
+      ...conversationProjection(input.conversationTurns),
       ...(selectionContext ? { selectionContext } : {}),
       conversationId: input.conversationId,
       taskId: input.taskId,
@@ -1011,6 +1035,25 @@ export function createAgentClarificationHistoryProviderInputSnapshot(
     linkedPieChartStyles: source.systemPrompt.includes(DASHBOARD_AGENT_LINKED_PIE_CHART_CATALOG_VERSION),
   })
   const nextSelectionContext = selectionContextProjection(selectionContext)
+  const projectedHistory = history.map(item => ({
+    question: { id: safeModelText(item.question.id), text: safeModelText(item.question.text) },
+    response: safeModelText(item.response),
+    attachmentIds: item.attachmentIds.map(id => safeModelText(id)),
+  }))
+  const clarificationLength = projectedHistory.reduce(
+    (total, item) => total + item.question.text.length + item.response.length,
+    0,
+  )
+  const compactClarifications =
+    clarificationLength > CONTEXT_COMPACTION_THRESHOLD || projectedHistory.length > RECENT_CLARIFICATIONS
+  const clarificationHistory = compactClarifications ? projectedHistory.slice(-RECENT_CLARIFICATIONS) : projectedHistory
+  const olderClarificationSummary = compactClarifications
+    ? projectedHistory
+        .slice(0, -RECENT_CLARIFICATIONS)
+        .map(item => `澄清：${item.question.text.slice(0, 500)}\n答复：${item.response.slice(0, 900)}`)
+        .join('\n')
+    : ''
+  const contextSummary = mergeContextSummary(payload.contextSummary, [olderClarificationSummary])
   return {
     systemPrompt: renderPromptBundle(bundle),
     userText: JSON.stringify({
@@ -1020,11 +1063,8 @@ export function createAgentClarificationHistoryProviderInputSnapshot(
         question: { id: safeModelText(latest.question.id), text: safeModelText(latest.question.text) },
         response: safeModelText(latest.response),
       },
-      clarificationHistory: history.map(item => ({
-        question: { id: safeModelText(item.question.id), text: safeModelText(item.question.text) },
-        response: safeModelText(item.response),
-        attachmentIds: item.attachmentIds.map(id => safeModelText(id)),
-      })),
+      ...(contextSummary ? { contextSummary } : {}),
+      clarificationHistory,
       ...(nextSelectionContext ? { selectionContext: nextSelectionContext } : {}),
       attachments: [...mergedAttachments.values()],
     }),

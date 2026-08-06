@@ -363,7 +363,7 @@ export function HomePage() {
   }
 
   return (
-    <div className='ed-home-page relative isolate mx-auto min-h-screen w-full max-w-[980px] px-10 pb-16 pt-[clamp(180px,28vh,300px)]'>
+    <div className='ed-home-page relative isolate mx-auto min-h-screen w-full max-w-[980px] px-10 pb-16 pt-[clamp(96px,16vh,144px)]'>
       {settingsLoadError || agentRecoveryWarning || agentSyncOffline ? (
         <div className='mx-auto mb-5 max-w-[820px] space-y-2'>
           {settingsLoadError ? (

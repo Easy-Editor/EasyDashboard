@@ -20,6 +20,7 @@ import {
   recordAgentTaskPlan,
   recordAgentTaskQuestion,
   recordAgentTaskRunDetail,
+  renameAgentConversation,
   replaceAgentWorkspace,
   rollbackProjectContext,
   setAgentMessageAttachments,
@@ -151,6 +152,27 @@ describe('agent workspace storage', () => {
     expect(getConversation('user-a', second.id, storage)?.title).toBe('项目 B 对话')
     expect(getConversation('user-a', second.id, storage)?.tasks).toEqual([])
     expect(getConversation('user-b', first.id, storage)).toBeUndefined()
+  })
+
+  it('names an empty conversation from its first user request and still allows an explicit rename', () => {
+    const storage = createStorage()
+    const empty = createAgentConversation({ ownerUserId: 'user-a', projectId: 'project-a', title: '新对话' }, storage)
+
+    const titled = appendAgentTurn(
+      {
+        ownerUserId: 'user-a',
+        conversationId: empty.id,
+        content: '把右侧实时告警改成更容易扫描的列表',
+      },
+      storage,
+    )
+    expect(titled.title).toBe('把右侧实时告警改成更容易扫描的列表')
+
+    const renamed = renameAgentConversation(
+      { ownerUserId: 'user-a', conversationId: empty.id, title: '实时告警优化' },
+      storage,
+    )
+    expect(renamed.title).toBe('实时告警优化')
   })
 
   it('creates a waiting task without fabricating a fixed execution plan', () => {

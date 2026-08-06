@@ -361,13 +361,14 @@ describe('Agent provider attempt dual-parent fencing', () => {
     expect(reconcile).toMatch(/started/)
   })
 
-  it('checks transition task hard bounds before preparing a provider attempt', () => {
+  it('keeps provider turns as telemetry instead of a task hard bound', () => {
     const prepare = repository.slice(
       repository.indexOf('prepareAgentProviderAttempt(actorId'),
       repository.indexOf('markAgentProviderAttemptStarted'),
     )
 
-    expect(prepare).toMatch(/maxProviderTurns/)
+    expect(prepare).not.toMatch(/maxProviderTurns/)
+    expect(prepare).not.toMatch(/promptTokens \+ run\.completionTokens >= taskBounds\.tokenLimit/)
     expect(prepare).toMatch(/costLimitMicros/)
     expect(prepare).toContain('task_budget_exceeded')
   })
@@ -1096,7 +1097,7 @@ describeWithDatabase('Agent provider attempt transition fence PostgreSQL integra
     }
   })
 
-  it('rejects provider preparation after the task provider-turn hard bound is exhausted', async () => {
+  it('allows provider preparation regardless of accumulated provider turns', async () => {
     if (!admin || !pgRepository?.prepareAgentProviderAttempt) {
       throw new Error('Agent provider transition integration database is unavailable')
     }
@@ -1107,25 +1108,24 @@ describeWithDatabase('Agent provider attempt transition fence PostgreSQL integra
         providerBounds.maxProviderTurns,
       ])
 
-      await expect(
-        pgRepository.prepareAgentProviderAttempt(fixture.actorId, fixture.fence, {
-          projectId: fixture.project.id,
-          taskId: fixture.run.taskId,
-          turnId: 'hard-bound-turn',
-          providerRequestKey: 'hard-bound-request',
-          requestBodyDigest: 'c'.repeat(64),
-          idempotencyMode: 'stable',
-          reservedMicros: 0,
-          now,
-        }),
-      ).resolves.toBe('task_budget_exceeded')
+      const prepared = await pgRepository.prepareAgentProviderAttempt(fixture.actorId, fixture.fence, {
+        projectId: fixture.project.id,
+        taskId: fixture.run.taskId,
+        turnId: 'hard-bound-turn',
+        providerRequestKey: 'hard-bound-request',
+        requestBodyDigest: 'c'.repeat(64),
+        idempotencyMode: 'stable',
+        reservedMicros: 0,
+        now,
+      })
+      expect(prepared).not.toBe('task_budget_exceeded')
       const transition = await admin.query<{ status: string; error_json: { code?: string } | null }>(
         'select status, error_json from app.agent_task_transitions where id=$1',
         [fixture.fence.transitionId],
       )
       expect(transition.rows[0]).toEqual({
-        status: 'failed',
-        error_json: { code: 'task_budget_exceeded' },
+        status: 'leased',
+        error_json: null,
       })
     } finally {
       await admin.query('delete from auth.users where id = $1', [fixture.actorId])

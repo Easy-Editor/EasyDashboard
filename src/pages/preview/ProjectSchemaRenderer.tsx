@@ -10,6 +10,8 @@ import type { DataSourceEngine } from '@easy-editor/core'
 import { PureRenderer } from '@easy-editor/react-renderer-dashboard'
 import { observer } from 'mobx-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AgentCanvasFocusOverlay } from '../agent/AgentCanvasFocusOverlay'
+import type { AgentCanvasActivity } from '../agent/agent-canvas-focus'
 import { PreviewScaleViewport } from './PreviewScaleViewport'
 import { PreviewState } from './PreviewState'
 import { createLatestPreviewNavigationRunner } from './preview-navigation-runner'
@@ -22,12 +24,14 @@ export const ProjectSchemaRenderer = observer(
     requestedPageId,
     createDataSourceEngine,
     showPreviewScaleControls = false,
+    agentCanvasActivity,
     onActivePageChange,
   }: {
     project: ProjectDetail<unknown>
     requestedPageId?: string | null
     createDataSourceEngine: PreviewDataSourceEngine
     showPreviewScaleControls?: boolean
+    agentCanvasActivity?: AgentCanvasActivity | null
     onActivePageChange?: (pageId: string) => void
   }) => {
     const routeRenderModel = useMemo(
@@ -69,19 +73,18 @@ export const ProjectSchemaRenderer = observer(
     const { initialPage, projectSchema } = routeRenderModel
     const { rootAttributes, rootStyle, viewport } = renderModel
     const remoteComponents = materialManager.remoteComponentsMap
-    const materialRenderKey = Object.keys(remoteComponents).sort().join('|')
 
     if (navigationError) throw navigationError
 
     const renderer = (
       <main
         {...rootAttributes}
-        className='h-full w-full overflow-hidden bg-black'
+        className='relative h-full w-full overflow-hidden bg-black'
         aria-label={createDashboardPreviewAriaLabel(project.name)}
         style={rootStyle}
       >
         <PureRenderer
-          key={`${project.id}:${initialPage ?? 'empty'}:${materialRenderKey}`}
+          key={`${project.id}:${initialPage ?? 'empty'}`}
           projectSchema={projectSchema}
           initialPage={initialPage}
           components={{ ...components, ...remoteComponents }}
@@ -131,6 +134,9 @@ export const ProjectSchemaRenderer = observer(
           loadingContent={<PreviewState title='正在装配画布…' />}
           notFoundContent={<PreviewState title='项目中没有可预览的页面' />}
         />
+        {agentCanvasActivity && agentCanvasActivity.targets.length > 0 ? (
+          <AgentCanvasFocusOverlay activity={agentCanvasActivity} />
+        ) : null}
       </main>
     )
 

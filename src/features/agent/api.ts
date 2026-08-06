@@ -504,8 +504,12 @@ function normalizeTaskRunDetail(value: unknown): AgentTaskRunDetail {
       configDigest: requiredString(binding.configDigest, 'Agent task config digest'),
     },
     bounds: {
-      maxProviderTurns: requiredInteger(bounds.maxProviderTurns, 'Agent task provider turn limit'),
-      maxStepRevisions: requiredInteger(bounds.maxStepRevisions, 'Agent task revision limit'),
+      ...(bounds.maxProviderTurns === undefined
+        ? {}
+        : { maxProviderTurns: requiredInteger(bounds.maxProviderTurns, 'Agent task provider turn telemetry') }),
+      ...(bounds.maxStepRevisions === undefined
+        ? {}
+        : { maxStepRevisions: requiredInteger(bounds.maxStepRevisions, 'Agent task revision telemetry') }),
       maxExecutorRetries: requiredInteger(bounds.maxExecutorRetries, 'Agent task executor retry limit'),
       tokenLimit: requiredInteger(bounds.tokenLimit, 'Agent task token limit'),
       costLimitMicros: requiredInteger(bounds.costLimitMicros, 'Agent task cost limit'),
@@ -1086,6 +1090,14 @@ export async function continueAgentTaskRun(input: ContinueAgentTaskRunInput): Pr
 export async function resumeAgentTaskRun(projectId: string, taskRunId: string): Promise<AgentTaskRunDetail> {
   const response = await apiRequest<{ taskRun: unknown }>(
     `/api/projects/${encodeURIComponent(projectId)}/agent/task-runs/${encodeURIComponent(taskRunId)}/resume`,
+    { method: 'POST' },
+  )
+  return normalizeTaskRunDetail(response.taskRun)
+}
+
+export async function cancelAgentTaskRun(projectId: string, taskRunId: string): Promise<AgentTaskRunDetail> {
+  const response = await apiRequest<{ taskRun: unknown }>(
+    `/api/projects/${encodeURIComponent(projectId)}/agent/task-runs/${encodeURIComponent(taskRunId)}/cancel`,
     { method: 'POST' },
   )
   return normalizeTaskRunDetail(response.taskRun)

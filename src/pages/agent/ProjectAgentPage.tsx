@@ -8,10 +8,13 @@ import {
   type AgentFileSelection,
   type AgentPreferences,
   type AgentProjectContext,
+  type AgentTask,
   DEFAULT_AGENT_PREFERENCES,
   appendAgentTurn,
   buildProjectMemoryProposal,
+  cancelAgentTaskRun,
   connectAgentWorkspaceSync,
+  controlAgentRun,
   createAgentConversation,
   createAgentTaskRun,
   deleteProjectContext,
@@ -34,6 +37,7 @@ import {
   recordAgentTaskQuestion,
   recordAgentTaskRunDetail,
   refreshLegacyAgentRunProjection,
+  renameAgentConversation,
   respondAgentTask,
   resumeAgentTaskRun,
   rollbackProjectContext,
@@ -56,8 +60,10 @@ import {
   ArrowUpRight,
   BookOpenText,
   CircleAlert,
+  CircleStop,
   LayoutDashboard,
   LoaderCircle,
+  MessageCircleQuestion,
   MessageSquareText,
   PencilRuler,
   RotateCw,
@@ -68,6 +74,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { type PreviewDataSourceEngine, ProjectSchemaRenderer } from '../preview/ProjectSchemaRenderer'
 import { ConversationThread } from './ConversationThread'
 import { ProjectContextSheet } from './ProjectContextSheet'
+import { resolveAgentCanvasActivity } from './agent-canvas-focus'
 import {
   continueSemanticTaskRunForConversation,
   retrySemanticTaskInPlace,
@@ -114,6 +121,7 @@ export function ProjectAgentPage() {
   const [contextOpen, setContextOpen] = useState(false)
   const [planPending, setPlanPending] = useState(false)
   const [resumePendingTaskRunId, setResumePendingTaskRunId] = useState<string | null>(null)
+  const [cancelPendingTaskId, setCancelPendingTaskId] = useState<string | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
   const [draftRefreshError, setDraftRefreshError] = useState<string | null>(null)
   const [contextError, setContextError] = useState<string | null>(null)
@@ -142,13 +150,17 @@ export function ProjectAgentPage() {
       }),
     [pendingContexts, sharedContexts],
   )
+  const activeCanvasActivity = useMemo(
+    () => resolveAgentCanvasActivity(activeConversation?.tasks.at(-1), project?.schema),
+    [activeConversation, project?.schema],
+  )
 
   useEffect(() => {
     if (!projectId) return
     // Reading the retry counter makes each explicit retry start a fresh request.
     void projectAttempt
     let cancelled = false
-    setProject(null)
+    setProject(current => (current?.id === projectId ? current : null))
     setProjectError(null)
 
     void getProject(projectId)
@@ -649,7 +661,7 @@ export function ProjectAgentPage() {
         })
       } catch (reason) {
         if (reason instanceof ApiError && reason.code === 'AGENT_TASK_RESUME_INVALID_STATE') {
-          setPlanError('请先在设置中提高单次任务预算，再继续同一任务。')
+          setPlanError('当前任务费用预算不足，请在设置中提高单任务预算后继续。')
         } else {
           setPlanError(`继续任务失败：${planningErrorMessage(reason)}`)
         }
@@ -659,6 +671,48 @@ export function ProjectAgentPage() {
       }
     },
     [activeConversation, projectId, refreshLocalState, refreshProjectDraft, user],
+  )
+
+  const cancelTask = useCallback(
+    async (task: AgentTask) => {
+      if (!user || !projectId || !activeConversation) return
+      setCancelPendingTaskId(task.id)
+      setPlanError(null)
+      try {
+        if (task.taskRunId) {
+          const detail = await cancelAgentTaskRun(projectId, task.taskRunId)
+          recordAgentTaskRunDetail({
+            ownerUserId: user.id,
+            conversationId: activeConversation.id,
+            detail,
+          })
+        } else if (task.run) {
+          const run = await controlAgentRun(projectId, task.run.operationId, 'cancel')
+          recordAgentRun({
+            ownerUserId: user.id,
+            conversationId: activeConversation.id,
+            taskId: task.id,
+            operationId: run.operationId,
+            status: run.status,
+            outcome: run.outcome,
+            receipt: run.receipt,
+            cost: run.cost,
+            trace: run.trace,
+            rollback: run.rollback,
+            rolledBackAt: run.rolledBackAt,
+            rollbackReceipt: run.rollbackReceipt,
+            message: run.message,
+            usage: run.usage,
+          })
+        }
+        refreshLocalState(activeConversation.id)
+      } catch (reason) {
+        setPlanError(`停止任务失败：${planningErrorMessage(reason)}`)
+      } finally {
+        setCancelPendingTaskId(null)
+      }
+    },
+    [activeConversation, projectId, refreshLocalState, user],
   )
 
   useEffect(() => {
@@ -1071,6 +1125,12 @@ export function ProjectAgentPage() {
     navigate(`/projects/${projectId}/agent/${nextConversationId}`)
   }
 
+  const renameConversation = (title: string) => {
+    if (!user || !activeConversation) return
+    renameAgentConversation({ ownerUserId: user.id, conversationId: activeConversation.id, title })
+    refreshLocalState(activeConversation.id)
+  }
+
   if (!projectId) {
     return <AgentPageState title='项目地址无效' detail='请从项目列表重新打开。' />
   }
@@ -1277,9 +1337,9 @@ export function ProjectAgentPage() {
   return (
     <div
       data-ed-shell='agent'
-      className='relative h-dvh min-w-[1024px] overflow-hidden bg-[var(--ed-canvas)] text-[var(--ed-ink)]'
+      className='relative h-dvh min-w-[760px] overflow-hidden bg-[var(--ed-canvas)] text-[var(--ed-ink)]'
     >
-      <div className='flex h-dvh min-w-[1024px] flex-col overflow-hidden'>
+      <div className='flex h-dvh min-w-[760px] flex-col overflow-hidden'>
         <motion.header
           className='relative flex h-16 shrink-0 items-center justify-between gap-4 border-b border-[var(--ed-line)] bg-[var(--ed-rail)] px-3.5'
           initial={reduceMotion ? false : { opacity: 0, y: -8 }}
@@ -1367,6 +1427,7 @@ export function ProjectAgentPage() {
               retryPending={planPending || contextRetryPending}
               showTaskProgress={agentPreferences.showTaskProgress}
               onCreateConversation={createConversation}
+              onRenameConversation={renameConversation}
               onRetry={retryNotice}
               onRollback={operationId => void rollbackRun(operationId)}
               onResumeTask={taskRunId => void resumeSemanticTaskRun(taskRunId)}
@@ -1389,11 +1450,36 @@ export function ProjectAgentPage() {
                 <LayoutDashboard className='size-3' />
                 实时画布
               </span>
-              {planPending ? (
-                <span className='flex items-center gap-1.5 text-[10px] text-[var(--ed-ink-muted)]'>
-                  <LoaderCircle className='size-3 animate-spin' />
-                  正在更新
-                </span>
+              {planPending ||
+              activeCanvasActivity ||
+              (latestTask && ['waiting', 'waiting_user', 'running', 'paused'].includes(latestTask.status)) ? (
+                <div className='flex items-center gap-2' aria-live='polite'>
+                  <span className='flex items-center gap-1.5 text-[11px] text-[var(--ed-ink-muted)]'>
+                    {latestTask?.status === 'waiting_user' || latestTask?.status === 'paused' ? (
+                      <MessageCircleQuestion className='size-3.5 text-[var(--ed-warning)]' aria-hidden='true' />
+                    ) : (
+                      <LoaderCircle className='size-3.5 animate-spin motion-reduce:animate-none' aria-hidden='true' />
+                    )}
+                    {latestTask?.status === 'waiting_user'
+                      ? '已暂停，等待你的回复'
+                      : latestTask?.status === 'paused'
+                        ? '任务已暂停'
+                        : (activeCanvasActivity?.detail ?? 'Agent 正在处理')}
+                  </span>
+                  {latestTask &&
+                  (latestTask.taskRunId || latestTask.run) &&
+                  ['waiting', 'waiting_user', 'running', 'paused'].includes(latestTask.status) ? (
+                    <button
+                      type='button'
+                      disabled={cancelPendingTaskId === latestTask.id}
+                      onClick={() => void cancelTask(latestTask)}
+                      className='inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-[var(--ed-line-strong)] px-2.5 text-[11px] text-[var(--ed-ink-muted)] hover:border-[var(--ed-error)]/55 hover:text-[var(--ed-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)] disabled:opacity-50'
+                    >
+                      <CircleStop className='size-3.5' aria-hidden='true' />
+                      {cancelPendingTaskId === latestTask.id ? '停止中' : '停止本轮'}
+                    </button>
+                  ) : null}
+                </div>
               ) : (
                 <span className='flex items-center gap-1.5 text-[10px] text-[var(--ed-ink-muted)]'>
                   <span className='size-1.5 rounded-full bg-[var(--ed-success)]' />
@@ -1406,6 +1492,7 @@ export function ProjectAgentPage() {
                 project={project}
                 createDataSourceEngine={createDataSourceEngine as PreviewDataSourceEngine}
                 showPreviewScaleControls
+                agentCanvasActivity={activeCanvasActivity}
               />
             </div>
           </motion.section>

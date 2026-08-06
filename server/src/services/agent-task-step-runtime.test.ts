@@ -329,6 +329,22 @@ describe('Agent task step runtime', () => {
       action: 'replan',
       plan: { steps: [{ ordinal: 1, title: '完成剩余布局' }] },
     })
+
+    await expect(
+      service.observe(
+        transition(
+          {
+            recoveryClass: 'revise_step',
+            semanticRevisionCount: 2,
+            observation: { outcome: 'not_applied' },
+          },
+          'observation',
+        ),
+      ),
+    ).resolves.toMatchObject({
+      action: 'replan',
+      plan: { steps: [{ ordinal: 1, title: '完成剩余布局' }] },
+    })
   })
 
   it('never converts an unknown commit outcome into a retry', async () => {
@@ -360,7 +376,7 @@ describe('Agent task step runtime', () => {
     ).resolves.toMatchObject({ action: 'revise' })
   })
 
-  it('uses bounded material fallback before reporting a blocking gap', async () => {
+  it('revises once and then replans a persistent material gap without a revision cap', async () => {
     const { service } = harness()
     const observation = {
       outcome: 'committed',
@@ -378,7 +394,7 @@ describe('Agent task step runtime', () => {
     ).resolves.toMatchObject({ action: 'revise', observation })
     await expect(
       service.observe(transition({ recoveryClass: 'committed', semanticRevisionCount: 2, observation }, 'observation')),
-    ).resolves.toMatchObject({ action: 'material_gap', observation })
+    ).resolves.toMatchObject({ action: 'replan', observation })
   })
 
   it('replays a remaining-plan checkpoint and filters already passed semantic work', async () => {
@@ -512,6 +528,28 @@ describe('Agent task step runtime', () => {
     })
     expect(model).not.toHaveBeenCalled()
     expect(dispatcher.enqueue).not.toHaveBeenCalled()
+  })
+
+  it('preserves the provider question when an action needs user input', async () => {
+    const { service } = harness()
+
+    await expect(
+      service.observe(
+        transition(
+          {
+            recoveryClass: 'user_action',
+            observation: {
+              outcome: 'user_input_required',
+              question: { id: 'scope', text: '告警列表按严重程度还是发生时间排序？' },
+            },
+          },
+          'observation',
+        ),
+      ),
+    ).resolves.toMatchObject({
+      action: 'wait',
+      question: { id: 'scope', text: '告警列表按严重程度还是发生时间排序？' },
+    })
   })
 
   it('recovers an existing durable operation without calling the model or issuing a second mutation', async () => {

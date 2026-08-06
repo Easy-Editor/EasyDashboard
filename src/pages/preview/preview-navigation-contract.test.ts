@@ -16,12 +16,20 @@ describe('preview navigation contract', () => {
     const notifyIndex = source.indexOf('if (nextPageId) onActivePageChange?.(nextPageId)')
 
     expect(loadIndex).toBeGreaterThan(-1)
-    expect(source).toContain("const materialRenderKey = Object.keys(remoteComponents).sort().join('|')")
-    expect(source).toContain("key={`${project.id}:${initialPage ?? 'empty'}:${materialRenderKey}`}")
+    expect(source).not.toContain('materialRenderKey')
+    expect(source).toContain("key={`${project.id}:${initialPage ?? 'empty'}`}")
     expect(source).toContain('await navigationRunner.run({')
     expect(source).toContain('useEffect(() => () => navigationRunner.invalidate(), [navigationRunner])')
     expect(source).toContain("setNavigationError(reason instanceof Error ? reason : new Error('页面物料加载失败'))")
     expect(notifyIndex).toBeGreaterThan(loadIndex)
+  })
+
+  it('keeps the current canvas mounted while a committed draft refreshes', async () => {
+    const source = await readSource('index.tsx')
+    const loadEffect = source.slice(source.indexOf('const load = async () => {'), source.indexOf('void load()'))
+
+    expect(loadEffect).not.toContain('setProjectDetail(null)')
+    expect(source).toContain('const [projectDetail, setProjectDetail] = useState<DraftProjectDetail | null>(null)')
   })
 
   it('keeps the URL, picker, and editor return target aligned with the rendered page', async () => {

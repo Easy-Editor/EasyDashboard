@@ -43,15 +43,11 @@ export function registerMaterial(url: string, module: LoadedMaterialModule): voi
     materials.createComponentMeta(registrationMeta, {
       source: MaterialSource.DEBUG,
       component,
+      extensions: new Map<string, unknown>([
+        ['devServerUrl', url],
+        ['isLocalDebug', true],
+      ]),
     })
-
-    // 在 registry 的 extensions 中存储调试信息
-    const entry = materials.registry.get(meta.componentName)
-    if (entry) {
-      entry.extensions = entry.extensions || new Map()
-      entry.extensions.set('devServerUrl', url)
-      entry.extensions.set('isLocalDebug', true)
-    }
 
     // 强制刷新 componentMetasMap
     materials.refreshComponentMetasMap()

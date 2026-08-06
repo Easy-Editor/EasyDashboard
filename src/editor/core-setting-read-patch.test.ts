@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,8 +23,23 @@ const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(currentDirectory, '../..')
 const patchPath = path.join(repositoryRoot, 'patches/@easy-editor__core@1.0.3.patch')
 const require = createRequire(import.meta.url)
-const installedCjsPath = require.resolve('@easy-editor/core')
-const installedEsmPath = path.join(path.dirname(installedCjsPath), 'index.js')
+const installedEntryPath = require.resolve('@easy-editor/core')
+const installedArtifactDirectory = installedEntryPath.includes(`${path.sep}src${path.sep}`)
+  ? path.join(path.dirname(installedEntryPath), '..', 'dist')
+  : path.dirname(installedEntryPath)
+
+async function readInstalledArtifact(extension: '.cjs' | '.js') {
+  const files: string[] = []
+  const visit = async (directory: string) => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) await visit(entryPath)
+      else if (entry.isFile() && entry.name.endsWith(extension)) files.push(entryPath)
+    }
+  }
+  await visit(installedArtifactDirectory)
+  return (await Promise.all(files.sort().map(file => readFile(file, 'utf8')))).join('\n')
+}
 
 describe('patched editor setting reads', () => {
   it.each([
@@ -34,18 +49,18 @@ describe('patched editor setting reads', () => {
     },
     {
       artifact: 'installed CommonJS bundle',
-      read: async () => readFile(installedCjsPath, 'utf8'),
+      read: async () => readInstalledArtifact('.cjs'),
     },
     {
       artifact: 'installed ESM bundle',
-      read: async () => readFile(installedEsmPath, 'utf8'),
+      read: async () => readInstalledArtifact('.js'),
     },
   ])('$artifact keeps getPropValue free of render-time writes', async ({ read }) => {
     assertReadOnlySettingGetter(await read())
   })
 
   it('fails when the setting getter creates a missing property', async () => {
-    const installedBundle = await readFile(installedCjsPath, 'utf8')
+    const installedBundle = await readInstalledArtifact('.cjs')
     const mutatedBundle = installedBundle.replace(
       'this.first.getProp(propName.toString(), false)?.getValue()',
       'this.first.getProp(propName.toString(), true)?.getValue()',

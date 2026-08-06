@@ -551,6 +551,17 @@ describeWithDatabase('Agent task Phase 3 PostgreSQL persistence safety', () => {
             verification: { deterministic: true },
             steps: [{ id: 'replacement-step', ordinal: 1, title: 'Apply replacement', intent: {} }],
           },
+          events: [
+            {
+              eventKey: `agent-task-event:${observation.id}:step-superseded`,
+              stepId: planned.stepId,
+              type: 'step_superseded',
+              summary: 'Current step was superseded by the replacement plan',
+              publicPayload: {},
+              technicalPayload: {},
+              redactionVersion: 1,
+            },
+          ],
           nextTransition: { kind: 'step_action', stepOrdinal: 1, transitionKey: 'phase3:replacement-action' },
           now,
         },
@@ -566,6 +577,12 @@ describeWithDatabase('Agent task Phase 3 PostgreSQL persistence safety', () => {
         { plan_version: 1, semantic_step_key: 'phase3-step', status: 'superseded' },
         { plan_version: 2, semantic_step_key: 'replacement-step', status: 'pending' },
       ])
+      const supersededEvents = await admin.query<{ step_id: string; type: string }>(
+        `select step_id, type from app.agent_task_events
+         where task_run_id=$1 and event_key=$2`,
+        [planned.run.id, `agent-task-event:${observation.id}:step-superseded`],
+      )
+      expect(supersededEvents.rows).toEqual([{ step_id: planned.stepId, type: 'step_superseded' }])
     } finally {
       await admin.query('delete from auth.users where id=$1', [fixture.actorId])
     }

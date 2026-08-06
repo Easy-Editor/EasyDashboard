@@ -14,7 +14,3 @@ minimumReleaseAgeExclude:
   - '@supabase/realtime-js@2.111.0'
   - '@supabase/storage-js@2.111.0'
   - '@supabase/supabase-js@2.111.0'
-
-patchedDependencies:
-  '@easy-editor/core@1.0.3': patches/@easy-editor__core@1.0.3.patch
-  '@easy-editor/react-renderer-dashboard@1.0.4': patches/@easy-editor__react-renderer-dashboard@1.0.4.patch

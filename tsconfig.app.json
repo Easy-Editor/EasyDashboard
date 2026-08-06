@@ -24,7 +24,14 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@easy-editor/core": ["../EasyEditor/packages/core/dist/index.d.ts"],
+      "@easy-editor/core/instance": ["../EasyEditor/packages/core/dist/instance.d.ts"],
+      "@easy-editor/plugin-dashboard": ["../EasyEditor/packages/plugin-dashboard/dist/index.d.ts"],
+      "@easy-editor/plugin-datasource": ["../EasyEditor/packages/plugin-datasource/dist/index.d.ts"],
+      "@easy-editor/react-renderer": ["../EasyEditor/packages/react-renderer/dist/index.d.ts"],
+      "@easy-editor/react-renderer-dashboard": ["../EasyEditor/packages/react-renderer-dashboard/dist/index.d.ts"],
+      "@easy-editor/renderer-core": ["../EasyEditor/packages/renderer-core/dist/index.d.ts"]
     }
   },
   "include": ["src"]

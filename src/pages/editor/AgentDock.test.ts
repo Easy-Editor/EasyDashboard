@@ -65,27 +65,35 @@ describe('editor Agent dock source contract', () => {
     expect(source).not.toContain('border-dashed')
     expect(source).not.toMatch(/\b(Bot|Wand|Sparkles|MagicWand)\b/)
     expect(source).not.toMatch(/purple|violet|fuchsia/)
-    expect(source).toContain('{projectName} · 项目助手')
-    expect(source).toContain('当前执行')
-    expect(source).toContain('taskStatusLabels[latestTask.status]')
+    expect(source).toContain('EasyDashboard Agent')
+    expect(source).toContain('查看本轮过程')
+    expect(source).toContain('taskActivitySummary(latestTask)')
+    expect(source).toContain('停止本轮')
+    expect(source).toContain('Agent 正在继续处理这个任务')
     expect(source).not.toContain('私有项目对话')
     expect(source).not.toContain('latestTask.stages.map')
     expect(source).not.toContain('uppercase tracking-')
   })
 
-  it('persists and displays the run Skill trace when skills were used', async () => {
+  it('persists the run trace without exposing technical execution details in the conversation', async () => {
     const source = await readFile(path.join(currentDirectory, 'AgentDock.tsx'), 'utf8')
 
     expect(source).toContain('trace: run.trace')
-    expect(source).toContain('latestTask.run.trace?.skills.length')
-    expect(source).toContain('使用技能')
+    expect(source).not.toContain('latestTask.run.trace?.skills.length')
+    expect(source).not.toContain('使用技能')
+    expect(source).not.toContain('执行凭据已记录')
+    expect(source).not.toContain('费用 {latestTaskCost}')
+    expect(source).not.toContain("<span className='font-mono'>{latestTask.run.operationId}</span>")
   })
 
-  it('uses the shared cost formatter so uncertain billing is never presented as exact', async () => {
+  it('offers compact choices for pending questions while preserving free-form input', async () => {
     const source = await readFile(path.join(currentDirectory, 'AgentDock.tsx'), 'utf8')
 
-    expect(source).toContain('formatAgentRunCost(latestTask?.run?.cost)')
-    expect(source).toContain('费用 {latestTaskCost}')
-    expect(source).not.toContain('latestTask.run.cost.amount')
+    expect(source).toContain("data-agent-question='editor-dock'")
+    expect(source).toContain('需要你的选择')
+    expect(source).toContain('resolveQuestionChoices(pendingQuestion.prompt)')
+    expect(source).toContain('也可以在下方输入自己的回答')
+    expect(source).toContain('messageInputRef.current?.focus()')
+    expect(source).toContain('event.currentTarget.form?.requestSubmit()')
   })
 })

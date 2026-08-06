@@ -132,7 +132,7 @@ async function hydrateTask(input: {
   return task
 }
 
-function renderConversation(conversationId: string, storage: AgentStorage): string {
+function renderConversation(conversationId: string, storage: AgentStorage, planPending = false): string {
   const conversation = getConversation('user-a', conversationId, storage)
   if (!conversation) throw new Error('Expected conversation')
   return renderToStaticMarkup(
@@ -141,7 +141,7 @@ function renderConversation(conversationId: string, storage: AgentStorage): stri
       conversations={[conversation]}
       defaultAttachmentScope='conversation'
       notice={null}
-      planPending={false}
+      planPending={planPending}
       retryPending={false}
       showTaskProgress
       onCreateConversation={() => undefined}
@@ -157,6 +157,22 @@ function renderConversation(conversationId: string, storage: AgentStorage): stri
 }
 
 describe('TaskThread persisted behavior', () => {
+  it('shows an Agent waiting reply while a newly submitted request is being planned', () => {
+    const storage = createStorage()
+    const conversation = createAgentConversation(
+      { ownerUserId: 'user-a', projectId: 'project-a', initialMessage: '调整大屏标题' },
+      storage,
+    )
+
+    const html = renderConversation(conversation.id, storage, true)
+
+    expect(html).toContain('data-agent-pending="true"')
+    expect(html).toContain('EasyDashboard Agent')
+    expect(html).toContain('Agent 正在思考')
+    expect(html).toContain('正在理解你的要求并准备下一步操作。')
+    expect(html).not.toContain('data-agent-todo="current"')
+  })
+
   it('renders the hydrated active plan and public activity from a V2 task identity', async () => {
     const storage = createStorage()
     const conversation = createAgentConversation(
@@ -176,11 +192,12 @@ describe('TaskThread persisted behavior', () => {
     })
     const html = renderConversation(conversation.id, storage)
 
-    expect(html).toContain('先还原左右面板，再校验中间主视图。')
-    expect(html).toContain('计划 v3')
-    expect(html).toContain('第 1 / 2 步')
+    expect(html).not.toContain('先还原左右面板，再校验中间主视图。')
+    expect(html).not.toContain('计划 v3')
+    expect(html).toContain('1 / 2 · 搭建左右信息面板')
     expect(html).toContain('搭建左右信息面板')
-    expect(html).toContain('正在搭建左右信息面板')
+    expect(html).toContain('正在修改')
+    expect(html).toContain('Agent 正在把这一步应用到右侧画布。')
     expect(html.match(/EasyDashboard Agent/g)).toHaveLength(1)
   })
 
@@ -215,16 +232,10 @@ describe('TaskThread persisted behavior', () => {
 
     expect(html).toContain('执行失败')
     expect(html).toContain('文档执行失败，任务已停止')
-    expect(html).toContain('技术信息')
-    expect(html).toContain('错误码：')
-    expect(html).toContain('DOCUMENT_EXECUTOR_FAILED')
-    expect(html).toContain('执行标识：')
-    expect(html).toContain('operation-failed-1')
-    expect(html).toContain('凭据标识：')
-    expect(html).toContain('receipt-failed-1')
-    expect(html).toContain('费用：')
-    expect(html).toContain('$0.001200（实际）')
-    expect(html).not.toContain('<details open')
+    expect(html).not.toContain('技术信息')
+    expect(html).not.toContain('DOCUMENT_EXECUTOR_FAILED')
+    expect(html).not.toContain('operation-failed-1')
+    expect(html).not.toContain('receipt-failed-1')
   })
 
   it('renders the persisted waiting-user question as the active task prompt', async () => {
@@ -254,9 +265,13 @@ describe('TaskThread persisted behavior', () => {
     })
     const html = renderConversation(conversation.id, storage)
 
-    expect(html).toContain('data-agent-activity="waiting_user"')
+    expect(html).not.toContain('data-agent-activity="waiting_user"')
+    expect(html).toContain('data-agent-question="current"')
+    expect(html).toContain('需要你的选择')
+    expect(html).toContain('确认，按此继续')
+    expect(html).toContain('不，保持当前状态')
     expect(html).toContain('左右面板是否保持等宽？')
-    expect(html).not.toContain('直接在下方回复后，将继续同一任务。')
+    expect(html).toContain('也可以在下方输入自己的回答')
   })
 
   it('offers an explicit same-task resume action after an execution-limit pause', async () => {
@@ -274,8 +289,8 @@ describe('TaskThread persisted behavior', () => {
     })
     const html = renderToStaticMarkup(<TaskThread task={hydrated} onResume={() => undefined} />)
 
-    expect(html).toContain('任务已安全暂停')
-    expect(html).toContain('继续同一任务')
+    expect(html).toContain('已暂停：处理预算或异常后可继续当前阶段')
+    expect(html).toContain('继续当前任务')
     expect(html).not.toContain('重新创建任务')
   })
 
@@ -301,7 +316,8 @@ describe('TaskThread persisted behavior', () => {
 
     const render = () => renderConversation(conversation.id, storage)
     expect(render).not.toThrow()
-    expect(render()).toContain('已恢复公开活动')
+    expect(render()).toContain('正在修改')
+    expect(render()).toContain('搭建左右信息面板')
     expect(render()).not.toContain('技术信息')
     expect(render()).not.toContain('do-not-show')
   })

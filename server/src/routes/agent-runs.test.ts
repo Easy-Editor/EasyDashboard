@@ -315,6 +315,7 @@ function harness(
     listAgentTaskEventPage: vi.fn(),
     continueAgentTaskRun: vi.fn(),
     resumeAgentTaskRun: vi.fn(),
+    cancelAgentTaskRun: vi.fn(),
   } as unknown as DurableTurnRepository
   const model = vi.fn(async () => {
     throw new Error('HTTP must never call the provider')
@@ -979,6 +980,11 @@ describe('semantic Agent task-run routes', () => {
         conversationId,
         taskId: 'task-1',
         idempotencyKey: 'task-run-request-1',
+        bounds: {
+          maxExecutorRetries: 2,
+          tokenLimit: 256_000,
+          costLimitMicros: 2_000_000,
+        },
         planningInput: expect.objectContaining({
           prompt: 'Create a dashboard',
           providerInputSnapshot: expect.any(Object),
@@ -1075,6 +1081,34 @@ describe('semantic Agent task-run routes', () => {
     )
     expect(wakeTaskOrchestrator).toHaveBeenCalledOnce()
     await expect(response.json()).resolves.toMatchObject({ taskRun: { id: run.id, status: 'running' } })
+  })
+
+  it('cancels a semantic task and its active mutation operation', async () => {
+    const state = harness({ taskLoop: true })
+    const canceledRun = { ...run, status: 'canceled' as const, currentTransitionKey: null, completedAt: now }
+    vi.mocked(state.repository.cancelAgentTaskRun!).mockResolvedValueOnce({
+      taskRun: canceledRun,
+      operationIds: ['operation-active'],
+    })
+    vi.mocked(state.repository.getAgentTaskRunDetail!).mockResolvedValueOnce({
+      run: canceledRun,
+      activePlan: null,
+      waitingReason: null,
+      latestEventSequence: 4,
+    })
+    vi.mocked(state.dispatcher!.control).mockResolvedValueOnce(null)
+
+    const response = await state.app.request(
+      new Request(`http://test/projects/${projectId}/agent/task-runs/${run.id}/cancel`, { method: 'POST' }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(state.repository.cancelAgentTaskRun).toHaveBeenCalledWith(
+      actorId,
+      expect.objectContaining({ projectId, taskRunId: run.id, now }),
+    )
+    expect(state.dispatcher?.control).toHaveBeenCalledWith(actorId, projectId, 'operation-active', 'cancel')
+    await expect(response.json()).resolves.toMatchObject({ taskRun: { id: run.id, status: 'canceled' } })
   })
 
   it('returns strictly paged durable task activity', async () => {

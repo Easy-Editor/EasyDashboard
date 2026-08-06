@@ -143,7 +143,7 @@ describe('HomePage project timelines', () => {
     expect(source).toContain("data-home-launcher='primary'")
     expect(source).toContain('从这里开始你的下一块大屏')
     expect(source).toContain('ed-home-primary mx-auto w-full max-w-[820px]')
-    expect(source).toContain('pt-[clamp(180px,28vh,300px)]')
+    expect(source).toContain('pt-[clamp(96px,16vh,144px)]')
     expect(source).toContain("className='ed-home-recent-projects'")
     expect(source).toContain("className='ed-home-recent-conversations'")
     expect(source).toContain('max-w-[660px]')

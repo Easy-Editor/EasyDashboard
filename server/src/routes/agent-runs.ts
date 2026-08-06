@@ -1197,8 +1197,6 @@ export function createAgentRunRoutes(options: AgentRunRouteOptions) {
         configDigest,
       },
       bounds: {
-        maxProviderTurns: 12,
-        maxStepRevisions: 2,
         maxExecutorRetries: 2,
         // A dashboard task commonly needs several large, schema-aware turns. The
         // previous 64k floor paused otherwise healthy runs after only a handful
@@ -1355,7 +1353,7 @@ export function createAgentRunRoutes(options: AgentRunRouteOptions) {
       throw new ApiError(
         409,
         'AGENT_TASK_RESUME_INVALID_STATE',
-        'Agent task cannot resume until its configured execution limit is increased',
+        'Agent task cannot resume until its configured cost budget is increased',
       )
     }
     if (!resumed) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
@@ -1363,6 +1361,31 @@ export function createAgentRunRoutes(options: AgentRunRouteOptions) {
     if (!detail) throw new ApiError(503, 'AGENT_TASK_RUN_UNAVAILABLE', 'Agent task run could not be read after resume')
     wakeTaskOrchestrator(projectId, taskRunId)
     return c.json({ taskRun: publicTaskRunDetail(detail) }, 202)
+  })
+
+  app.post('/:projectId/agent/task-runs/:taskRunId/cancel', async c => {
+    const repository = requireSemanticTaskRuns()
+    if (!repository.cancelAgentTaskRun) {
+      throw new ApiError(503, 'AGENT_TASK_CANCEL_UNAVAILABLE', 'Agent task cancellation is unavailable')
+    }
+    const actorId = c.get('actorId')
+    const projectId = c.req.param('projectId')
+    const taskRunId = c.req.param('taskRunId')
+    const canceled = await repository.cancelAgentTaskRun(actorId, {
+      projectId,
+      taskRunId,
+      now: options.modelConfig?.now?.() ?? new Date(),
+    })
+    if (canceled === 'invalid_state') {
+      throw new ApiError(409, 'AGENT_TASK_CANCEL_INVALID_STATE', 'Agent task cannot be canceled in its current state')
+    }
+    if (!canceled) throw new ApiError(404, 'AGENT_TASK_RUN_NOT_FOUND', 'Agent task run not found')
+    for (const operationId of canceled.operationIds) {
+      await options.dispatcher?.control(actorId, projectId, operationId, 'cancel').catch(() => undefined)
+    }
+    const detail = await repository.getAgentTaskRunDetail(actorId, projectId, taskRunId)
+    if (!detail) throw new ApiError(503, 'AGENT_TASK_RUN_UNAVAILABLE', 'Agent task run could not be read after cancel')
+    return c.json({ taskRun: publicTaskRunDetail(detail) })
   })
 
   app.post('/:projectId/agent/runs', async c => {

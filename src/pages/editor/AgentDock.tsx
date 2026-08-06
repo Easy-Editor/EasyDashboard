@@ -12,9 +12,10 @@ import {
   DEFAULT_AGENT_PREFERENCES,
   appendAgentTurn,
   buildProjectMemoryProposal,
+  cancelAgentTaskRun,
   connectAgentWorkspaceSync,
+  controlAgentRun,
   createAgentConversation,
-  formatAgentRunCost,
   getAgentRun,
   getProjectAttachmentManifest,
   getProjectContexts,
@@ -28,6 +29,7 @@ import {
   recordAgentRunPendingQuestion,
   recordAgentRunRollback,
   recordAgentTaskQuestion,
+  recordAgentTaskRunDetail,
   respondAgentTask,
   startAgentRun,
   undoAgentRun,
@@ -36,9 +38,22 @@ import {
   uploadAgentFiles,
   upsertProjectContext,
 } from '@/features/agent'
+import { resolveQuestionChoices } from '@/features/agent/question-choices'
 import { getSettings } from '@/features/settings/settings-api'
 import { project } from '@easy-editor/core'
-import { ArrowUpRight, Check, Circle, Clock3, LoaderCircle, MessageSquareText, Paperclip, Send, X } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Check,
+  Circle,
+  CircleStop,
+  Clock3,
+  LoaderCircle,
+  MessageCircleQuestion,
+  MessageSquareText,
+  Paperclip,
+  Send,
+  X,
+} from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { buildEditorAgentSelectionContext } from './agent-selection-context'
@@ -81,29 +96,23 @@ function stageTone(status: AgentTaskStageStatus): string {
   return 'border-[var(--ed-line)] text-[var(--ed-ink-faint)]'
 }
 
-const taskStatusLabels: Record<AgentTaskStatus, string> = {
-  waiting: '等待执行',
-  waiting_user: '等待回复',
-  paused: '已暂停',
-  running: '执行中',
-  complete: '已完成',
-  failed: '执行失败',
-  canceled: '已取消',
+function taskStatusDescription(status: AgentTaskStatus): string {
+  if (status === 'complete') return '本次修改已完成'
+  if (status === 'failed') return '任务未完成，请重试当前阶段'
+  if (status === 'paused') return '任务已暂停，可以继续处理'
+  if (status === 'canceled') return '任务已取消'
+  return 'Agent 正在继续处理这个任务'
 }
 
-function runStatusLabel(status: NonNullable<AgentConversation['tasks'][number]['run']>['status']): string {
-  const labels: Record<typeof status, string> = {
-    planning: '规划中',
-    running: '执行中',
-    paused: '已暂停',
-    prepared: '准备提交',
-    committed: '已提交',
-    stale: '版本已变化',
-    failed: '执行失败',
-    canceled: '已取消',
-    indeterminate: '状态待确认',
-  }
-  return labels[status]
+function taskActivitySummary(task: AgentConversation['tasks'][number]): string {
+  const activity = [...(task.activities ?? [])].sort((left, right) => left.seq - right.seq).at(-1)
+  if (task.status === 'complete') return '画布已更新并完成检查'
+  if (task.status === 'failed') return activity?.summary ?? '本轮没有完成，可以重试当前阶段'
+  if (task.status === 'canceled') return '本轮已停止，已完成的修改仍可撤销'
+  if (task.status === 'paused') return '本轮已暂停，处理后可以继续'
+  if (activity?.type === 'change_committed') return '修改已同步到当前画布，正在检查结果'
+  if (activity?.type === 'step_passed') return '当前步骤检查通过，正在继续后续工作'
+  return activity?.summary ?? taskStatusDescription(task.status)
 }
 
 function planningErrorMessage(reason: unknown): string {
@@ -136,11 +145,13 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
     'hydrating' | 'synced' | 'saving' | 'offline' | 'error'
   >('hydrating')
   const [rollbackPendingOperationId, setRollbackPendingOperationId] = useState<string | null>(null)
+  const [cancelPendingTaskId, setCancelPendingTaskId] = useState<string | null>(null)
   const [rolledBackOperationIds, setRolledBackOperationIds] = useState<Set<string>>(() => new Set())
   const planningRef = useRef(false)
   const activeOperationIdsRef = useRef(new Set<string>())
   const refreshedOperationIdsRef = useRef(new Set<string>())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messageInputRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const requestedConversationId = searchParams.get('conversation')
@@ -690,10 +701,53 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
     [conversations, projectId, refreshConversations, reloadServerDraft, user],
   )
 
+  const cancelTask = useCallback(
+    async (task: AgentConversation['tasks'][number]) => {
+      if (!user) return
+      setCancelPendingTaskId(task.id)
+      setPlanError(null)
+      try {
+        if (task.taskRunId) {
+          const detail = await cancelAgentTaskRun(projectId, task.taskRunId)
+          recordAgentTaskRunDetail({
+            ownerUserId: user.id,
+            conversationId: currentConversation!.id,
+            detail,
+          })
+        } else if (task.run) {
+          const run = await controlAgentRun(projectId, task.run.operationId, 'cancel')
+          recordAgentRun({
+            ownerUserId: user.id,
+            conversationId: currentConversation!.id,
+            taskId: task.id,
+            operationId: run.operationId,
+            status: run.status,
+            outcome: run.outcome,
+            receipt: run.receipt,
+            cost: run.cost,
+            trace: run.trace,
+            rollback: run.rollback,
+            rolledBackAt: run.rolledBackAt,
+            rollbackReceipt: run.rollbackReceipt,
+            message: run.message,
+            usage: run.usage,
+          })
+        }
+        refreshConversations()
+      } catch (reason) {
+        setPlanError(`停止任务失败：${planningErrorMessage(reason)}`)
+      } finally {
+        setCancelPendingTaskId(null)
+      }
+    },
+    [currentConversation, projectId, refreshConversations, user],
+  )
+
   if (!open) return null
 
   const latestTask = currentConversation?.tasks.at(-1)
-  const latestTaskCost = formatAgentRunCost(latestTask?.run?.cost)
+  const pendingQuestion = latestTask?.status === 'waiting_user' ? latestTask.pendingQuestion : undefined
+  const questionChoices = pendingQuestion ? resolveQuestionChoices(pendingQuestion.prompt) : []
   const currentStage = latestTask
     ? (latestTask.stages.find(stage => stage.status === 'failed') ??
       latestTask.stages.find(stage => stage.status === 'running') ??
@@ -730,7 +784,10 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
       <header className='flex h-[var(--ed-panel-header-height)] shrink-0 items-center justify-between border-b border-[var(--ed-line)] bg-[var(--ed-rail)] px-3'>
         <div className='flex min-w-0 items-center gap-2'>
           <MessageSquareText className='size-3.5 text-[var(--ed-cyan)]' />
-          <h2 className='truncate text-xs font-semibold'>{projectName} · 项目助手</h2>
+          <div className='min-w-0'>
+            <h2 className='truncate text-xs font-semibold'>EasyDashboard Agent</h2>
+            <p className='truncate text-[11px] text-[var(--ed-ink-faint)]'>{projectName}</p>
+          </div>
         </div>
         <button
           type='button'
@@ -786,58 +843,61 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
       <div className='min-h-0 flex-1 overflow-y-auto px-3 py-3'>
         {currentConversation ? (
           <div className='space-y-3'>
-            {currentConversation.messages.map(item => (
-              <article
-                key={item.id}
-                className={`border px-3 py-2.5 ${
-                  item.role === 'user'
-                    ? 'ml-7 border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)]'
-                    : 'mr-4 border-[var(--ed-line)] bg-[var(--ed-rail)]'
-                }`}
-              >
-                <div className='flex items-center justify-between gap-3'>
-                  <span className='text-[10px] font-medium text-[var(--ed-ink-muted)]'>
-                    {item.role === 'user' ? '你' : item.role === 'assistant' ? '助手' : '系统'}
-                  </span>
-                  <time className='font-mono text-[9px] text-[var(--ed-ink-faint)]' dateTime={item.createdAt}>
-                    {formatActivity(item.createdAt)}
-                  </time>
-                </div>
-                {item.content ? (
-                  <p className='mt-1.5 whitespace-pre-wrap text-xs leading-5 text-[var(--ed-ink-soft)]'>
-                    {item.content}
-                  </p>
-                ) : null}
-                {item.attachments.length > 0 ? (
-                  <ul className='mt-2 space-y-1 border-t border-[var(--ed-line)] pt-2'>
-                    {item.attachments.map(attachment => (
-                      <li key={attachment.id} className='flex min-w-0 items-center gap-1.5 text-[10px]'>
-                        <Paperclip className='size-3 shrink-0 text-[var(--ed-ink-faint)]' />
-                        <span className='truncate text-[var(--ed-ink-muted)]'>{attachment.name}</span>
-                        <span className='ml-auto shrink-0 text-[var(--ed-ink-faint)]'>
-                          {attachment.scope === 'project' ? '项目文件清单' : '仅本对话'}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </article>
-            ))}
+            {currentConversation.messages
+              .filter(item => item.role !== 'system')
+              .map(item => (
+                <article
+                  key={item.id}
+                  className={`border px-3 py-2.5 ${
+                    item.role === 'user'
+                      ? 'ml-7 border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)]'
+                      : 'mr-4 border-[var(--ed-line)] bg-[var(--ed-rail)]'
+                  }`}
+                >
+                  <div className='flex items-center justify-between gap-3'>
+                    <span className='text-[10px] font-medium text-[var(--ed-ink-muted)]'>
+                      {item.role === 'user' ? '你' : 'EasyDashboard Agent'}
+                    </span>
+                    <time className='text-[11px] text-[var(--ed-ink-faint)]' dateTime={item.createdAt}>
+                      {formatActivity(item.createdAt)}
+                    </time>
+                  </div>
+                  {item.content ? (
+                    <p className='mt-1.5 whitespace-pre-wrap text-xs leading-5 text-[var(--ed-ink-soft)]'>
+                      {item.content}
+                    </p>
+                  ) : null}
+                  {item.attachments.length > 0 ? (
+                    <ul className='mt-2 space-y-1 border-t border-[var(--ed-line)] pt-2'>
+                      {item.attachments.map(attachment => (
+                        <li key={attachment.id} className='flex min-w-0 items-center gap-1.5 text-[10px]'>
+                          <Paperclip className='size-3 shrink-0 text-[var(--ed-ink-faint)]' />
+                          <span className='truncate text-[var(--ed-ink-muted)]'>{attachment.name}</span>
+                          <span className='ml-auto shrink-0 text-[var(--ed-ink-faint)]'>
+                            {attachment.scope === 'project' ? '项目文件清单' : '仅本对话'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ))}
 
-            {latestTask && agentPreferences.showTaskProgress ? (
+            {latestTask && latestTask.status !== 'waiting_user' && agentPreferences.showTaskProgress ? (
               <section
                 aria-label='当前任务状态'
+                aria-live='polite'
                 className='border border-[var(--ed-line-strong)] bg-[var(--ed-rail)] px-3 py-3'
               >
                 <div className='flex items-start justify-between gap-3'>
                   <div className='min-w-0'>
-                    <p className='text-[10px] text-[var(--ed-ink-faint)]'>当前执行</p>
+                    <p className='text-[11px] text-[var(--ed-cyan)]'>{taskStatusDescription(latestTask.status)}</p>
                     <h3 className='mt-0.5 truncate text-xs font-medium text-[var(--ed-ink-soft)]'>
                       {latestTask.title}
                     </h3>
                   </div>
-                  <span className='shrink-0 text-[10px] text-[var(--ed-warning)]'>
-                    {taskStatusLabels[latestTask.status]}
+                  <span className='shrink-0 text-[11px] text-[var(--ed-ink-muted)]'>
+                    {formatActivity(latestTask.updatedAt)}
                   </span>
                 </div>
                 {currentStage ? (
@@ -849,50 +909,51 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
                     </span>
                     <div className='min-w-0 pt-0.5'>
                       <p className='text-[11px] text-[var(--ed-ink-muted)]'>{currentStage.title}</p>
-                      {currentStage.detail ? (
-                        <p className='mt-0.5 text-[10px] leading-4 text-[var(--ed-ink-faint)]'>{currentStage.detail}</p>
-                      ) : null}
+                      <p className='mt-0.5 text-[11px] leading-4 text-[var(--ed-ink-faint)]'>
+                        {taskStatusDescription(latestTask.status)}
+                      </p>
                     </div>
                   </div>
                 ) : null}
-                {latestTask.run ? (
-                  <div className='mt-2 border-t border-[var(--ed-line)] pt-2 text-[10px] text-[var(--ed-ink-faint)]'>
-                    <p>
-                      {runStatusLabel(latestTask.run.status)} ·{' '}
-                      <span className='font-mono'>{latestTask.run.operationId}</span>
-                    </p>
-                    {latestTask.run.trace?.skills.length ? (
-                      <div className='mt-1.5 flex flex-wrap items-center gap-1.5 font-sans'>
-                        <span>使用技能</span>
-                        {latestTask.run.trace.skills.map(skill => (
-                          <span
-                            key={skill}
-                            className='rounded-full border border-[var(--ed-line-strong)] px-1.5 py-0.5 font-mono text-[var(--ed-cyan)]'
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    {latestTaskCost ? <p className='mt-1'>费用 {latestTaskCost}</p> : null}
-                    {latestTask.run.receipt ? <p className='mt-1 text-[var(--ed-success)]'>执行凭据已记录</p> : null}
-                    {latestTask.run.rollback ? (
-                      <button
-                        type='button'
-                        disabled={
-                          rollbackPendingOperationId === latestTask.run.operationId ||
-                          rolledBackOperationIds.has(latestTask.run.operationId)
-                        }
-                        onClick={() => void rollbackRun(latestTask.run!.operationId)}
-                        className='mt-1 text-[var(--ed-cyan)] hover:text-[var(--ed-ink)] disabled:opacity-50'
-                      >
-                        {rolledBackOperationIds.has(latestTask.run.operationId)
-                          ? '已回滚'
-                          : rollbackPendingOperationId === latestTask.run.operationId
-                            ? '回滚中…'
-                            : '回滚本次执行'}
-                      </button>
-                    ) : null}
+                <p className='mt-2 text-[11px] leading-5 text-[var(--ed-ink-muted)]'>
+                  {taskActivitySummary(latestTask)}
+                </p>
+                <div className='mt-2 flex items-center gap-3 border-t border-[var(--ed-line)] pt-2'>
+                  <Link
+                    to={`/projects/${projectId}/agent/${currentConversation.id}`}
+                    className='text-[11px] text-[var(--ed-cyan)] hover:text-[var(--ed-ink)]'
+                  >
+                    查看本轮过程
+                  </Link>
+                  {['waiting', 'running', 'paused'].includes(latestTask.status) ? (
+                    <button
+                      type='button'
+                      disabled={cancelPendingTaskId === latestTask.id}
+                      onClick={() => void cancelTask(latestTask)}
+                      className='ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-[5px] px-2 text-[11px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-error)] disabled:opacity-50'
+                    >
+                      <CircleStop className='size-3.5' aria-hidden='true' />
+                      {cancelPendingTaskId === latestTask.id ? '停止中' : '停止本轮'}
+                    </button>
+                  ) : null}
+                </div>
+                {latestTask.run?.rollback ? (
+                  <div className='mt-2 border-t border-[var(--ed-line)] pt-2 text-[11px]'>
+                    <button
+                      type='button'
+                      disabled={
+                        rollbackPendingOperationId === latestTask.run.operationId ||
+                        rolledBackOperationIds.has(latestTask.run.operationId)
+                      }
+                      onClick={() => void rollbackRun(latestTask.run!.operationId)}
+                      className='mt-1 text-[var(--ed-cyan)] hover:text-[var(--ed-ink)] disabled:opacity-50'
+                    >
+                      {rolledBackOperationIds.has(latestTask.run.operationId)
+                        ? '已回滚'
+                        : rollbackPendingOperationId === latestTask.run.operationId
+                          ? '回滚中…'
+                          : '撤销本次修改'}
+                    </button>
                   </div>
                 ) : null}
               </section>
@@ -912,7 +973,61 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
         )}
       </div>
 
-      <form onSubmit={submitMessage} className='shrink-0 border-t border-[var(--ed-line)] bg-[var(--ed-rail)] p-3'>
+      <form
+        onSubmit={submitMessage}
+        className='relative shrink-0 border-t border-[var(--ed-line)] bg-[var(--ed-rail)] p-3'
+      >
+        {pendingQuestion ? (
+          <section
+            data-agent-question='editor-dock'
+            aria-label='Agent 等待你的选择'
+            className='absolute bottom-[calc(100%+10px)] left-3 right-3 z-30 rounded-[9px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)] p-3 shadow-[0_14px_36px_rgba(0,0,0,0.32)]'
+          >
+            <div className='flex items-start gap-2.5'>
+              <MessageCircleQuestion className='mt-0.5 size-4 shrink-0 text-[var(--ed-cyan)]' aria-hidden='true' />
+              <div className='min-w-0 flex-1'>
+                <p className='text-[11px] font-medium text-[var(--ed-cyan)]'>需要你的选择</p>
+                <p className='mt-1 text-xs leading-5 text-[var(--ed-ink-soft)]'>{pendingQuestion.prompt}</p>
+              </div>
+            </div>
+            <div className='mt-3 grid gap-1.5'>
+              {questionChoices.map(choice => {
+                const selected = message.trim() === choice
+                return (
+                  <button
+                    key={choice}
+                    type='button'
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setMessage(choice === '我需要补充说明' ? '' : choice)
+                      messageInputRef.current?.focus()
+                    }}
+                    className={`min-h-10 rounded-[6px] border px-3 text-left text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ed-cyan)] ${
+                      selected
+                        ? 'border-[var(--ed-cyan)]/55 bg-[var(--ed-cyan)]/10 text-[var(--ed-ink)]'
+                        : 'border-[var(--ed-line)] bg-[var(--ed-panel)] text-[var(--ed-ink-muted)] hover:border-[var(--ed-line-strong)] hover:text-[var(--ed-ink)]'
+                    }`}
+                  >
+                    {choice}
+                  </button>
+                )
+              })}
+            </div>
+            <div className='mt-2 flex items-center justify-between gap-3'>
+              <p className='text-[11px] text-[var(--ed-ink-faint)]'>也可以在下方输入自己的回答</p>
+              {latestTask ? (
+                <button
+                  type='button'
+                  disabled={cancelPendingTaskId === latestTask.id}
+                  onClick={() => void cancelTask(latestTask)}
+                  className='min-h-8 shrink-0 rounded-[5px] px-2 text-[11px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel)] hover:text-[var(--ed-error)] disabled:opacity-50'
+                >
+                  {cancelPendingTaskId === latestTask.id ? '停止中' : '停止本轮'}
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
         {visiblePlanError ? (
           <div
             role='alert'
@@ -958,12 +1073,19 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
           </ul>
         ) : null}
         <textarea
+          ref={messageInputRef}
           value={message}
           onChange={event => setMessage(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              event.currentTarget.form?.requestSubmit()
+            }
+          }}
           disabled={planning}
           placeholder='说明要继续完成的工作…'
           rows={3}
-          className='w-full resize-none rounded-[5px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)] px-3 py-2 text-[11px] leading-5 text-[var(--ed-ink)] outline-none placeholder:text-[var(--ed-ink-faint)] focus:border-[var(--ed-cyan)]'
+          className='w-full resize-none rounded-[5px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel)] px-3 py-2 text-[12px] leading-5 text-[var(--ed-ink)] outline-none placeholder:text-[var(--ed-ink-faint)] focus:border-[var(--ed-cyan)]'
         />
         <div className='mt-2 flex items-center justify-between'>
           <div className='flex items-center gap-2'>
@@ -979,10 +1101,10 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
               type='button'
               title={`支持 ${AGENT_ATTACHMENT_FORMAT_LABEL}`}
               onClick={() => fileInputRef.current?.click()}
-              className='inline-flex h-7 items-center gap-1.5 rounded-[5px] px-2 text-[10px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ed-cyan)]'
+              className='inline-flex h-9 items-center gap-1.5 rounded-[5px] px-2.5 text-[11px] text-[var(--ed-ink-muted)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ed-cyan)]'
             >
               <Paperclip className='size-3.5' />
-              添加文件清单
+              添加附件
             </button>
             <span className='text-[9px] text-[var(--ed-ink-faint)]'>
               {agentPreferences.defaultAttachmentScope === 'project' ? '默认加入项目清单' : '默认仅本对话'}
@@ -991,7 +1113,7 @@ export function EditorAgentDock({ open, onOpenChange }: EditorAgentDockProps) {
           <button
             type='submit'
             disabled={!user || planning || (!message.trim() && attachments.length === 0)}
-            className='inline-flex h-7 items-center gap-1.5 rounded-[5px] bg-[var(--ed-ink)] px-2.5 text-[10px] font-medium text-[var(--ed-canvas)] hover:bg-white disabled:cursor-not-allowed disabled:opacity-40'
+            className='inline-flex h-9 items-center gap-1.5 rounded-[5px] bg-[var(--ed-ink)] px-3 text-[11px] font-medium text-[var(--ed-canvas)] hover:bg-white disabled:cursor-not-allowed disabled:opacity-40'
           >
             {planning ? <LoaderCircle className='size-3.5 animate-spin' /> : <Send className='size-3.5' />}
             {planning ? '规划中' : '发送'}

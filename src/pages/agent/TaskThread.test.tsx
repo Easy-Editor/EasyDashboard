@@ -19,29 +19,25 @@ function createTask(status: AgentTask['status'], stageStatus: AgentTask['stages'
 }
 
 describe('TaskThread Todo presentation', () => {
-  it('shows a compact Codex-like step list with collapsed technical details', async () => {
+  it('shows a solid floating task control without an outer panel', async () => {
     const source = await readFile(path.join(currentDirectory, 'TaskThread.tsx'), 'utf8')
 
-    expect(source).toContain("<ol className='space-y-0.5'>")
-    expect(source).toContain('第 {currentStep} / {steps.length} 步')
-    expect(source).toContain('计划 v{task.activePlan.version}')
-    expect(source).toContain('{task.activePlan.summary}')
-    expect(source).toContain('currentStage?.title ?? summary.label')
-    expect(source).toContain('technicalOpen')
-    expect(source).toContain('执行详情')
-    expect(source).toContain('{technicalOpen ? (')
-    expect(source).toContain('defaultExpanded = true')
+    expect(source).toContain("<ol className='mt-2 space-y-1'>")
+    expect(source).toContain('visibleSteps')
+    expect(source).toContain('hiddenStepCount')
+    expect(source).toContain('defaultExpanded = false')
     expect(source).toContain("gridTemplateRows: expanded ? '1fr' : '0fr'")
     expect(source).toContain('inert={!expanded}')
     expect(source).toContain("from 'motion/react'")
     expect(source).toContain('useReducedMotion()')
     expect(source).toContain('<motion.section')
     expect(source).toContain('<motion.div')
-    expect(source).toContain('max-w-[380px]')
-    expect(source).toContain('shadow-[inset_2px_0_0_var(--ed-cyan)]')
-    expect(source).toContain('stageIndex === steps.length - 1')
-    expect(source).toContain('rounded-full border border-[var(--ed-line-strong)]')
-    expect(source).not.toContain('summaryToneClasses')
+    expect(source).toContain('max-w-[360px]')
+    expect(source).toContain('rounded-full border border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)]')
+    expect(source).toContain('rounded-[9px] border border-[var(--ed-line-strong)] bg-[var(--ed-panel-raised)]')
+    expect(source).not.toContain('执行详情')
+    expect(source).not.toContain('计划 v')
+    expect(source).not.toContain('bg-[var(--ed-panel)] p-1.5')
   })
 
   it('renders the persisted active plan exactly and only falls back to legacy stages', () => {
@@ -71,7 +67,7 @@ describe('TaskThread Todo presentation', () => {
     expect(source).toContain("statuses.every(status => ['complete', 'passed', 'superseded'].includes(status))")
     expect(source).toContain("label: '待处理'")
     expect(source).toContain("label: '等待中'")
-    expect(source).toContain("label: '运行中'")
+    expect(source).toContain("label: 'Agent 正在执行'")
     expect(source).toContain("label: '已完成'")
     expect(source).toContain("label: '执行失败'")
   })
@@ -86,15 +82,14 @@ describe('TaskThread Todo presentation', () => {
     expect(resolveTodoSummary(createTask(status, stageStatus)).label).toBe(expectedLabel)
   })
 
-  it('preserves run cost, skill trace, receipt, and rollback details', async () => {
+  it('keeps rollback available without mixing technical telemetry into the task popup', async () => {
     const source = await readFile(path.join(currentDirectory, 'TaskThread.tsx'), 'utf8')
 
-    expect(source).toContain('formatAgentRunCost(task.run?.cost)')
-    expect(source).toContain('task.run?.trace?.skills.length')
-    expect(source).toContain('task.run?.receipt')
     expect(source).toContain('onRollback(task.run!.operationId)')
-    expect(source).toContain('task.taskRun.modelBinding.model')
-    expect(source).toContain('task.taskRun.accounting.providerTurns')
+    expect(source).toContain('撤销本次修改')
+    expect(source).not.toContain('formatAgentRunCost')
+    expect(source).not.toContain('模型调用')
+    expect(source).not.toContain('执行标识')
   })
 
   it('keeps execution activity and waiting questions out of the temporary Todo', async () => {

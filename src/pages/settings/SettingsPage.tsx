@@ -271,21 +271,7 @@ export function SettingsPage() {
   }
 
   return (
-    <PageFrame
-      size='standard'
-      title='个人设置'
-      description='管理你的创作偏好、Agent 与账户。'
-      action={
-        <Button
-          type='submit'
-          form='personal-settings-form'
-          disabled={loading || saving || Boolean(loadError)}
-          className='h-10 rounded-[8px] border border-[var(--ed-action-border)] bg-[var(--ed-action-bg)] px-4 text-xs text-[var(--ed-action-ink)] hover:bg-[var(--ed-action-bg-hover)]'
-        >
-          {saving ? '正在保存…' : '保存更改'}
-        </Button>
-      }
-    >
+    <PageFrame size='standard' title='个人设置' description='管理你的创作偏好、Agent 与账户。'>
       {loadError ? (
         <div
           role='alert'
@@ -783,6 +769,23 @@ export function SettingsPage() {
               </Button>
             </div>
           </section>
+
+          <div
+            data-settings-save='global'
+            className='sticky bottom-4 z-20 flex items-center justify-between gap-5 rounded-[10px] border border-[var(--ed-line-strong)] bg-[color-mix(in_srgb,var(--ed-panel-raised)_94%,transparent)] px-4 py-3 shadow-[0_16px_36px_rgba(0,0,0,0.3)] backdrop-blur-md'
+          >
+            <div>
+              <p className='text-xs font-medium text-[var(--ed-ink-soft)]'>保存个人设置</p>
+              <p className='mt-1 text-[11px] text-[var(--ed-ink-faint)]'>保存个人资料、工作区与 Agent 偏好</p>
+            </div>
+            <Button
+              type='submit'
+              disabled={loading || saving || Boolean(loadError)}
+              className='h-9 shrink-0 rounded-[8px] border border-[var(--ed-action-border)] bg-[var(--ed-action-bg)] px-4 text-xs text-[var(--ed-action-ink)] hover:bg-[var(--ed-action-bg-hover)]'
+            >
+              {saving ? '正在保存…' : '保存更改'}
+            </Button>
+          </div>
         </div>
       </form>
     </PageFrame>

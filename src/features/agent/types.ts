@@ -169,8 +169,10 @@ export type AgentTaskRunModelBinding = {
 }
 
 export type AgentTaskRunBounds = {
-  maxProviderTurns: number
-  maxStepRevisions: number
+  /** Legacy telemetry only. Provider turns are no longer a task execution bound. */
+  maxProviderTurns?: number
+  /** Legacy telemetry only. Semantic revisions continue until completion or cost exhaustion. */
+  maxStepRevisions?: number
   maxExecutorRetries: number
   tokenLimit: number
   costLimitMicros: number
@@ -405,6 +407,13 @@ export type AppendAgentTurnInput = {
   createdAt?: string
 }
 
+export type RenameAgentConversationInput = {
+  ownerUserId: string
+  conversationId: string
+  title: string
+  updatedAt?: string
+}
+
 export type SetAgentMessageAttachmentsInput = {
   ownerUserId: string
   conversationId: string
@@ -507,6 +516,7 @@ export type AgentStore = {
   readWorkspace(ownerUserId: string): AgentWorkspace
   createConversation(input: CreateAgentConversationInput): AgentConversation
   appendTurn(input: AppendAgentTurnInput): AgentConversation
+  renameConversation(input: RenameAgentConversationInput): AgentConversation
   setMessageAttachments(input: SetAgentMessageAttachmentsInput): AgentConversation
   getProjectConversations(ownerUserId: string, projectId: string): AgentConversation[]
   getConversation(ownerUserId: string, conversationId: string): AgentConversation | undefined

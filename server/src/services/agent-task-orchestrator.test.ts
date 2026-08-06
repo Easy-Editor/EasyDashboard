@@ -364,6 +364,40 @@ describe('Agent task orchestrator persistence kernel', () => {
     )
   })
 
+  it('releases a claimed transition when the background drain fails after a definitive provider outcome', async () => {
+    const state = harness([planningTransition()])
+    state.store.completeAgentTaskTransition
+      .mockRejectedValueOnce(new Error('persistence failed after provider success'))
+      .mockRejectedValueOnce(new Error('failsafe persistence also failed'))
+
+    state.service.start()
+    await vi.waitFor(() => expect(state.store.releaseAgentTaskTransition).toHaveBeenCalledOnce())
+    await state.service.stop()
+
+    expect(state.store.releaseAgentTaskTransition).toHaveBeenCalledWith(
+      'actor-1',
+      {
+        transitionId: 'transition-planning-1',
+        workerId: 'worker-1',
+        leaseGeneration: 1,
+        leaseToken: 'lease-token-1',
+      },
+      now,
+    )
+    expect(state.logger.error).toHaveBeenCalledWith('Agent task worker failed')
+  })
+
+  it('does not release a background transition when the provider outcome is unknown', async () => {
+    const state = harness([planningTransition({ providerOutcome: 'started_unknown' })])
+    state.store.pauseAgentTaskTransitionUnknownOutcome.mockRejectedValueOnce(new Error('connection lost after commit'))
+
+    state.service.start()
+    await vi.waitFor(() => expect(state.logger.error).toHaveBeenCalledWith('Agent task worker failed'))
+    await state.service.stop()
+
+    expect(state.store.releaseAgentTaskTransition).not.toHaveBeenCalled()
+  })
+
   it('atomically pauses without resending when the persisted provider outcome is unknown', async () => {
     const state = harness([
       planningTransition({

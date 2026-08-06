@@ -12,7 +12,7 @@ type DashboardLifecycleSimulator = {
 type DashboardLifecycleProject = {
   simulator?: DashboardLifecycleSimulator | null
   currentDocument?: { fileName: string } | null
-  documents: Array<{ rootNode?: { select: () => void } | null }>
+  documents: readonly { rootNode?: { select: () => void } | null }[]
   export: () => unknown
   onSimulatorReady: (listener: (simulator: DashboardLifecycleSimulator) => void) => () => void
   onCurrentDocumentChange: (listener: (document: { fileName: string }) => void) => () => void

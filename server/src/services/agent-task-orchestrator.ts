@@ -643,16 +643,6 @@ export function createAgentTaskOrchestrator(options: {
     }
 
     const nextRevisionCount = semanticRevisionCount + 1
-    if (nextRevisionCount > detail.run.bounds.maxStepRevisions) {
-      return terminalObservation(transition, {
-        status: 'failed',
-        type: 'task_failed',
-        summary: '当前步骤超过允许的修订次数，任务已停止。',
-        code: 'step_revision_limit_exceeded',
-        observation,
-      })
-    }
-
     if (result.action === 'revise') {
       assertAgentDecisionUserTextSafe({ summary: result.summary })
       const preview =
@@ -816,7 +806,7 @@ export function createAgentTaskOrchestrator(options: {
       const visualRevisionCount = boundedCounter(transition.input.visualRevisionCount)
       const nextVisualRevisionCount = visualRevisionCount + 1
       const repairStep = [...detail.activePlan.steps].sort((left, right) => right.ordinal - left.ordinal)[0]
-      if (repairStep && nextVisualRevisionCount <= detail.run.bounds.maxStepRevisions) {
+      if (repairStep) {
         const code = safeReference(result.code, 'Agent visual acceptance code')!
         const observation = sanitizedObservation({
           outcome: 'visual_acceptance_failed',
@@ -1207,6 +1197,12 @@ export function createAgentTaskOrchestrator(options: {
           if (outcome === 'retry') break
         }
       } catch {
+        const failedTransition = activeTransition
+        if (failedTransition && !hasUnknownProviderOutcome(failedTransition)) {
+          await release(failedTransition).catch(releaseError => {
+            logger.error('Agent task transition release failed', releaseError)
+          })
+        }
         logger.error('Agent task worker failed')
       } finally {
         active = null

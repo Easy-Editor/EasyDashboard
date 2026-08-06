@@ -2045,11 +2045,19 @@ export function createPgRepository(env: AppEnv): Repository {
         if (!run) return null
         if (run.status !== 'paused') return 'invalid_state'
         const bounds = run.bounds as unknown as AgentTaskRunBounds
+        const resumableBounds = {
+          maxExecutorRetries: bounds.maxExecutorRetries,
+          tokenLimit: Math.max(bounds.tokenLimit, input.tokenLimit),
+          costLimitMicros: Math.max(bounds.costLimitMicros, input.costLimitMicros),
+        }
+        const pausedByLegacyProviderTurnLimit =
+          typeof bounds.maxProviderTurns === 'number' && run.providerTurns >= bounds.maxProviderTurns
         if (
-          input.costLimitMicros <= run.costMicros ||
-          (input.costLimitMicros <= bounds.costLimitMicros &&
-            input.tokenLimit <= bounds.tokenLimit &&
-            input.configDigest === run.configDigest)
+          !pausedByLegacyProviderTurnLimit &&
+          (input.costLimitMicros <= run.costMicros ||
+            (input.costLimitMicros <= bounds.costLimitMicros &&
+              input.tokenLimit <= bounds.tokenLimit &&
+              input.configDigest === run.configDigest))
         )
           return 'invalid_state'
         const [failedTransition] = await tx
@@ -2099,11 +2107,7 @@ export function createPgRepository(env: AppEnv): Repository {
         const [updatedRun] = await tx
           .update(agentTaskRuns)
           .set({
-            bounds: {
-              ...bounds,
-              costLimitMicros: Math.max(bounds.costLimitMicros, input.costLimitMicros),
-              tokenLimit: Math.max(bounds.tokenLimit, input.tokenLimit),
-            },
+            bounds: resumableBounds,
             configDigest: input.configDigest,
             status: transitionKind === 'planning' ? 'planning' : 'running',
             currentTransitionKey: transitionKey,
@@ -2114,6 +2118,67 @@ export function createPgRepository(env: AppEnv): Repository {
           .returning()
         if (!updatedRun) throw new Error('Agent task resume run update returned no row')
         return { taskRun: updatedRun, transition } as never
+      })
+    },
+    cancelAgentTaskRun(actorId, input) {
+      return withActor(actorId, async tx => {
+        const [run] = await tx
+          .select()
+          .from(agentTaskRuns)
+          .where(
+            and(
+              eq(agentTaskRuns.id, input.taskRunId),
+              eq(agentTaskRuns.projectId, input.projectId),
+              eq(agentTaskRuns.actorId, actorId),
+              canEditAgentTaskProject(actorId),
+            ),
+          )
+          .for('update')
+          .limit(1)
+        if (!run) return null
+        if (['completed', 'failed', 'canceled', 'rolled_back'].includes(run.status)) return 'invalid_state'
+
+        const activeTransitions = await tx
+          .select({ operationId: agentTaskTransitions.operationId })
+          .from(agentTaskTransitions)
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, run.id),
+              inArray(agentTaskTransitions.status, ['pending', 'leased']),
+            ),
+          )
+        await tx
+          .update(agentTaskTransitions)
+          .set({
+            status: 'canceled',
+            leaseOwner: null,
+            leaseToken: null,
+            leaseUntil: null,
+            heartbeatAt: null,
+            error: { code: 'user_canceled' },
+            completedAt: input.now,
+            updatedAt: input.now,
+          })
+          .where(
+            and(
+              eq(agentTaskTransitions.taskRunId, run.id),
+              inArray(agentTaskTransitions.status, ['pending', 'leased']),
+            ),
+          )
+        await tx
+          .update(agentProjectTaskLeases)
+          .set({ leaseUntil: input.now, heartbeatAt: input.now, updatedAt: input.now })
+          .where(and(eq(agentProjectTaskLeases.projectId, run.projectId), eq(agentProjectTaskLeases.taskRunId, run.id)))
+        const [taskRun] = await tx
+          .update(agentTaskRuns)
+          .set({ status: 'canceled', currentTransitionKey: null, completedAt: input.now, updatedAt: input.now })
+          .where(eq(agentTaskRuns.id, run.id))
+          .returning()
+        if (!taskRun) return null
+        return {
+          taskRun: taskRun as never,
+          operationIds: activeTransitions.flatMap(item => (item.operationId ? [item.operationId] : [])),
+        }
       })
     },
     getAgentTaskTransitionProviderResult(actorId, taskRunId, transitionId) {
@@ -2866,8 +2931,7 @@ export function createPgRepository(env: AppEnv): Repository {
           costMicros: run.costMicros,
         }
         const bounds = run.bounds as unknown as AgentTaskRunBounds
-        if (operationRetryCount > bounds.maxExecutorRetries || stepRevisionCount > bounds.maxStepRevisions)
-          return 'invalid_state'
+        if (operationRetryCount > bounds.maxExecutorRetries) return 'invalid_state'
 
         const normalizedPlanStepsInput = input.plan ? normalizedAgentPlanSteps(input.plan.steps) : []
         const projectedPlanVersion = input.plan ? run.activePlanVersion + 1 : run.activePlanVersion
@@ -2923,9 +2987,18 @@ export function createPgRepository(env: AppEnv): Repository {
                   .where(and(eq(agentTaskSteps.id, resolvedEventStepId), eq(agentTaskSteps.taskRunId, run.id)))
                   .limit(1)
               )[0]
+            const supersedesCurrentPlanStep =
+              Boolean(input.plan) &&
+              transition.kind === 'observation' &&
+              event.type === 'step_superseded' &&
+              transitionStep?.id === resolvedEventStepId &&
+              input.stepPatch?.stepId === resolvedEventStepId &&
+              input.stepPatch.status === 'superseded'
             if (
               !ownedEventStep ||
-              ('planVersion' in ownedEventStep && ownedEventStep.planVersion !== projectedPlanVersion)
+              ('planVersion' in ownedEventStep &&
+                ownedEventStep.planVersion !== projectedPlanVersion &&
+                !supersedesCurrentPlanStep)
             )
               return 'invalid_state'
           }
@@ -3125,7 +3198,14 @@ export function createPgRepository(env: AppEnv): Repository {
                   .where(and(eq(agentTaskSteps.id, resolvedEventStepId), eq(agentTaskSteps.taskRunId, run.id)))
                   .limit(1)
               )[0]
-            if (!ownedEventStep || ownedEventStep.planVersion !== run.activePlanVersion)
+            const supersedesCurrentPlanStep =
+              Boolean(input.plan) &&
+              transition.kind === 'observation' &&
+              event.type === 'step_superseded' &&
+              transitionStep?.id === resolvedEventStepId &&
+              input.stepPatch?.stepId === resolvedEventStepId &&
+              input.stepPatch.status === 'superseded'
+            if (!ownedEventStep || (ownedEventStep.planVersion !== run.activePlanVersion && !supersedesCurrentPlanStep))
               throw new AgentTaskCompletionRollback('invalid_state')
           }
           const publicEvent = sanitizePublicAgentTaskEvent(event)
@@ -4810,10 +4890,7 @@ export function createPgRepository(env: AppEnv): Repository {
             .limit(1)
           if (!run) return 'stale'
           const taskBounds = run.bounds as unknown as AgentTaskRunBounds
-          const hardBoundExceeded =
-            run.providerTurns >= taskBounds.maxProviderTurns ||
-            run.promptTokens + run.completionTokens >= taskBounds.tokenLimit ||
-            run.costMicros + input.reservedMicros > taskBounds.costLimitMicros
+          const hardBoundExceeded = run.costMicros + input.reservedMicros > taskBounds.costLimitMicros
           if (hardBoundExceeded) {
             const eventKey = `task-budget-exceeded:${transition.id}`
             const [existingEvent] = await tx
@@ -4829,7 +4906,7 @@ export function createPgRepository(env: AppEnv): Repository {
                 eventKey,
                 stepId: transition.stepId,
                 type: 'waiting_user',
-                summary: '任务已达到本轮执行上限，已安全暂停。',
+                summary: '任务费用预算已达到上限，已安全暂停。',
                 publicPayload: { code: 'task_budget_exceeded', action: 'review_budget_before_resume' },
                 technicalPayload: {},
                 redactionVersion: 1,
@@ -5381,10 +5458,7 @@ export function createPgRepository(env: AppEnv): Repository {
             const nextCompletionTokens = run.completionTokens + (input.completionTokens ?? 0)
             const nextCostMicros = run.costMicros + amountMicros
             const taskBounds = run.bounds as unknown as AgentTaskRunBounds
-            const actualOverage =
-              nextProviderTurns > taskBounds.maxProviderTurns ||
-              nextPromptTokens + nextCompletionTokens > taskBounds.tokenLimit ||
-              nextCostMicros > taskBounds.costLimitMicros
+            const actualOverage = nextCostMicros > taskBounds.costLimitMicros
             taskBudgetExceeded = actualOverage
             taskOutcomeClassification = actualOverage ? 'task_budget_exceeded_paused' : 'within_budget'
             await tx
@@ -5427,7 +5501,7 @@ export function createPgRepository(env: AppEnv): Repository {
                   eventKey: budgetEventKey,
                   stepId: transition.stepId,
                   type: 'waiting_user',
-                  summary: '本次模型调用达到任务执行上限，任务已安全暂停。',
+                  summary: '本次模型调用达到任务费用预算，任务已安全暂停。',
                   publicPayload: { code: 'task_budget_exceeded', action: 'review_budget_before_resume' },
                   technicalPayload: {},
                   redactionVersion: 1,

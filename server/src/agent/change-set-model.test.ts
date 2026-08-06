@@ -1336,6 +1336,32 @@ describe('Agent ChangeSet model boundary', () => {
     ])
   })
 
+  it('compacts older conversation context while preserving the original requirement and recent turns', () => {
+    const conversationTurns = Array.from({ length: 30 }, (_, index) => ({
+      role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+      content: `turn-${index}-${'x'.repeat(2_000)}`,
+    }))
+    const snapshot = createAgentProviderInputSnapshot({
+      prompt: '创建销售大屏',
+      project,
+      conversationId: 'conversation-1',
+      taskId: 'task-1',
+      attachments: [],
+      projectContext: [],
+      conversationTurns,
+    })
+    const payload = JSON.parse(snapshot.userText) as {
+      requirement: string
+      contextSummary?: string
+      conversationTurns: Array<{ role: string; content: string }>
+    }
+
+    expect(payload.requirement).toBe('创建销售大屏')
+    expect(payload.contextSummary).toContain('turn-0-')
+    expect(payload.conversationTurns.at(-1)?.content).toContain('turn-29-')
+    expect(payload.conversationTurns.length).toBeLessThan(conversationTurns.length)
+  })
+
   it('freezes the explicit linked PieChart capability across clarification snapshots', () => {
     const source = createAgentProviderInputSnapshot({
       prompt: '调整环形图',

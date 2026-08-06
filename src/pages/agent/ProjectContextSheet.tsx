@@ -72,7 +72,7 @@ export function ProjectContextSheet({
             <button
               type='button'
               onClick={() => setDraft(EMPTY_DRAFT)}
-              className='flex h-7 items-center gap-1.5 rounded-[6px] border border-[var(--ed-line-strong)] px-2.5 text-[10px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
+              className='flex h-9 items-center gap-1.5 rounded-[6px] border border-[var(--ed-line-strong)] px-3 text-[11px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
             >
               <Plus className='size-3' aria-hidden='true' />
               新增
@@ -154,7 +154,7 @@ export function ProjectContextSheet({
                         <button
                           type='button'
                           onClick={() => onConfirm(context.id)}
-                          className='flex h-6 items-center gap-1 rounded-[5px] px-2 text-[9px] text-[var(--ed-success)] hover:bg-[var(--ed-panel-raised)]'
+                          className='flex h-8 items-center gap-1 rounded-[5px] px-2 text-[10px] text-[var(--ed-success)] hover:bg-[var(--ed-panel-raised)]'
                         >
                           <BookCheck className='size-3' aria-hidden='true' />
                           确认使用
@@ -170,7 +170,7 @@ export function ProjectContextSheet({
                         aria-label={`回滚${context.title}到上一版`}
                         disabled={context.history.length === 0}
                         onClick={() => onRollback(context.id)}
-                        className='grid size-6 place-items-center rounded-[5px] text-[var(--ed-ink-faint)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-cyan)] disabled:cursor-not-allowed disabled:opacity-30'
+                        className='grid size-8 place-items-center rounded-[5px] text-[var(--ed-ink-faint)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-cyan)] disabled:cursor-not-allowed disabled:opacity-30'
                       >
                         <RotateCcw className='size-3' aria-hidden='true' />
                       </button>
@@ -178,7 +178,7 @@ export function ProjectContextSheet({
                         type='button'
                         aria-label={`编辑${context.title}`}
                         onClick={() => setDraft({ id: context.id, title: context.title, content: context.content })}
-                        className='ml-auto grid size-6 place-items-center rounded-[5px] text-[var(--ed-ink-faint)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
+                        className='ml-auto grid size-8 place-items-center rounded-[5px] text-[var(--ed-ink-faint)] hover:bg-[var(--ed-panel-raised)] hover:text-[var(--ed-ink)]'
                       >
                         <Pencil className='size-3' aria-hidden='true' />
                       </button>
@@ -186,7 +186,7 @@ export function ProjectContextSheet({
                         type='button'
                         aria-label={`删除${context.title}`}
                         onClick={() => onDelete(context.id)}
-                        className='grid size-6 place-items-center rounded-[5px] text-[var(--ed-ink-faint)] hover:bg-[color-mix(in_srgb,var(--ed-error)_10%,transparent)] hover:text-[var(--ed-error)]'
+                        className='grid size-8 place-items-center rounded-[5px] text-[var(--ed-ink-faint)] hover:bg-[color-mix(in_srgb,var(--ed-error)_10%,transparent)] hover:text-[var(--ed-error)]'
                       >
                         <Trash2 className='size-3' aria-hidden='true' />
                       </button>
@@ -195,11 +195,18 @@ export function ProjectContextSheet({
                 ))}
               </ul>
             ) : (
-              <div className='border border-dashed border-[var(--ed-line-strong)] px-5 py-8 text-center'>
+              <div className='border border-[var(--ed-line)] bg-[var(--ed-rail)] px-5 py-8 text-center'>
                 <p className='text-xs text-[var(--ed-ink-soft)]'>还没有项目上下文</p>
-                <p className='mt-1.5 text-[10px] leading-5 text-[var(--ed-ink-faint)]'>
-                  新增目标、约束或决策，先以待确认状态保存。
+                <p className='mx-auto mt-1.5 max-w-[300px] text-[11px] leading-5 text-[var(--ed-ink-muted)]'>
+                  只有会影响整个项目的目标、约束和决策才会出现在这里。普通对话内容仍只保留在当前私有对话中。
                 </p>
+                <button
+                  type='button'
+                  onClick={() => setDraft(EMPTY_DRAFT)}
+                  className='mt-4 min-h-9 rounded-[6px] border border-[var(--ed-line-strong)] px-3 text-[11px] text-[var(--ed-ink-soft)] hover:bg-[var(--ed-panel-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ed-cyan)]'
+                >
+                  手动添加项目决策
+                </button>
               </div>
             )}
           </div>

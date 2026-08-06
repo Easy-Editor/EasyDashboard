@@ -104,19 +104,14 @@ describe('project Agent workspace source contract', () => {
     expect(source).not.toContain("planStage.detail !== '等待 Agent 开始处理'")
   })
 
-  it('uses uncertainty-aware cost formatting in the page and task thread', async () => {
+  it('keeps billing and execution telemetry out of the temporary Todo', async () => {
     const taskSource = await readFile(path.join(currentDirectory, 'TaskThread.tsx'), 'utf8')
 
-    expect(taskSource).toContain('formatAgentRunCost(task.run?.cost)')
+    expect(taskSource).not.toContain('formatAgentRunCost(task.run?.cost)')
     expect(taskSource).not.toContain('task.run.cost.amount}')
-  })
-
-  it('shows Skill trace only when a run records used skills', async () => {
-    const taskSource = await readFile(path.join(currentDirectory, 'TaskThread.tsx'), 'utf8')
-
-    expect(taskSource).toContain('task.run?.trace?.skills.length')
-    expect(taskSource).toContain('使用技能')
-    expect(taskSource).toContain('task.run.trace.skills.map')
+    expect(taskSource).not.toContain('task.run?.trace?.skills.length')
+    expect(taskSource).not.toContain('使用技能')
+    expect(taskSource).not.toContain('task.run.trace.skills.map')
   })
 
   it('keeps manual editing one click away in an immersive project workspace', async () => {

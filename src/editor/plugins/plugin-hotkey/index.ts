@@ -1,4 +1,4 @@
-import type { PluginCreator } from '@easy-editor/core'
+import { type PluginCreator, assertLegacyTrustedPluginContext } from '@easy-editor/core'
 import { HOTKEY_MAP, type HotkeyAction } from './const'
 import {
   createClipboardHandlers,
@@ -24,6 +24,7 @@ const HotkeyPlugin: PluginCreator<HotkeyPluginOptions> = (options = {}) => {
     name: 'HotkeyPlugin',
     deps: ['DashboardPlugin'],
     init(ctx) {
+      assertLegacyTrustedPluginContext(ctx)
       const { hotkey, project, logger } = ctx
 
       const historyHandlers = createHistoryHandlers(project)

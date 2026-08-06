@@ -784,13 +784,6 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         observation,
       }
     }
-    if (revisionCount >= detail.run.bounds.maxStepRevisions) {
-      return {
-        action: 'material_gap',
-        summary: '已尝试现有物料、结构化 Div 与局部场景兜底，仍无法表达当前内容。',
-        observation,
-      }
-    }
     if (revisionCount === 0) {
       return {
         action: 'revise',
@@ -1165,6 +1158,8 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         return { action: 'revise', summary: '执行尚未形成确定结果，将在有界恢复后重试当前步骤。', observation }
       }
       if (classification === 'revise_step') {
+        const revisionCount = nonnegativeInteger(transition.input.semanticRevisionCount) ?? 0
+        if (revisionCount >= 2) return replanRemaining(transition)
         return { action: 'revise', summary: '当前操作未应用，正在修订当前步骤。', observation }
       }
       if (classification === 'replan_remaining') {
@@ -1174,10 +1169,15 @@ export function createAgentTaskStepRuntime(options: AgentTaskStepRuntimeOptions)
         return recoverMaterialGap(transition)
       }
       if (classification === 'user_action') {
+        const question = record(observation.question)
+        const questionId = stringValue(question?.id) ?? `step-input-${transition.taskRunId}`
+        const questionText =
+          stringValue(question?.text) ??
+          '当前步骤需要你确认后才能继续。请选择“按 Agent 建议继续”，或直接说明希望怎样调整。'
         return {
           action: 'wait',
-          summary: '当前步骤需要补充信息后才能继续。',
-          question: { id: `step-input-${transition.taskRunId}`, text: '请补充当前步骤所需的信息。' },
+          summary: '当前步骤已暂停，正在等待你的回复。',
+          question: { id: questionId, text: questionText },
           observation,
         }
       }
