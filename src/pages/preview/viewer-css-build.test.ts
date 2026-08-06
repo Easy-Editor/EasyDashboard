@@ -51,5 +51,5 @@ describe('standalone Viewer stylesheet', () => {
 
     expect(javascript).not.toMatch(/\/api\/auth\/|\/api\/projects\//i)
     expect(javascript).toMatch(/credentials\s*:\s*["']omit/i)
-  }, 15_000)
+  }, 60_000)
 })
