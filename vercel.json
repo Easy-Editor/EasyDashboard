@@ -4,6 +4,9 @@
   "buildCommand": "pnpm build:web && pnpm build:server",
   "devCommand": "pnpm exec vite --port $PORT --strictPort",
   "outputDirectory": "dist",
+  "env": {
+    "AGENT_TASK_LOOP_V1": "false"
+  },
   "regions": ["sin1"],
   "rewrites": [
     {
