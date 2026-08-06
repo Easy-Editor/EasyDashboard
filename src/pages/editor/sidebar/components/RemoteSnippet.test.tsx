@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const testContext = vi.hoisted(() => ({
   addComponent: vi.fn(),
-  hasComponent: vi.fn(),
+  getPackageInfo: vi.fn(),
   insertNode: vi.fn(),
   selectNode: vi.fn(),
   toastError: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock('mobx-react', () => ({
 vi.mock('@/editor/remote', () => ({
   materialManager: {
     addComponent: testContext.addComponent,
-    hasComponent: testContext.hasComponent,
+    getPackageInfo: testContext.getPackageInfo,
   },
 }))
 
@@ -104,8 +104,7 @@ function createDeferred() {
 describe('RemoteSnippet', () => {
   beforeEach(() => {
     testContext.addComponent.mockReset()
-    testContext.hasComponent.mockReset()
-    testContext.hasComponent.mockReturnValue(false)
+    testContext.getPackageInfo.mockReset()
     testContext.insertNode.mockReset()
     testContext.selectNode.mockReset()
     testContext.toastError.mockReset()
@@ -131,13 +130,40 @@ describe('RemoteSnippet', () => {
   })
 
   it('inserts immediately when the package component finished loading after the sidebar rendered', async () => {
-    testContext.hasComponent.mockReturnValue(true)
+    testContext.getPackageInfo.mockReturnValue({
+      globalName: 'RemoteChartLibrary',
+      hasComponent: true,
+      version: '1.2.3',
+    })
 
     await renderSnippet().props.onDoubleClick()
 
-    expect(testContext.hasComponent).toHaveBeenCalledWith('@example/remote-chart', '1.2.3')
+    expect(testContext.getPackageInfo).toHaveBeenCalledWith('@example/remote-chart', '1.2.3')
     expect(testContext.addComponent).not.toHaveBeenCalled()
     expect(testContext.insertNode).toHaveBeenCalledOnce()
+  })
+
+  it('uses the active project package when the sidebar metadata points at a different version', async () => {
+    testContext.getPackageInfo.mockImplementation((_packageName: string, version?: string) =>
+      version
+        ? undefined
+        : {
+            globalName: 'ActiveRemoteChartLibrary',
+            hasComponent: true,
+            version: '1.2.2',
+          },
+    )
+
+    await renderSnippet().props.onDoubleClick()
+
+    expect(testContext.addComponent).not.toHaveBeenCalled()
+    expect(testContext.insertNode).toHaveBeenCalledWith(
+      { id: 'root' },
+      expect.objectContaining({
+        npm: expect.objectContaining({ globalName: 'ActiveRemoteChartLibrary', version: '1.2.2' }),
+      }),
+      -1,
+    )
   })
 
   it('loads the version registered by the material manager when package metadata reports a newer linked build', async () => {

@@ -45,10 +45,14 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
 
       try {
         // 1. 加载组件代码（如果未加载）
-        // 点击可能发生在侧边栏初次渲染之后。在操作时查询包缓存，
-        // 避免使用远程物料异步加载前捕获的过期组件映射。
-        if (!materialManager.hasComponent(npmPackage, registeredVersion)) {
-          await materialManager.addComponent(npmPackage, registeredVersion)
+        // 侧边栏可能保留该包的历史元数据，当前项目激活的包才是运行时权威。
+        // 优先匹配卡片版本，未命中时退回当前激活版本，避免用过期版本查空缓存。
+        let activePackage =
+          materialManager.getPackageInfo(npmPackage, registeredVersion) ?? materialManager.getPackageInfo(npmPackage)
+        if (!activePackage?.hasComponent) {
+          await materialManager.addComponent(npmPackage, activePackage?.version ?? registeredVersion)
+          activePackage =
+            materialManager.getPackageInfo(npmPackage, registeredVersion) ?? materialManager.getPackageInfo(npmPackage)
         }
 
         // 2. 获取当前文档
@@ -95,8 +99,8 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
           // 添加 npm 信息到 schema
           npm: {
             package: npmPackage,
-            version: npmVersion || 'latest',
-            globalName: npmGlobalName,
+            version: activePackage?.version ?? npmVersion ?? 'latest',
+            globalName: activePackage?.globalName ?? npmGlobalName,
             componentName: npmComponentName || componentName,
           },
           // 覆盖位置信息
