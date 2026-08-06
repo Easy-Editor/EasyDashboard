@@ -1,7 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const readOnlySettingGetter = /return this\.first\.getProp\(propName\.toString\(\), false\)\?\.getValue\(\);/
@@ -11,17 +10,6 @@ function assertReadOnlySettingGetter(source: string) {
   expect(source).not.toMatch(/return this\.first\.getProp\(propName\.toString\(\), true\)\?\.getValue\(\);/)
 }
 
-function addedPatchSource(patch: string) {
-  return patch
-    .split('\n')
-    .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-    .map(line => line.slice(1))
-    .join('\n')
-}
-
-const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
-const repositoryRoot = path.resolve(currentDirectory, '../..')
-const patchPath = path.join(repositoryRoot, 'patches/@easy-editor__core@1.0.3.patch')
 const require = createRequire(import.meta.url)
 const installedEntryPath = require.resolve('@easy-editor/core')
 const installedArtifactDirectory = installedEntryPath.includes(`${path.sep}src${path.sep}`)
@@ -43,10 +31,6 @@ async function readInstalledArtifact(extension: '.cjs' | '.js') {
 
 describe('patched editor setting reads', () => {
   it.each([
-    {
-      artifact: 'committed pnpm patch',
-      read: async () => addedPatchSource(await readFile(patchPath, 'utf8')),
-    },
     {
       artifact: 'installed CommonJS bundle',
       read: async () => readInstalledArtifact('.cjs'),

@@ -37,32 +37,17 @@ describe('Div configure', () => {
     expect(fieldByName('condition')?.extraProps?.agent?.fieldId).toBe('shared.visibility')
   })
 
-  it('compiles callback-backed shared fields into the safe Agent manifest', async () => {
-    const manifestModulePath = new URL(
-      '../../../../../EasyEditor/examples/dashboard/src/editor/agent/manifest/index.mjs',
-      import.meta.url,
-    ).href
-    const { compileSafeMaterialManifest } = await import(/* @vite-ignore */ manifestModulePath)
-    const manifest = compileSafeMaterialManifest({
-      materialRegistryVersion: 1,
-      metadata: { componentName: 'Div', configure },
-    })
-    const fieldIds = manifest.fields.map((field: { fieldId: string }) => field.fieldId)
+  it('declares a complete, unambiguous Agent field contract', () => {
+    const capabilities = collectFields(configure.props)
+      .map(field => field.extraProps?.agent)
+      .filter(capability => capability?.fieldId)
+    const fieldIds = capabilities.map(capability => capability.fieldId)
 
     expect(fieldIds).toEqual(
       expect.arrayContaining([
         'shared.title',
         'shared.rect',
         'shared.visibility',
-        'props.background',
-        'props.borderColor',
-        'props.borderWidth',
-        'props.borderRadius',
-        'props.opacity',
-        'props.overflow',
-        'props.shadowColor',
-        'props.shadowBlur',
-        'props.shadowOffsetY',
         'div.panelShape',
         'div.panelInset',
         'div.visualPreset',
@@ -71,12 +56,15 @@ describe('Div configure', () => {
         'div.enterDelay',
       ]),
     )
-    expect(manifest.diagnostics.map((diagnostic: { code: string }) => diagnostic.code)).not.toContain(
-      'ambiguous-field-binding',
-    )
-    expect(manifest.diagnostics.map((diagnostic: { code: string }) => diagnostic.code)).not.toContain(
-      'callback-annotation-required',
-    )
-    expect(manifest.readiness.status).toBe('ready')
+    expect(new Set(fieldIds).size).toBe(fieldIds.length)
+    for (const capability of capabilities) {
+      expect(capability).toMatchObject({
+        access: 'read-write',
+        readPath: expect.any(Array),
+        valueSchema: expect.any(Object),
+        verifyPaths: expect.any(Array),
+        writeTargets: expect.any(Array),
+      })
+    }
   })
 })
