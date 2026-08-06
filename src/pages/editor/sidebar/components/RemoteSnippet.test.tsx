@@ -6,6 +6,7 @@ const testContext = vi.hoisted(() => ({
   addComponent: vi.fn(),
   getPackageInfo: vi.fn(),
   insertNode: vi.fn(),
+  loadFull: vi.fn(),
   selectNode: vi.fn(),
   toastError: vi.fn(),
 }))
@@ -30,6 +31,7 @@ vi.mock('@/editor/remote', () => ({
   materialManager: {
     addComponent: testContext.addComponent,
     getPackageInfo: testContext.getPackageInfo,
+    loadFull: testContext.loadFull,
   },
 }))
 
@@ -39,6 +41,16 @@ vi.mock('@easy-editor/core', () => ({
       insertNode: testContext.insertNode,
       root: { id: 'root' },
     },
+    export: () => ({
+      componentsMap: [
+        {
+          componentName: 'RemoteChart',
+          globalName: 'RemoteChartLibrary',
+          package: '@example/remote-chart',
+          version: '1.2.3',
+        },
+      ],
+    }),
     simulator: {
       viewport: {
         height: 1080,
@@ -105,7 +117,13 @@ describe('RemoteSnippet', () => {
   beforeEach(() => {
     testContext.addComponent.mockReset()
     testContext.getPackageInfo.mockReset()
+    testContext.getPackageInfo.mockReturnValue({
+      globalName: 'RemoteChartLibrary',
+      hasComponent: false,
+      version: '1.2.3',
+    })
     testContext.insertNode.mockReset()
+    testContext.loadFull.mockReset()
     testContext.selectNode.mockReset()
     testContext.toastError.mockReset()
     testContext.insertNode.mockReturnValue({
@@ -164,6 +182,21 @@ describe('RemoteSnippet', () => {
       }),
       -1,
     )
+  })
+
+  it('rebuilds an evicted manager entry from the current project component map', async () => {
+    testContext.getPackageInfo.mockReturnValue(undefined)
+
+    await renderSnippet().props.onDoubleClick()
+
+    expect(testContext.loadFull).toHaveBeenCalledWith({
+      componentName: 'RemoteChart',
+      globalName: 'RemoteChartLibrary',
+      package: '@example/remote-chart',
+      version: '1.2.3',
+    })
+    expect(testContext.addComponent).not.toHaveBeenCalled()
+    expect(testContext.insertNode).toHaveBeenCalledOnce()
   })
 
   it('loads the version registered by the material manager when package metadata reports a newer linked build', async () => {

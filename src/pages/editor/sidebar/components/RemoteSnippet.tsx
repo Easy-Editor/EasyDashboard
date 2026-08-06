@@ -7,7 +7,13 @@ import { Card, CardContent } from '@/components/ui/card'
 import { materialManager } from '@/editor/remote'
 import { parseVersionedName } from '@/editor/remote/managers/material-manager/utils'
 import { cn } from '@/lib/utils'
-import { type ComponentMeta, type Snippet as ISnippet, type Point, project } from '@easy-editor/core'
+import {
+  type ComponentMeta,
+  type Snippet as ISnippet,
+  type Point,
+  type ProCodeComponent,
+  project,
+} from '@easy-editor/core'
 import { observer } from 'mobx-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -44,15 +50,33 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
       setIsLoading(true)
 
       try {
+        const projectPackage = project
+          .export()
+          .componentsMap?.find(
+            (item): item is ProCodeComponent =>
+              item.devMode === 'proCode' && item.package === npmPackage && !!item.globalName,
+          )
+        const targetVersion = projectPackage?.version ?? registeredVersion ?? 'latest'
+        const targetGlobalName = projectPackage?.globalName ?? npmGlobalName
+        const targetComponentName = projectPackage?.componentName ?? npmComponentName ?? componentName
+
         // 1. 加载组件代码（如果未加载）
         // 侧边栏可能保留该包的历史元数据，当前项目激活的包才是运行时权威。
         // 优先匹配卡片版本，未命中时退回当前激活版本，避免用过期版本查空缓存。
         let activePackage =
-          materialManager.getPackageInfo(npmPackage, registeredVersion) ?? materialManager.getPackageInfo(npmPackage)
-        if (!activePackage?.hasComponent) {
-          await materialManager.addComponent(npmPackage, activePackage?.version ?? registeredVersion)
+          materialManager.getPackageInfo(npmPackage, targetVersion) ?? materialManager.getPackageInfo(npmPackage)
+        if (!activePackage) {
+          await materialManager.loadFull({
+            package: npmPackage,
+            version: targetVersion,
+            globalName: targetGlobalName,
+            componentName: targetComponentName,
+          })
           activePackage =
-            materialManager.getPackageInfo(npmPackage, registeredVersion) ?? materialManager.getPackageInfo(npmPackage)
+            materialManager.getPackageInfo(npmPackage, targetVersion) ?? materialManager.getPackageInfo(npmPackage)
+        } else if (!activePackage.hasComponent) {
+          await materialManager.addComponent(npmPackage, activePackage.version)
+          activePackage = materialManager.getPackageInfo(npmPackage, activePackage.version)
         }
 
         // 2. 获取当前文档
@@ -99,9 +123,9 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
           // 添加 npm 信息到 schema
           npm: {
             package: npmPackage,
-            version: activePackage?.version ?? npmVersion ?? 'latest',
-            globalName: activePackage?.globalName ?? npmGlobalName,
-            componentName: npmComponentName || componentName,
+            version: activePackage?.version ?? targetVersion,
+            globalName: activePackage?.globalName ?? targetGlobalName,
+            componentName: targetComponentName,
           },
           // 覆盖位置信息
           $dashboard: {
@@ -136,7 +160,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
         setIsLoading(false)
       }
     },
-    [componentName, npmComponentName, npmGlobalName, npmPackage, npmVersion, registeredVersion, snippetSchema],
+    [componentName, npmComponentName, npmGlobalName, npmPackage, registeredVersion, snippetSchema],
   )
 
   const handleCanvasDragOver = useCallback((e: DragEvent) => {
