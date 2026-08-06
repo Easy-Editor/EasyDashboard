@@ -100,6 +100,7 @@ jobs:
 
           cat > .env <<EOF
           APP_ORIGIN=http://127.0.0.1:5173
+          AGENT_TASK_LOOP_V1=false
           PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
           PORT=8787
           VITE_PUBLIC_VIEWER_ORIGIN=http://view.localhost:5174
