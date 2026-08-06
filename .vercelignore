@@ -1,0 +1,17 @@
+.git/
+.vercel/
+.playwright-cli/
+.tmp/
+.omx/
+.impeccable/
+node_modules/
+dist/
+dist-viewer/
+viewer/dist/
+server/dist/
+output/
+coverage/
+docs/
+evals/
+tests/
+*.log
