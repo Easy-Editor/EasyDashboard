@@ -34,10 +34,6 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
   const ref = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  // 使用 MobX 响应式数据来检测组件是否已加载
-  const remoteComponentsMap = materialManager.remoteComponentsMap
-  const hasRemoteComponent = componentName ? !!remoteComponentsMap[componentName] : false
-
   // 添加 Snippet 到画布上
   const addSnippetToCanvas = useCallback(
     async (_pos?: Point) => {
@@ -49,8 +45,9 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
 
       try {
         // 1. 加载组件代码（如果未加载）
-        if (!hasRemoteComponent) {
-          // 修复：传入 version 参数，避免 cache key 不匹配
+        // 点击可能发生在侧边栏初次渲染之后。在操作时查询包缓存，
+        // 避免使用远程物料异步加载前捕获的过期组件映射。
+        if (!materialManager.hasComponent(npmPackage, registeredVersion)) {
           await materialManager.addComponent(npmPackage, registeredVersion)
         }
 
@@ -135,16 +132,7 @@ export const RemoteSnippet = observer(({ snippet, componentMeta }: RemoteSnippet
         setIsLoading(false)
       }
     },
-    [
-      componentName,
-      hasRemoteComponent,
-      npmComponentName,
-      npmGlobalName,
-      npmPackage,
-      npmVersion,
-      registeredVersion,
-      snippetSchema,
-    ],
+    [componentName, npmComponentName, npmGlobalName, npmPackage, npmVersion, registeredVersion, snippetSchema],
   )
 
   const handleCanvasDragOver = useCallback((e: DragEvent) => {

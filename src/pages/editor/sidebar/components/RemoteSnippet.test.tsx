@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const testContext = vi.hoisted(() => ({
   addComponent: vi.fn(),
+  hasComponent: vi.fn(),
   insertNode: vi.fn(),
   selectNode: vi.fn(),
   toastError: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock('mobx-react', () => ({
 vi.mock('@/editor/remote', () => ({
   materialManager: {
     addComponent: testContext.addComponent,
-    remoteComponentsMap: {},
+    hasComponent: testContext.hasComponent,
   },
 }))
 
@@ -103,6 +104,8 @@ function createDeferred() {
 describe('RemoteSnippet', () => {
   beforeEach(() => {
     testContext.addComponent.mockReset()
+    testContext.hasComponent.mockReset()
+    testContext.hasComponent.mockReturnValue(false)
     testContext.insertNode.mockReset()
     testContext.selectNode.mockReset()
     testContext.toastError.mockReset()
@@ -124,6 +127,16 @@ describe('RemoteSnippet', () => {
     deferred.resolve()
     await addSnippet
 
+    expect(testContext.insertNode).toHaveBeenCalledOnce()
+  })
+
+  it('inserts immediately when the package component finished loading after the sidebar rendered', async () => {
+    testContext.hasComponent.mockReturnValue(true)
+
+    await renderSnippet().props.onDoubleClick()
+
+    expect(testContext.hasComponent).toHaveBeenCalledWith('@example/remote-chart', '1.2.3')
+    expect(testContext.addComponent).not.toHaveBeenCalled()
     expect(testContext.insertNode).toHaveBeenCalledOnce()
   })
 
